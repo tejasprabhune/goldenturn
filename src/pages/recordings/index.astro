@@ -143,7 +143,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const decision = escapeHtml(hit['decision'] as string ?? '');
     const year = escapeHtml(hit['year'] as string ?? '');
     const tournament = escapeHtml(hit['tournament'] as string ?? '');
-    const tags: string[] = Array.isArray(hit['_tags']) ? (hit['_tags'] as string[]) : [];
+    const tags: string[] = Array.isArray(hit['_tags'])
+      ? (hit['_tags'] as string[]).filter(t => typeof t === 'string' && t.startsWith('#'))
+      : [];
 
     const tagPills = tags
       .map(t => `<button class="rec-card__tag" data-tag="${escapeHtml(t)}" data-active="${activeTags.includes(t)}">${escapeHtml(t)}</button>`)
@@ -503,7 +505,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   .rec-card__header {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) minmax(4.5rem, max-content);
     gap: 1rem;
     padding: 1.125rem 1.25rem;
     cursor: pointer;
@@ -512,6 +514,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   .rec-card__title {
     font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-style: normal;
     font-size: 1.0625rem;
     font-weight: 600;
     color: #1a1a1a;
@@ -584,7 +587,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     flex-direction: column;
     align-items: flex-end;
     justify-content: space-between;
-    min-width: 6rem;
+    max-width: 9rem;
     flex-shrink: 0;
   }
 
@@ -598,6 +601,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     color: #fcefef;
     padding: 0.2rem 0.5rem;
     border-radius: 0.25rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
