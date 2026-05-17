@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          PUBLIC_ALGOLIA_APP_ID: npdavideos
+          PUBLIC_ALGOLIA_APP_ID: CS1MDMNJTO
           PUBLIC_ALGOLIA_SEARCH_KEY: ${{ secrets.ALGOLIA_SEARCH_KEY }}
           PUBLIC_ALGOLIA_INDEX_NAME: all_rounds
           ALGOLIA_ADMIN_KEY: ${{ secrets.ALGOLIA_ADMIN_KEY }}

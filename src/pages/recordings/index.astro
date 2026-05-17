@@ -142,56 +142,59 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   async function search(page: number, append: boolean) {
     const filters = buildFilters(currentYear, currentAffType);
+    try {
+      const result = await client.searchSingleIndex({
+        indexName: INDEX_NAME,
+        searchParams: {
+          query: currentQuery,
+          hitsPerPage: 20,
+          page,
+          facets: ['year', 'tournament', 'aff_type'],
+          ...(filters ? { filters } : {}),
+        },
+      });
 
-    const result = await client.searchSingleIndex({
-      indexName: INDEX_NAME,
-      searchParams: {
-        query: currentQuery,
-        hitsPerPage: 20,
-        page,
-        facets: ['year', 'tournament', 'aff_type'],
-        ...(filters ? { filters } : {}),
-      },
-    });
+      const hits = result.hits as Record<string, unknown>[];
+      const nbHits = result.nbHits ?? 0;
+      const nbPages = result.nbPages ?? 0;
+      const facets = result.facets as Record<string, Record<string, number>> | undefined;
 
-    const hits = result.hits as Record<string, unknown>[];
-    const nbHits = result.nbHits ?? 0;
-    const nbPages = result.nbPages ?? 0;
-    const facets = result.facets as Record<string, Record<string, number>> | undefined;
+      totalPages = nbPages;
+      currentPage = page;
 
-    totalPages = nbPages;
-    currentPage = page;
+      if (facets?.['year'] && !yearDropdownPopulated) {
+        populateYearDropdown(facets['year']);
+      }
 
-    if (facets?.['year'] && !yearDropdownPopulated) {
-      populateYearDropdown(facets['year']);
-    }
+      resultsCount.textContent = `${nbHits} round${nbHits === 1 ? '' : 's'}`;
 
-    resultsCount.textContent = `${nbHits} round${nbHits === 1 ? '' : 's'}`;
+      if (!append) {
+        resultsEl.innerHTML = '';
+      }
 
-    if (!append) {
-      resultsEl.innerHTML = '';
-    }
+      for (const hit of hits) {
+        resultsEl.insertAdjacentHTML('beforeend', renderCard(hit));
+      }
 
-    for (const hit of hits) {
-      resultsEl.insertAdjacentHTML('beforeend', renderCard(hit));
-    }
-
-    if (currentPage + 1 < totalPages) {
-      loadMoreBtn.classList.remove('hidden');
-    } else {
-      loadMoreBtn.classList.add('hidden');
+      loadMoreBtn.classList.toggle('hidden', currentPage + 1 >= totalPages);
+    } catch (err) {
+      resultsCount.textContent = 'Search unavailable.';
+      console.error('Algolia search error:', err);
     }
   }
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
+  function runSearch() {
+    clearTimeout(debounceTimer);
+    currentQuery = searchInput.value.trim();
+    yearDropdownPopulated = false;
+    search(0, false);
+  }
+
   function onSearchInput() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      currentQuery = searchInput.value.trim();
-      yearDropdownPopulated = false;
-      search(0, false);
-    }, 300);
+    debounceTimer = setTimeout(runSearch, 300);
   }
 
   function onFilterChange() {
@@ -205,6 +208,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   });
 
   searchInput.addEventListener('input', onSearchInput);
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runSearch();
+  });
   filterYear.addEventListener('change', onFilterChange);
   filterAffType.addEventListener('change', onFilterChange);
 
