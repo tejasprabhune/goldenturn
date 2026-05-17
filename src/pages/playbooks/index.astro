@@ -13,16 +13,16 @@ const sorted = playbooks.sort((a, b) => {
   title="Playbooks | the golden turn"
   description="Curated strategy collections for parliamentary debate."
 >
-  <div class="max-w-6xl mx-auto px-6 pt-16 pb-24">
+  <div class="max-w-5xl mx-auto px-6 pt-16 pb-24">
     <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-4">
       Playbooks
     </h1>
-    <p class="text-ink/60 text-lg max-w-2xl leading-relaxed mb-16">
+    <p class="font-body text-ink/60 text-base max-w-xl leading-relaxed mb-16">
       Curated strategy collections.
     </p>
 
     {sorted.length === 0 ? (
-      <p class="text-ink/50">No playbooks yet.</p>
+      <p class="font-body text-ink/50">No playbooks yet.</p>
     ) : (
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {sorted.map(entry => {
@@ -30,18 +30,18 @@ const sorted = playbooks.sort((a, b) => {
           return (
             <a
               href={`/playbooks/${slug}`}
-              class="block border border-ink/10 rounded-lg p-6 hover:border-accent transition-colors group"
+              class="block border border-ink/10 rounded-lg p-6 hover:border-ink/25 transition-colors group"
             >
-              <h2 class="font-display italic text-heading text-xl mb-1 group-hover:text-accent transition-colors">
+              <h2 class="font-display italic text-heading text-xl mb-1">
                 {entry.data.title}
               </h2>
-              <p class="text-sm text-ink/50 mb-3">
+              <p class="font-sans text-sm text-ink/50 mb-3">
                 {entry.data.author && <span>{entry.data.author}</span>}
                 {entry.data.author && entry.data.year && <span class="mx-1">·</span>}
                 {entry.data.year && <span>{entry.data.year}</span>}
               </p>
               {entry.data.description && (
-                <p class="text-sm text-ink/60 leading-relaxed">{entry.data.description}</p>
+                <p class="font-body text-sm text-ink/60 leading-relaxed">{entry.data.description}</p>
               )}
             </a>
           );

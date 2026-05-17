@@ -3,125 +3,125 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Submit a Recording | the golden turn">
-  <div class="max-w-2xl mx-auto px-6 py-10">
-    <h1 class="font-display italic text-heading text-4xl mb-2">Submit a Recording</h1>
-    <p class="text-ink/60 text-sm mb-2">
+  <div class="max-w-2xl mx-auto px-6 pt-16 pb-24">
+    <h1 class="font-display italic text-heading text-5xl leading-tight mb-3">Submit a Recording</h1>
+    <p class="font-sans text-ink/60 text-sm mb-1">
       Submissions open a GitHub issue for review. You'll need a GitHub account.
     </p>
-    <p class="text-ink/50 text-xs mb-8">
-      <a href="/recordings" class="text-accent hover:underline">Back to recordings</a>
+    <p class="font-sans text-ink/40 text-xs mb-10">
+      <a href="/recordings" class="text-heading hover:underline transition-colors">Back to recordings</a>
     </p>
 
     <form id="submission-form" novalidate class="space-y-0">
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Round title</label>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Round title</label>
         <input
           type="text"
           name="title"
           placeholder="Finals - Cal MR vs Rice AL"
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Link</label>
-        <p class="text-xs text-ink/40 mb-1">Dropbox, YouTube, or Vimeo URL</p>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Link</label>
+        <p class="font-sans text-xs text-ink/35 mb-1">Dropbox, YouTube, or Vimeo URL</p>
         <input
           type="text"
           name="link"
           placeholder="https://..."
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Resolution</label>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Resolution</label>
         <input
           type="text"
           name="resolution"
           placeholder="The USFG should..."
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Aff</label>
-        <p class="text-xs text-ink/40 mb-1">Describe aff strategy</p>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Aff</label>
+        <p class="font-sans text-xs text-ink/35 mb-1">Describe aff strategy</p>
         <input
           type="text"
           name="aff"
           placeholder="topical (war, econ)"
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Neg</label>
-        <p class="text-xs text-ink/40 mb-1">Start with N-off or "1-off", "2-off"</p>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Neg</label>
+        <p class="font-sans text-xs text-ink/35 mb-1">Start with N-off or "1-off", "2-off"</p>
         <input
           type="text"
           name="neg"
           placeholder="2-off (framework-t, orientalism)"
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Tags</label>
-        <p class="text-xs text-ink/40 mb-1">Must start with #, comma-separated</p>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Tags</label>
+        <p class="font-sans text-xs text-ink/35 mb-1">Must start with #, comma-separated</p>
         <input
           type="text"
           name="tags"
           placeholder="#topicality, #mlm"
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Decision</label>
-        <p class="text-xs text-ink/40 mb-1">Format: N-N Aff/Neg</p>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Decision</label>
+        <p class="font-sans text-xs text-ink/35 mb-1">Format: N-N Aff/Neg</p>
         <input
           type="text"
           name="decision"
           placeholder="3-0 Aff"
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Year</label>
-        <p class="text-xs text-ink/40 mb-1">Format: YYYY-YY</p>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Year</label>
+        <p class="font-sans text-xs text-ink/35 mb-1">Format: YYYY-YY</p>
         <input
           type="text"
           name="year"
           placeholder="2020-21"
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <div class="mb-8">
-        <label class="block text-sm font-body font-medium text-ink mb-1">Tournament</label>
+        <label class="block font-sans text-sm font-medium text-ink mb-1">Tournament</label>
         <input
           type="text"
           name="tournament"
           placeholder="NPDA"
-          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
         />
-        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
       </div>
 
       <button
         type="submit"
-        class="bg-accent text-ink font-body font-medium text-sm px-6 py-2.5 rounded hover:bg-accent/80 transition-colors"
+        class="font-sans text-sm text-heading border border-heading/40 rounded px-5 py-2.5 hover:border-heading hover:bg-heading hover:text-paper transition-colors"
       >
         Open GitHub issue
       </button>

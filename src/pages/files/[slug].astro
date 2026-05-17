@@ -40,23 +40,23 @@ const hasRelated = relatedArticles.length > 0 || relatedKs.length > 0;
 
 <BaseLayout title={`${entry.data.title} | Files | the golden turn`}>
   <div class="max-w-3xl mx-auto px-6 py-16">
-    <nav class="flex items-center gap-1 text-sm text-ink/50 mb-8">
+    <nav class="flex items-center gap-1 font-sans text-ink/40 mb-8" style="font-size: 0.75rem;">
       <a href="/files" class="hover:text-ink transition-colors">Files</a>
       <span>/</span>
-      <span class="text-ink/80">{entry.data.title}</span>
+      <span class="text-ink/60">{entry.data.title}</span>
     </nav>
 
     <div class="flex items-start gap-3 flex-wrap mb-2">
       <h1 class="font-display italic text-heading text-4xl sm:text-5xl leading-tight">
         {entry.data.title}
       </h1>
-      <span class="mt-2 text-xs font-mono bg-accent-soft/30 text-ink/60 rounded px-2 py-0.5 self-start">
+      <span class="mt-2 font-sans uppercase tracking-wide bg-ink/5 text-ink/60 rounded px-2 py-0.5 self-start" style="font-size: 0.65rem;">
         {entry.data.type}
       </span>
     </div>
 
     {(entry.data.author || entry.data.year) && (
-      <p class="text-sm text-ink/50 mb-10">
+      <p class="font-sans text-ink/40 text-sm mb-10">
         {entry.data.author && <span>{entry.data.author}</span>}
         {entry.data.author && entry.data.year && <span class="mx-1">·</span>}
         {entry.data.year && <span>{entry.data.year}</span>}
@@ -66,7 +66,7 @@ const hasRelated = relatedArticles.length > 0 || relatedKs.length > 0;
     {entry.data.download_url && (
       <a
         href={entry.data.download_url}
-        class="inline-flex items-center gap-2 mb-10 px-4 py-2 bg-accent text-paper rounded text-sm font-body hover:bg-accent/90 transition-colors"
+        class="inline-flex items-center gap-2 mb-10 px-4 py-2 font-sans text-sm text-heading border border-heading/30 rounded hover:border-heading transition-colors"
       >
         Download
       </a>
@@ -78,15 +78,15 @@ const hasRelated = relatedArticles.length > 0 || relatedKs.length > 0;
 
     {hasRelated && (
       <section class="mt-16 pt-8 border-t border-ink/10">
-        <h2 class="font-display italic text-heading text-xl mb-6">Related</h2>
+        <p class="font-sans uppercase tracking-widest text-ink/30 mb-6" style="font-size: 0.75rem;">Related</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {relatedArticles.length > 0 && (
             <div>
-              <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Articles</p>
+              <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Articles</p>
               <ul class="space-y-2">
                 {relatedArticles.map(({ entry: a, href }) => (
                   <li>
-                    <a href={href} class="text-sm text-accent hover:underline">
+                    <a href={href} class="font-sans text-sm text-heading hover:underline transition-colors">
                       {a.data.title}
                     </a>
                   </li>
@@ -97,13 +97,13 @@ const hasRelated = relatedArticles.length > 0 || relatedKs.length > 0;
 
           {relatedKs.length > 0 && (
             <div>
-              <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Ks</p>
+              <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Ks</p>
               <ul class="space-y-2">
                 {relatedKs.map(k => {
                   const kslug = k.id.replace(/\.mdx?$/, '');
                   return (
                     <li>
-                      <a href={`/k/${kslug}`} class="text-sm text-accent hover:underline">
+                      <a href={`/k/${kslug}`} class="font-sans text-sm text-heading hover:underline transition-colors">
                         {k.data.name}
                       </a>
                     </li>

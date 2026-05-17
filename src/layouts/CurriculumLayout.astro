@@ -57,10 +57,10 @@ const hasMath = article.body.includes('$');
 
 <BaseLayout title={`${article.data.title} | Curriculum | the golden turn`}>
   <div class="max-w-6xl mx-auto px-6">
-    <div class="lg:grid lg:grid-cols-[240px_1fr] lg:gap-12">
+    <div class="lg:grid lg:gap-12" style="grid-template-columns: 220px 1fr">
       <aside class="hidden lg:block">
         <div class="sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto pb-8 pr-2">
-          <a href="/curriculum" class="font-display italic text-heading text-lg block mb-6 hover:text-accent">
+          <a href="/curriculum" class="font-display italic text-heading text-base block mb-6 hover:text-accent transition-colors">
             Curriculum
           </a>
           <nav aria-label="Article navigation">
@@ -69,7 +69,7 @@ const hasMath = article.body.includes('$');
               if (!articles || articles.length === 0) return null;
               return (
                 <div class="mb-5">
-                  <p class="text-xs font-body font-semibold uppercase tracking-widest text-ink/40 mb-2">
+                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-2" style="font-size: 0.65rem;">
                     {SECTION_LABELS[section]}
                   </p>
                   <ul class="space-y-1">
@@ -81,7 +81,8 @@ const hasMath = article.body.includes('$');
                           <a
                             href={href}
                             aria-current={isCurrent ? 'page' : undefined}
-                            class={`block text-sm py-0.5 ${isCurrent ? 'text-accent font-medium' : 'text-ink/60 hover:text-ink'}`}
+                            class={`block font-sans py-0.5 transition-colors ${isCurrent ? 'text-heading font-medium' : 'text-ink/50 hover:text-ink/90'}`}
+                            style="font-size: 0.8125rem;"
                           >
                             {entry.data.title}
                           </a>
@@ -96,20 +97,20 @@ const hasMath = article.body.includes('$');
         </div>
       </aside>
 
-      <main class="py-10 min-w-0">
-        <nav aria-label="Breadcrumb" class="flex items-center gap-1 text-sm text-ink/50 mb-4 flex-wrap">
+      <main class="py-14 min-w-0">
+        <nav aria-label="Breadcrumb" class="flex items-center gap-1 font-sans text-ink/40 mb-4 flex-wrap" style="font-size: 0.75rem;">
           <a href="/curriculum" class="hover:text-ink transition-colors">Curriculum</a>
           <span>/</span>
           <a href={`/curriculum#${article.data.section}`} class="hover:text-ink transition-colors">{sectionLabel}</a>
           <span>/</span>
-          <span class="text-ink/80" aria-current="page">{article.data.title}</span>
+          <span class="text-ink/60" aria-current="page">{article.data.title}</span>
         </nav>
 
         <div class="lg:hidden mb-6">
           <button
             id="toc-toggle"
             type="button"
-            class="text-sm border border-ink/20 rounded px-4 py-2 text-ink/70 hover:border-ink/40 hover:text-ink transition-colors"
+            class="font-sans text-sm border border-ink/20 rounded px-4 py-2 text-ink/70 hover:border-ink/40 hover:text-ink transition-colors"
           >
             Contents
           </button>
@@ -120,7 +121,7 @@ const hasMath = article.body.includes('$');
                 if (!articles || articles.length === 0) return null;
                 return (
                   <div class="mb-4">
-                    <p class="text-xs font-body font-semibold uppercase tracking-widest text-ink/40 mb-1">
+                    <p class="font-sans uppercase tracking-widest text-ink/30 mb-1" style="font-size: 0.65rem;">
                       {SECTION_LABELS[section]}
                     </p>
                     <ul class="space-y-1">
@@ -132,7 +133,8 @@ const hasMath = article.body.includes('$');
                             <a
                               href={href}
                               aria-current={isCurrent ? 'page' : undefined}
-                              class={`block text-sm py-0.5 ${isCurrent ? 'text-accent font-medium' : 'text-ink/60 hover:text-ink'}`}
+                              class={`block font-sans py-0.5 transition-colors ${isCurrent ? 'text-heading font-medium' : 'text-ink/50 hover:text-ink/90'}`}
+                              style="font-size: 0.8125rem;"
                             >
                               {entry.data.title}
                             </a>
@@ -157,15 +159,15 @@ const hasMath = article.body.includes('$');
 
         {hasRelated && (
           <section class="mt-16 pt-8 border-t border-ink/10">
-            <h2 class="font-display italic text-heading text-xl mb-6">Related</h2>
+            <p class="font-sans uppercase tracking-widest text-ink/30 mb-6" style="font-size: 0.75rem;">Related</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {relatedArticles.length > 0 && (
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Articles</p>
+                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Articles</p>
                   <ul class="space-y-2">
                     {relatedArticles.map(a => (
                       <li>
-                        <a href={articleHref(a)} class="text-sm text-accent hover:underline">
+                        <a href={articleHref(a)} class="font-sans text-sm text-heading hover:underline transition-colors">
                           {a.data.title}
                         </a>
                       </li>
@@ -176,11 +178,11 @@ const hasMath = article.body.includes('$');
 
               {article.data.related_ks.length > 0 && (
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Ks</p>
+                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Ks</p>
                   <ul class="space-y-2">
                     {article.data.related_ks.map(slug => (
                       <li>
-                        <a href={`/k/${slug}`} class="text-sm text-accent hover:underline">
+                        <a href={`/k/${slug}`} class="font-sans text-sm text-heading hover:underline transition-colors">
                           {toTitleCase(slug)}
                         </a>
                       </li>
@@ -191,11 +193,11 @@ const hasMath = article.body.includes('$');
 
               {article.data.related_recordings_tags.length > 0 && (
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Recordings</p>
+                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Recordings</p>
                   <ul class="space-y-2">
                     {article.data.related_recordings_tags.map(tag => (
                       <li>
-                        <a href={`/recordings?tag=${encodeURIComponent(tag)}`} class="text-sm text-accent hover:underline">
+                        <a href={`/recordings?tag=${encodeURIComponent(tag)}`} class="font-sans text-sm text-heading hover:underline transition-colors">
                           {tag}
                         </a>
                       </li>
@@ -206,11 +208,11 @@ const hasMath = article.body.includes('$');
 
               {article.data.related_files.length > 0 && (
                 <div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Files</p>
+                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Files</p>
                   <ul class="space-y-2">
                     {article.data.related_files.map(slug => (
                       <li>
-                        <a href={`/files/${slug}`} class="text-sm text-accent hover:underline">
+                        <a href={`/files/${slug}`} class="font-sans text-sm text-heading hover:underline transition-colors">
                           {toTitleCase(slug)}
                         </a>
                       </li>

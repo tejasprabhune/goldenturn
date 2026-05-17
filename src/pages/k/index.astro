@@ -10,11 +10,11 @@ const sorted = entries.sort((a, b) => a.data.name.localeCompare(b.data.name));
   title="Ks | the golden turn"
   description="A reference for common kritiks in parliamentary debate."
 >
-  <div class="max-w-6xl mx-auto px-6 pt-16 pb-24">
+  <div class="max-w-5xl mx-auto px-6 pt-16 pb-24">
     <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-4">
       Ks
     </h1>
-    <p class="text-ink/60 text-lg max-w-2xl leading-relaxed mb-10">
+    <p class="font-body text-ink/60 text-base max-w-xl leading-relaxed mb-10">
       A reference for common kritiks in parliamentary debate.
     </p>
 
@@ -23,7 +23,7 @@ const sorted = entries.sort((a, b) => a.data.name.localeCompare(b.data.name));
         id="k-filter"
         type="search"
         placeholder="Filter by name or alias..."
-        class="w-full border border-ink/20 rounded px-3 py-2 text-sm font-body bg-paper text-ink placeholder:text-ink/40 focus:outline-none focus:border-accent"
+        class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm bg-paper text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
       />
     </div>
 
@@ -38,12 +38,12 @@ const sorted = entries.sort((a, b) => a.data.name.localeCompare(b.data.name));
           >
             <a
               href={`/k/${slug}`}
-              class="font-body text-ink hover:text-accent transition-colors text-base"
+              class="inline font-sans font-semibold text-heading hover:text-accent transition-colors"
             >
               {entry.data.name}
             </a>
             {entry.data.aliases && entry.data.aliases.length > 0 && (
-              <span class="ml-2 text-sm text-ink/40">
+              <span class="ml-2 font-sans text-ink/40" style="font-size: 0.75rem;">
                 {entry.data.aliases.join(', ')}
               </span>
             )}
@@ -52,7 +52,7 @@ const sorted = entries.sort((a, b) => a.data.name.localeCompare(b.data.name));
       })}
     </ul>
 
-    <p id="k-empty" class="hidden text-ink/40 text-sm mt-4">No results.</p>
+    <p id="k-empty" class="hidden text-ink/40 font-sans text-sm mt-4">No results.</p>
   </div>
 </BaseLayout>
 

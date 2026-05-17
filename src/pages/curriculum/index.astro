@@ -34,34 +34,34 @@ function articleHref(entry: CollectionEntry<'curriculum'>) {
   title="Curriculum | the golden turn"
   description="A complete guide to college parliamentary debate, from first principles to advanced theory."
 >
-  <div class="max-w-6xl mx-auto px-6 pt-16 pb-24">
+  <div class="max-w-5xl mx-auto px-6 pt-16 pb-24">
     <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-4">
       Curriculum
     </h1>
-    <p class="text-ink/60 text-lg max-w-2xl leading-relaxed mb-16">
+    <p class="font-body text-ink/60 text-base max-w-xl leading-relaxed mb-16">
       A complete guide to college parliamentary debate, from first principles to advanced theory.
     </p>
 
-    <div class="space-y-12">
+    <div class="space-y-14">
       {SECTION_ORDER.map(section => {
         const sectionArticles = grouped[section];
         if (!sectionArticles || sectionArticles.length === 0) return null;
         return (
           <section id={section}>
-            <h2 class="font-display italic text-heading text-2xl mb-4 pb-3 border-b border-ink/10">
+            <p class="font-sans uppercase tracking-widest text-ink/30 mb-4 pb-3 border-b border-ink/10" style="font-size: 0.75rem;">
               {SECTION_LABELS[section]}
-            </h2>
+            </p>
             <ul class="space-y-3">
               {sectionArticles.map(entry => (
                 <li>
                   <a
                     href={articleHref(entry)}
-                    class="flex items-baseline gap-3 group hover:text-accent transition-colors"
+                    class="flex items-baseline gap-3 group"
                   >
-                    <span class="text-ink/30 text-sm font-mono w-6 shrink-0 text-right">
+                    <span class="text-ink/30 font-mono shrink-0 text-right" style="font-size: 0.75rem; width: 1.5rem;">
                       {String(entry.data.order).padStart(2, '0')}
                     </span>
-                    <span class="text-ink group-hover:text-accent font-body text-base transition-colors">
+                    <span class="font-body text-ink group-hover:underline decoration-accent underline-offset-2 transition-colors">
                       {entry.data.title}
                     </span>
                   </a>

@@ -3,26 +3,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Search | the golden turn">
-  <div class="max-w-4xl mx-auto px-6 py-10">
-    <h1 class="font-display italic text-heading text-4xl mb-6">Search</h1>
+  <div class="max-w-4xl mx-auto px-6 pt-16 pb-24">
+    <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-8">Search</h1>
 
     <input
       id="search-input"
       type="search"
       placeholder="Search everything..."
-      class="w-full border border-ink/20 rounded bg-white px-4 py-3 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+      class="w-full border border-ink/15 rounded-lg bg-paper px-4 py-3 font-sans text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
     />
 
-    <div id="type-filters" class="flex gap-3 mt-4 mb-8 flex-wrap">
-      <button data-filter="" class="filter-btn active text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">All</button>
-      <button data-filter="curriculum" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Curriculum</button>
-      <button data-filter="k" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Ks</button>
-      <button data-filter="file" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Files</button>
-      <button data-filter="playbook" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Playbooks</button>
-      <button data-filter="recording" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Recordings</button>
+    <div id="type-filters" class="flex gap-2 mt-4 mb-8 flex-wrap">
+      <button data-filter="" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">All</button>
+      <button data-filter="curriculum" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Curriculum</button>
+      <button data-filter="k" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Ks</button>
+      <button data-filter="file" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Files</button>
+      <button data-filter="playbook" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Playbooks</button>
+      <button data-filter="recording" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Recordings</button>
     </div>
 
-    <p id="results-count" class="text-xs text-ink/40 mb-4"></p>
+    <p id="results-count" class="font-sans text-xs text-ink/40 mb-4"></p>
     <div id="results" class="space-y-3"></div>
   </div>
 </BaseLayout>
@@ -33,13 +33,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     background: transparent;
   }
   .filter-btn:hover {
-    color: rgb(26 26 26);
-    border-color: rgb(26 26 26 / 0.4);
+    color: rgb(26 26 26 / 0.9);
+    border-color: rgb(26 26 26 / 0.3);
   }
   .filter-btn.active {
-    background: #fcab64;
-    border-color: #fcab64;
-    color: #1a1a1a;
+    background: #2f4858;
+    border-color: #2f4858;
+    color: #fcefef;
   }
 </style>
 
@@ -81,12 +81,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const label = TYPE_LABELS[type] ?? type;
     const target = external ? ' target="_blank" rel="noopener noreferrer"' : '';
     return `
-      <a href="${escapeHtml(url)}"${target} class="block border border-ink/10 rounded-lg p-4 hover:border-accent/40 transition-colors group">
+      <a href="${escapeHtml(url)}"${target} class="block border border-ink/10 rounded-lg p-4 hover:border-ink/25 transition-colors group">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-widest text-ink/30 mb-0.5">${escapeHtml(label)}</p>
-            <h3 class="font-display italic text-heading text-lg group-hover:text-accent transition-colors">${escapeHtml(title)}</h3>
-            ${description ? `<p class="text-ink/60 text-sm mt-1 line-clamp-2">${escapeHtml(description)}</p>` : ''}
+            <p class="font-sans uppercase tracking-wide text-ink/30 mb-0.5" style="font-size: 0.65rem;">${escapeHtml(label)}</p>
+            <h3 class="font-sans font-semibold text-heading text-base">${escapeHtml(title)}</h3>
+            ${description ? `<p class="font-body text-ink/55 text-sm mt-1 line-clamp-2">${escapeHtml(description)}</p>` : ''}
           </div>
         </div>
       </a>

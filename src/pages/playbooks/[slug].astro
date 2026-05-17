@@ -25,30 +25,30 @@ const playbookFiles = allFiles.filter(f => f.data.playbook === slug);
 
 <BaseLayout title={`${entry.data.title} | Playbooks | the golden turn`}>
   <div class="max-w-3xl mx-auto px-6 py-16">
-    <nav class="flex items-center gap-1 text-sm text-ink/50 mb-8">
+    <nav class="flex items-center gap-1 font-sans text-ink/40 mb-8" style="font-size: 0.75rem;">
       <a href="/playbooks" class="hover:text-ink transition-colors">Playbooks</a>
       <span>/</span>
-      <span class="text-ink/80">{entry.data.title}</span>
+      <span class="text-ink/60">{entry.data.title}</span>
     </nav>
 
     <h1 class="font-display italic text-heading text-5xl leading-tight mb-3">
       {entry.data.title}
     </h1>
 
-    <p class="text-sm text-ink/50 mb-4">
+    <p class="font-sans text-ink/40 text-sm mb-4">
       {entry.data.author && <span>{entry.data.author}</span>}
       {entry.data.author && entry.data.year && <span class="mx-1">·</span>}
       {entry.data.year && <span>{entry.data.year}</span>}
     </p>
 
     {entry.data.description && (
-      <p class="text-ink/70 text-base leading-relaxed mb-8">{entry.data.description}</p>
+      <p class="font-body text-ink/70 text-base leading-relaxed mb-8">{entry.data.description}</p>
     )}
 
     {entry.data.download_url && (
       <a
         href={entry.data.download_url}
-        class="inline-flex items-center gap-2 mb-12 px-4 py-2 bg-accent text-paper rounded text-sm font-body hover:bg-accent/90 transition-colors"
+        class="inline-flex items-center gap-2 mb-12 px-4 py-2 font-sans text-sm text-heading border border-heading/40 rounded hover:border-heading hover:bg-heading hover:text-paper transition-colors"
       >
         Download full playbook
       </a>
@@ -59,9 +59,9 @@ const playbookFiles = allFiles.filter(f => f.data.playbook === slug);
     </div>
 
     <section>
-      <h2 class="font-display italic text-heading text-2xl mb-6">Contents</h2>
+      <p class="font-sans uppercase tracking-widest text-ink/30 mb-4" style="font-size: 0.75rem;">Contents</p>
       {playbookFiles.length === 0 ? (
-        <p class="text-ink/50 text-sm">Individual files coming soon.</p>
+        <p class="font-sans text-ink/50 text-sm">Individual files coming soon.</p>
       ) : (
         <ul class="space-y-3">
           {playbookFiles.map(f => {
@@ -70,12 +70,12 @@ const playbookFiles = allFiles.filter(f => f.data.playbook === slug);
               <li>
                 <a
                   href={`/files/${fslug}`}
-                  class="flex items-baseline gap-3 group hover:text-accent transition-colors"
+                  class="flex items-baseline gap-3 group"
                 >
-                  <span class="text-xs font-mono bg-accent-soft/30 text-ink/50 rounded px-1.5 py-0.5 shrink-0">
+                  <span class="font-sans bg-ink/5 text-ink/50 rounded px-1.5 py-0.5 shrink-0" style="font-size: 0.65rem;">
                     {f.data.type}
                   </span>
-                  <span class="font-body text-ink group-hover:text-accent transition-colors">
+                  <span class="font-sans text-sm text-ink/70 group-hover:text-ink transition-colors">
                     {f.data.title}
                   </span>
                 </a>

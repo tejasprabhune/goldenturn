@@ -4,9 +4,10 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
+  minimalNav?: boolean;
 }
 
-const { title, description = 'An open-source curriculum, recordings index, files archive, and K reference for college parliamentary debate.' } = Astro.props;
+const { title, description = 'An open-source curriculum, recordings index, files archive, and K reference for college parliamentary debate.', minimalNav = false } = Astro.props;
 
 const pathname = Astro.url.pathname;
 
@@ -35,22 +36,26 @@ function isActive(href: string) {
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
-    <header class="sticky top-0 z-50 bg-paper border-b border-ink/10">
+    <header class="sticky top-0 z-50 bg-paper/95 backdrop-blur-sm border-b border-ink/10">
       <nav aria-label="Main navigation" class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-        <a
-          href="/"
-          class="font-display italic font-semibold text-accent text-xl leading-none hover:text-accent/80"
-          aria-current={pathname === '/' ? 'page' : undefined}
-        >
-          the golden turn
-        </a>
+        {!minimalNav && (
+          <a
+            href="/"
+            class="font-display italic text-heading text-xl leading-none hover:text-accent transition-colors"
+            aria-current={pathname === '/' ? 'page' : undefined}
+          >
+            the golden turn
+          </a>
+        )}
 
-        <div class="hidden md:flex items-center gap-6">
-          {navLinks.map(({ href, label }) => (
+        {minimalNav && <span />}
+
+        <div class={`hidden md:flex items-center gap-6`}>
+          {!minimalNav && navLinks.map(({ href, label }) => (
             <a
               href={href}
               aria-current={isActive(href) ? 'page' : undefined}
-              class={`text-sm font-body hover:text-accent transition-colors ${isActive(href) ? 'text-accent' : 'text-ink/70'}`}
+              class={`text-sm font-sans transition-colors ${isActive(href) ? 'text-ink/90' : 'text-ink/60 hover:text-accent'}`}
             >
               {label}
             </a>
@@ -58,7 +63,7 @@ function isActive(href: string) {
           <button
             id="search-trigger"
             type="button"
-            class={`text-sm font-body hover:text-accent transition-colors ${isActive('/search') ? 'text-accent' : 'text-ink/70'}`}
+            class={`text-sm font-sans transition-colors ${isActive('/search') ? 'text-ink/90' : 'text-ink/60 hover:text-accent'}`}
           >
             Search
           </button>
@@ -68,51 +73,55 @@ function isActive(href: string) {
           <button
             id="search-trigger"
             type="button"
-            class="text-sm font-body text-ink/70 hover:text-accent transition-colors"
+            class="text-sm font-sans text-ink/60 hover:text-accent transition-colors"
           >
             Search
           </button>
-          <button
-            id="mobile-menu-toggle"
-            type="button"
-            aria-label="Open navigation menu"
-            class="text-ink/70 hover:text-accent transition-colors p-1"
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
-              <line x1="2" y1="5" x2="18" y2="5" />
-              <line x1="2" y1="10" x2="18" y2="10" />
-              <line x1="2" y1="15" x2="18" y2="15" />
-            </svg>
-          </button>
+          {!minimalNav && (
+            <button
+              id="mobile-menu-toggle"
+              type="button"
+              aria-label="Open navigation menu"
+              class="text-ink/60 hover:text-accent transition-colors p-1"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+                <line x1="2" y1="5" x2="18" y2="5" />
+                <line x1="2" y1="10" x2="18" y2="10" />
+                <line x1="2" y1="15" x2="18" y2="15" />
+              </svg>
+            </button>
+          )}
         </div>
       </nav>
 
-      <div
-        id="mobile-menu"
-        class="hidden md:hidden border-t border-ink/10 bg-paper"
-      >
-        <nav aria-label="Mobile navigation" class="px-6 py-4 flex flex-col gap-4">
-          {navLinks.map(({ href, label }) => (
-            <a
-              href={href}
-              aria-current={isActive(href) ? 'page' : undefined}
-              class={`text-sm font-body hover:text-accent transition-colors ${isActive(href) ? 'text-accent' : 'text-ink/70'}`}
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-      </div>
+      {!minimalNav && (
+        <div
+          id="mobile-menu"
+          class="hidden md:hidden border-t border-ink/10 bg-paper"
+        >
+          <nav aria-label="Mobile navigation" class="px-6 py-4 flex flex-col gap-4">
+            {navLinks.map(({ href, label }) => (
+              <a
+                href={href}
+                aria-current={isActive(href) ? 'page' : undefined}
+                class={`text-sm font-sans transition-colors ${isActive(href) ? 'text-ink/90' : 'text-ink/60 hover:text-accent'}`}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+        </div>
+      )}
     </header>
 
     <main>
       <slot />
     </main>
 
-    <footer class="border-t border-ink/10 mt-24">
-      <div class="max-w-6xl mx-auto px-6 py-10 flex items-center justify-between text-sm text-ink/50">
-        <span class="font-display italic text-accent/70">the golden turn</span>
-        <a href="/contribute" class="hover:text-ink transition-colors">contribute</a>
+    <footer class="mt-24 pt-8">
+      <div class="max-w-6xl mx-auto px-6 pb-10 flex items-center justify-between">
+        <span class="font-display italic text-heading/50 text-sm">the golden turn</span>
+        <a href="/contribute" class="font-sans text-sm text-ink/40 hover:text-ink transition-colors">contribute</a>
       </div>
     </footer>
   </body>
@@ -151,14 +160,14 @@ function isActive(href: string) {
             type="search"
             placeholder="Search everything..."
             autocomplete="off"
-            class="w-full border border-ink/20 rounded px-4 py-2.5 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-sm"
+            class="w-full border border-ink/15 rounded-lg px-4 py-2.5 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-sm font-sans"
           />
           <div id="overlay-quick-results" class="mt-3 space-y-1"></div>
           <div id="overlay-see-all" class="hidden mt-3 pt-3 border-t border-ink/10">
             <a
               id="overlay-see-all-link"
               href="/search"
-              class="text-sm text-accent hover:underline"
+              class="text-sm font-sans text-heading hover:underline"
             >See all results &rarr;</a>
           </div>
         </div>
@@ -227,7 +236,7 @@ function isActive(href: string) {
 
   function updateActiveItem() {
     quickItems.forEach((item, i) => {
-      item.classList.toggle('bg-accent-soft/30', i === activeItemIndex);
+      item.classList.toggle('bg-ink/5', i === activeItemIndex);
     });
     if (activeItemIndex >= 0) quickItems[activeItemIndex]?.scrollIntoView({ block: 'nearest' });
   }
@@ -274,11 +283,11 @@ function isActive(href: string) {
 
       const a = document.createElement('a');
       a.href = url;
-      a.className = 'block px-3 py-2 rounded-lg transition-colors hover:bg-accent-soft/30';
+      a.className = 'block px-3 py-2 rounded-lg transition-colors hover:bg-ink/5';
       a.innerHTML = `
-        <p class="text-xs font-semibold uppercase tracking-widest text-ink/30 mb-0.5">${escapeHtml(label)}</p>
-        <p class="text-sm text-heading font-display italic">${escapeHtml(title)}</p>
-        ${desc ? `<p class="text-xs text-ink/50 truncate">${escapeHtml(desc)}</p>` : ''}
+        <p class="text-xs font-sans uppercase tracking-widest text-ink/30 mb-0.5">${escapeHtml(label)}</p>
+        <p class="text-sm text-heading font-sans font-medium">${escapeHtml(title)}</p>
+        ${desc ? `<p class="text-xs text-ink/50 truncate font-sans">${escapeHtml(desc)}</p>` : ''}
       `;
       a.addEventListener('click', closeOverlay);
       quickResultsEl!.appendChild(a);

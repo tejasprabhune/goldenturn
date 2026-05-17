@@ -3,34 +3,23 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Recordings | the golden turn">
-  <div class="max-w-5xl mx-auto px-6 py-10">
-    <h1 class="font-display italic text-heading text-4xl mb-2">Recordings</h1>
-    <p class="text-ink/60 text-sm mb-8">
-      Search the parliamentary debate round archive.
-      <a href="/recordings/add" class="text-accent hover:underline">Submit a recording.</a>
-    </p>
-
-    <div class="mb-6">
-      <input
-        id="search-input"
-        type="search"
-        aria-label="Search recordings"
-        placeholder="Search by team, tournament, resolution, tag..."
-        class="w-full border border-ink/20 rounded bg-white px-4 py-3 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-      />
+  <div class="max-w-5xl mx-auto px-6 py-12">
+    <div class="mb-10 flex items-baseline justify-between flex-wrap gap-4">
+      <h1 class="font-display italic text-heading" style="font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1; margin: 0;">Recordings</h1>
+      <a href="/recordings/add" class="text-sm font-sans text-ink/50 hover:text-ink transition-colors">Submit a recording</a>
     </div>
 
-    <div id="facets" class="flex flex-wrap gap-3 mb-8">
-      <select
-        id="filter-year"
-        class="text-sm border border-ink/20 rounded px-3 py-1.5 bg-white text-ink/70 focus:outline-none focus:ring-1 focus:ring-accent"
-      >
+    <div class="mb-6">
+      <input id="search-input" type="search" aria-label="Search recordings"
+        placeholder="Search rounds, teams, resolutions..."
+        class="w-full border border-ink/15 rounded-lg bg-white px-4 py-3 text-sm font-sans text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
+    </div>
+
+    <div class="flex flex-wrap gap-3 mb-6">
+      <select id="filter-year" class="text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 focus:outline-none focus:ring-1 focus:ring-accent">
         <option value="">All years</option>
       </select>
-      <select
-        id="filter-aff-type"
-        class="text-sm border border-ink/20 rounded px-3 py-1.5 bg-white text-ink/70 focus:outline-none focus:ring-1 focus:ring-accent"
-      >
+      <select id="filter-aff-type" class="text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 focus:outline-none focus:ring-1 focus:ring-accent">
         <option value="">All aff types</option>
         <option value="topical">Topical</option>
         <option value="k-aff">K-aff</option>
@@ -39,17 +28,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       </select>
     </div>
 
-    <p id="results-count" class="text-xs text-ink/40 mb-4"></p>
+    <div id="active-filters" class="active-filters" style="display:none;"></div>
 
-    <div id="results" class="space-y-4"></div>
+    <p id="results-count" class="text-xs font-sans text-ink/35 mb-5"></p>
 
-    <div class="mt-8 text-center">
-      <button
-        id="load-more"
-        class="hidden text-sm text-ink/50 hover:text-ink border border-ink/20 rounded px-4 py-2 transition-colors"
-      >
-        Load more
-      </button>
+    <div id="results" class="space-y-3"></div>
+
+    <div class="mt-10 text-center">
+      <button id="load-more" class="hidden text-xs font-sans text-ink/40 hover:text-ink border border-ink/15 rounded-md px-5 py-2 transition-colors">Load more</button>
     </div>
   </div>
 </BaseLayout>
@@ -69,6 +55,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const resultsEl = document.getElementById('results') as HTMLDivElement;
   const resultsCount = document.getElementById('results-count') as HTMLParagraphElement;
   const loadMoreBtn = document.getElementById('load-more') as HTMLButtonElement;
+  const activeFiltersEl = document.getElementById('active-filters') as HTMLDivElement;
 
   let currentPage = 0;
   let currentQuery = '';
@@ -76,11 +63,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   let currentAffType = '';
   let totalPages = 0;
   let yearDropdownPopulated = false;
+  let activeTags: string[] = [];
+  let expandedObjectID = '';
 
-  function buildFilters(year: string, affType: string): string {
+  function buildFilters(year: string, affType: string, tags: string[]): string {
     const parts: string[] = [];
     if (year) parts.push(`year:"${year}"`);
     if (affType) parts.push(`aff_type:"${affType}"`);
+    if (tags.length > 0) {
+      const tagFilter = tags.map(t => `_tags:"${t}"`).join(' AND ');
+      parts.push(tagFilter);
+    }
     return parts.join(' AND ');
   }
 
@@ -92,9 +85,58 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       .replace(/"/g, '&quot;');
   }
 
+  function updateURL() {
+    const params = new URLSearchParams();
+    if (currentQuery) params.set('q', currentQuery);
+    if (currentYear) params.set('year', currentYear);
+    if (currentAffType) params.set('affType', currentAffType);
+    activeTags.forEach(t => params.append('tag', t));
+    if (expandedObjectID) params.set('expand', expandedObjectID);
+    const url = params.toString() ? `/recordings?${params}` : '/recordings';
+    history.pushState({}, '', url);
+  }
+
+  function renderActiveFilters() {
+    if (activeTags.length === 0) {
+      activeFiltersEl.style.display = 'none';
+      activeFiltersEl.innerHTML = '';
+      return;
+    }
+    activeFiltersEl.style.display = 'flex';
+    const chips = activeTags.map(tag => `
+      <button class="active-filter-chip" data-remove-tag="${escapeHtml(tag)}">
+        ${escapeHtml(tag)}
+        <span aria-hidden="true">x</span>
+      </button>
+    `).join('');
+    activeFiltersEl.innerHTML = `${chips}<button class="clear-filters">clear all</button>`;
+
+    activeFiltersEl.querySelectorAll('[data-remove-tag]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tag = (btn as HTMLElement).dataset.removeTag!;
+        activeTags = activeTags.filter(t => t !== tag);
+        updateURL();
+        renderActiveFilters();
+        search(0, false);
+      });
+    });
+
+    const clearBtn = activeFiltersEl.querySelector('.clear-filters');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        activeTags = [];
+        updateURL();
+        renderActiveFilters();
+        search(0, false);
+      });
+    }
+  }
+
   function renderCard(hit: Record<string, unknown>): string {
+    const objectID = escapeHtml(hit['objectID'] as string ?? '');
     const title = escapeHtml(hit['title'] as string ?? '');
-    const link = escapeHtml(hit['link'] as string ?? '#');
+    const rawLink = hit['link'] as string ?? '#';
+    const link = escapeHtml(rawLink);
     const resolution = escapeHtml(hit['resolution'] as string ?? '');
     const aff = escapeHtml(hit['aff'] as string ?? '');
     const neg = escapeHtml(hit['neg'] as string ?? '');
@@ -103,26 +145,36 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const tournament = escapeHtml(hit['tournament'] as string ?? '');
     const tags: string[] = Array.isArray(hit['_tags']) ? (hit['_tags'] as string[]) : [];
 
-    const tagBadges = tags
-      .map(t => `<span class="bg-accent-soft/40 px-1.5 py-0.5 rounded">${escapeHtml(t)}</span>`)
+    const tagPills = tags
+      .map(t => `<button class="rec-card__tag" data-tag="${escapeHtml(t)}" data-active="${activeTags.includes(t)}">${escapeHtml(t)}</button>`)
       .join('');
 
     return `
-      <article class="border border-ink/10 rounded-lg p-5 hover:border-accent/50 transition-colors">
-        <h2 class="font-display italic text-heading text-lg mb-1">
-          <a href="${link}" target="_blank" rel="noopener noreferrer" class="hover:text-accent">${title}</a>
-        </h2>
-        <p class="text-ink/50 text-xs mb-3">${resolution}</p>
-        <div class="text-sm text-ink/80 space-y-1 mb-3">
-          <p><span class="text-ink/40">Aff</span> ${aff}</p>
-          <p><span class="text-ink/40">Neg</span> ${neg}</p>
+      <article class="rec-card" data-objectid="${objectID}" data-link="${link}">
+        <div class="rec-card__header" role="button" tabindex="0" aria-expanded="false">
+          <div class="rec-card__main">
+            <h2 class="rec-card__title">${title}</h2>
+            <p class="rec-card__resolution">${resolution}</p>
+            <div class="rec-card__strategies">
+              <p class="rec-card__strategy"><span class="rec-card__label">Aff</span> ${aff}</p>
+              <p class="rec-card__strategy"><span class="rec-card__label">Neg</span> ${neg}</p>
+            </div>
+            <div class="rec-card__tags">${tagPills}</div>
+          </div>
+          <div class="rec-card__aside">
+            <span class="rec-card__decision">${decision}</span>
+            <span class="rec-card__meta">${year} · ${tournament}</span>
+          </div>
         </div>
-        <div class="flex flex-wrap gap-2 items-center text-xs">
-          <span class="text-ink/40">Tags</span>
-          ${tagBadges}
-          <span class="ml-auto text-ink/50">${decision}</span>
-          <span class="text-ink/40">${year}</span>
-          <span class="text-ink/40">${tournament}</span>
+        <div class="rec-card__body" hidden>
+          <div class="rec-card__body-inner">
+            <div class="rec-card__player"></div>
+            <div class="rec-card__footer">
+              <button class="rec-card__action" data-action="copy">copy link</button>
+              <a class="rec-card__action" href="${link}" target="_blank" rel="noopener noreferrer">open original</a>
+              <button class="rec-card__action" data-action="close">close</button>
+            </div>
+          </div>
         </div>
       </article>
     `;
@@ -141,8 +193,102 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     }
   }
 
+  function standardizeDropbox(url: string): string {
+    url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+    url = url.replace('dl.dropbox.com', 'dl.dropboxusercontent.com');
+    url = url.replace(/[?&]dl=[01]/, '');
+    return url;
+  }
+
+  function ytVidId(url: string): string | false {
+    const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    return m ? m[1] : false;
+  }
+
+  function showFallback(playerEl: HTMLElement, link: string) {
+    playerEl.innerHTML = `<p class="player-fallback">
+      Media preview unavailable.
+      <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" style="color:#2f4858;opacity:1;text-decoration:underline;">Open original</a>
+    </p>`;
+  }
+
+  function injectPlayer(card: HTMLElement) {
+    const link = card.dataset.link || '';
+    const playerEl = card.querySelector('.rec-card__player') as HTMLElement;
+
+    const ytId = ytVidId(link);
+    if (ytId) {
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube.com/embed/${ytId}`;
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      playerEl.appendChild(iframe);
+      return;
+    }
+
+    let mediaUrl = link;
+    if (link.includes('dropbox.com')) {
+      mediaUrl = standardizeDropbox(link);
+    }
+
+    const ext = mediaUrl.split('?')[0].split('.').pop()?.toLowerCase() || '';
+
+    if (['mp4', 'mov', 'webm'].includes(ext)) {
+      const video = document.createElement('video');
+      video.src = mediaUrl;
+      video.controls = true;
+      video.addEventListener('error', () => showFallback(playerEl, link));
+      playerEl.appendChild(video);
+      return;
+    }
+
+    if (['mp3', 'm4a', 'wav', 'ogg', 'aac'].includes(ext) || link.includes('dropbox')) {
+      const audio = document.createElement('audio');
+      audio.src = mediaUrl;
+      audio.controls = true;
+      audio.style.width = '100%';
+      audio.addEventListener('error', () => showFallback(playerEl, link));
+      playerEl.appendChild(audio);
+      return;
+    }
+
+    showFallback(playerEl, link);
+  }
+
+  function expandCard(card: HTMLElement) {
+    const body = card.querySelector('.rec-card__body') as HTMLElement;
+    const header = card.querySelector('.rec-card__header') as HTMLElement;
+    body.removeAttribute('hidden');
+    requestAnimationFrame(() => {
+      card.setAttribute('data-expanded', 'true');
+      header.setAttribute('aria-expanded', 'true');
+    });
+    if (!card.dataset.playerInjected) {
+      injectPlayer(card);
+      card.dataset.playerInjected = 'true';
+    }
+    setTimeout(() => {
+      const rect = card.getBoundingClientRect();
+      if (rect.top < 80) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+  }
+
+  function collapseCard(card: HTMLElement) {
+    const body = card.querySelector('.rec-card__body') as HTMLElement;
+    const header = card.querySelector('.rec-card__header') as HTMLElement;
+    card.setAttribute('data-expanded', 'false');
+    header.setAttribute('aria-expanded', 'false');
+    setTimeout(() => {
+      if (card.getAttribute('data-expanded') === 'false') {
+        body.setAttribute('hidden', '');
+      }
+    }, 260);
+  }
+
   async function search(page: number, append: boolean) {
-    const filters = buildFilters(currentYear, currentAffType);
+    const filters = buildFilters(currentYear, currentAffType, activeTags);
     try {
       const result = await client.searchSingleIndex({
         indexName: INDEX_NAME,
@@ -167,7 +313,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         populateYearDropdown(facets['year']);
       }
 
-      resultsCount.textContent = `${nbHits} round${nbHits === 1 ? '' : 's'}`;
+      let countLabel = `${nbHits} round${nbHits === 1 ? '' : 's'}`;
+      if (activeTags.length > 0 || currentYear || currentAffType) {
+        countLabel += ' matching filters';
+      }
+      resultsCount.textContent = countLabel;
 
       if (!append) {
         resultsEl.innerHTML = '';
@@ -178,11 +328,78 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       }
 
       loadMoreBtn.classList.toggle('hidden', currentPage + 1 >= totalPages);
+
+      if (initExpandID && !append) {
+        const card = resultsEl.querySelector(`[data-objectid="${CSS.escape(initExpandID)}"]`) as HTMLElement | null;
+        if (card) {
+          expandedObjectID = initExpandID;
+          expandCard(card);
+        }
+      }
     } catch (err) {
       resultsCount.textContent = 'Search unavailable.';
       console.error('Algolia search error:', err);
     }
   }
+
+  resultsEl.addEventListener('click', (e) => {
+    const target = e.target as Element;
+
+    const tagBtn = target.closest('[data-tag]') as HTMLElement | null;
+    if (tagBtn && tagBtn.closest('.rec-card')) {
+      const tag = tagBtn.getAttribute('data-tag')!;
+      if (activeTags.includes(tag)) {
+        activeTags = activeTags.filter(t => t !== tag);
+      } else {
+        activeTags = [...activeTags, tag];
+      }
+      updateURL();
+      renderActiveFilters();
+      search(0, false);
+      return;
+    }
+
+    const actionTarget = target as HTMLElement;
+    if (actionTarget.dataset?.action === 'close') {
+      const card = target.closest('.rec-card') as HTMLElement;
+      collapseCard(card);
+      expandedObjectID = '';
+      updateURL();
+      return;
+    }
+
+    if (actionTarget.dataset?.action === 'copy') {
+      const card = target.closest('.rec-card') as HTMLElement;
+      const oid = card.dataset.objectid!;
+      const url = `${window.location.origin}/recordings?expand=${encodeURIComponent(oid)}`;
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = target as HTMLButtonElement;
+        const orig = btn.textContent;
+        btn.textContent = 'copied';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      });
+      return;
+    }
+
+    const header = target.closest('.rec-card__header') as HTMLElement | null;
+    if (!header) return;
+    if (target.closest('a')) return;
+    const card = header.closest('.rec-card') as HTMLElement;
+    const oid = card.dataset.objectid!;
+
+    if (expandedObjectID === oid) {
+      collapseCard(card);
+      expandedObjectID = '';
+    } else {
+      if (expandedObjectID) {
+        const prevCard = resultsEl.querySelector(`[data-objectid="${CSS.escape(expandedObjectID)}"]`) as HTMLElement | null;
+        if (prevCard) collapseCard(prevCard);
+      }
+      expandCard(card);
+      expandedObjectID = oid;
+    }
+    updateURL();
+  });
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -190,6 +407,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     clearTimeout(debounceTimer);
     currentQuery = searchInput.value.trim();
     yearDropdownPopulated = false;
+    updateURL();
     search(0, false);
   }
 
@@ -201,6 +419,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   function onFilterChange() {
     currentYear = filterYear.value;
     currentAffType = filterAffType.value;
+    updateURL();
     search(0, false);
   }
 
@@ -215,13 +434,266 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   filterYear.addEventListener('change', onFilterChange);
   filterAffType.addEventListener('change', onFilterChange);
 
-  // Handle ?tag=... on load
-  const params = new URLSearchParams(window.location.search);
-  const tagParam = params.get('tag');
-  if (tagParam) {
-    searchInput.value = tagParam;
-    currentQuery = tagParam;
-  }
+  window.addEventListener('popstate', () => {
+    const p = new URLSearchParams(window.location.search);
+    currentQuery = p.get('q') || '';
+    currentYear = p.get('year') || '';
+    currentAffType = p.get('affType') || '';
+    activeTags = p.getAll('tag');
+    expandedObjectID = p.get('expand') || '';
+    searchInput.value = currentQuery;
+    filterYear.value = currentYear;
+    filterAffType.value = currentAffType;
+    renderActiveFilters();
+    search(0, false);
+  });
+
+  const initParams = new URLSearchParams(window.location.search);
+  currentQuery = initParams.get('q') || '';
+  currentYear = initParams.get('year') || '';
+  currentAffType = initParams.get('affType') || '';
+  activeTags = initParams.getAll('tag');
+  const initExpandID = initParams.get('expand') || '';
+  if (currentQuery) searchInput.value = currentQuery;
+  if (currentYear) filterYear.value = currentYear;
+  if (currentAffType) filterAffType.value = currentAffType;
+  renderActiveFilters();
 
   search(0, false);
 </script>
+
+<style>
+  .rec-card {
+    border: 1px solid rgba(26,26,26,0.1);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .rec-card:hover {
+    border-color: rgba(26,26,26,0.2);
+  }
+  .rec-card[data-expanded="true"] {
+    border-color: rgba(26,26,26,0.25);
+    box-shadow: 0 2px 12px rgba(26,26,26,0.06);
+  }
+
+  .rec-card__header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    padding: 1.125rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .rec-card__title {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0 0 0.25rem;
+    line-height: 1.3;
+  }
+
+  .rec-card__resolution {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    color: #2f4858;
+    margin: 0 0 0.625rem;
+    opacity: 0.8;
+  }
+
+  .rec-card__strategies {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.625rem;
+  }
+
+  .rec-card__strategy {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    color: #1a1a1a;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .rec-card__label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #1a1a1a;
+    opacity: 0.38;
+    margin-right: 0.4rem;
+  }
+
+  .rec-card__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.375rem;
+  }
+
+  .rec-card__tag {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    background: rgba(26,26,26,0.06);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    color: #1a1a1a;
+    opacity: 0.7;
+    cursor: pointer;
+    border: none;
+    transition: background 0.12s, opacity 0.12s;
+  }
+  .rec-card__tag:hover,
+  .rec-card__tag[data-active="true"] {
+    background: #edf09a;
+    opacity: 1;
+  }
+
+  .rec-card__aside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    min-width: 6rem;
+    flex-shrink: 0;
+  }
+
+  .rec-card__decision {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #2f4858;
+    color: #fcefef;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .rec-card__meta {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.75rem;
+    color: #1a1a1a;
+    opacity: 0.38;
+    text-align: right;
+    line-height: 1.4;
+  }
+
+  .rec-card__body {
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease;
+  }
+  .rec-card__body:not([hidden]) {
+    grid-template-rows: 1fr;
+  }
+  .rec-card__body > * {
+    overflow: hidden;
+  }
+
+  .rec-card__body[hidden] {
+    display: grid !important;
+  }
+
+  .rec-card__body-inner {
+    padding: 0 1.25rem 1.25rem;
+    border-top: 1px solid rgba(26,26,26,0.07);
+  }
+
+  .rec-card__player {
+    margin-bottom: 1rem;
+  }
+
+  .rec-card__player iframe,
+  .rec-card__player video,
+  .rec-card__player audio {
+    width: 100%;
+    border-radius: 0.375rem;
+    display: block;
+  }
+
+  .rec-card__player iframe {
+    aspect-ratio: 16/9;
+    border: none;
+  }
+
+  .rec-card__player .player-fallback {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    color: #1a1a1a;
+    opacity: 0.5;
+    padding: 1rem 0;
+  }
+
+  .rec-card__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.25rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid rgba(26,26,26,0.07);
+    margin-top: 0.875rem;
+  }
+
+  .rec-card__action {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.8rem;
+    color: #1a1a1a;
+    opacity: 0.45;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: none;
+    transition: opacity 0.12s;
+  }
+  .rec-card__action:hover {
+    opacity: 1;
+  }
+
+  .active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+    align-items: center;
+  }
+  .active-filter-chip {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.75rem;
+    background: #edf09a;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    color: #1a1a1a;
+    cursor: pointer;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: background 0.12s;
+  }
+  .active-filter-chip:hover {
+    background: #ced530;
+  }
+  .clear-filters {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.75rem;
+    color: #1a1a1a;
+    opacity: 0.4;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 0.25rem;
+    transition: opacity 0.12s;
+  }
+  .clear-filters:hover {
+    opacity: 0.8;
+  }
+</style>
