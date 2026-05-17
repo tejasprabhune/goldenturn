@@ -1,5 +1,5 @@
 ---
-title: "A2 Afropessimism Thesis:"
+title: "A2 Afropessimism Thesis"
 slug: "jc-a2-afropessimism-thesis"
 type: "brief"
 playbook: "jc"

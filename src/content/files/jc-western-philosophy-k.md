@@ -1,5 +1,5 @@
 ---
-title: "Western Philosophy K:"
+title: "Western Philosophy K"
 slug: "jc-western-philosophy-k"
 type: "brief"
 playbook: "jc"

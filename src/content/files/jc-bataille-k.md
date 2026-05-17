@@ -1,5 +1,5 @@
 ---
-title: "Bataille K:"
+title: "Bataille K"
 slug: "jc-bataille-k"
 type: "brief"
 playbook: "jc"

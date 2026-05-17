@@ -1,5 +1,5 @@
 ---
-title: "Juche Aff:"
+title: "Juche Aff"
 slug: "jc-juche-aff"
 type: "brief"
 playbook: "jc"

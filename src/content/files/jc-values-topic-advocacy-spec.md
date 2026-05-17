@@ -1,5 +1,5 @@
 ---
-title: "Value’s Topic Advocacy Spec:"
+title: "Value’s Topic Advocacy Spec"
 slug: "jc-values-topic-advocacy-spec"
 type: "brief"
 playbook: "jc"

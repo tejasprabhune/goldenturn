@@ -1,5 +1,5 @@
 ---
-title: "NET Spec:"
+title: "NET Spec"
 slug: "jc-net-spec"
 type: "brief"
 playbook: "jc"

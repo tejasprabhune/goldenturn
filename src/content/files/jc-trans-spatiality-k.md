@@ -1,5 +1,5 @@
 ---
-title: "Trans Spatiality K:"
+title: "Trans Spatiality K"
 slug: "jc-trans-spatiality-k"
 type: "brief"
 playbook: "jc"

@@ -1,5 +1,5 @@
 ---
-title: "Transwoman Eroticism K:"
+title: "Transwoman Eroticism K"
 slug: "jc-transwoman-eroticism-k"
 type: "brief"
 playbook: "jc"

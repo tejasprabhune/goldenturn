@@ -1,5 +1,5 @@
 ---
-title: "DHHS Legitimacy DA:"
+title: "DHHS Legitimacy DA"
 slug: "jc-dhhs-legitimacy-da"
 type: "brief"
 playbook: "jc"

@@ -1,5 +1,5 @@
 ---
-title: "Barad Ecology K:"
+title: "Barad Ecology K"
 slug: "jc-barad-ecology-k"
 type: "brief"
 playbook: "jc"

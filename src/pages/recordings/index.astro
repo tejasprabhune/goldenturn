@@ -14,6 +14,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <input
         id="search-input"
         type="search"
+        aria-label="Search recordings"
         placeholder="Search by team, tournament, resolution, tag..."
         class="w-full border border-ink/20 rounded bg-white px-4 py-3 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
       />
@@ -109,7 +110,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return `
       <article class="border border-ink/10 rounded-lg p-5 hover:border-accent/50 transition-colors">
         <h2 class="font-display italic text-heading text-lg mb-1">
-          <a href="${link}" target="_blank" rel="noopener" class="hover:text-accent">${title}</a>
+          <a href="${link}" target="_blank" rel="noopener noreferrer" class="hover:text-accent">${title}</a>
         </h2>
         <p class="text-ink/50 text-xs mb-3">${resolution}</p>
         <div class="text-sm text-ink/80 space-y-1 mb-3">

@@ -1,5 +1,5 @@
 ---
-title: "Alt Lang PIC:"
+title: "Alt Lang PIC"
 slug: "jc-alt-lang-pic"
 type: "brief"
 playbook: "jc"

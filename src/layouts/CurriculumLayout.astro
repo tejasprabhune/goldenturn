@@ -63,44 +63,89 @@ const hasMath = article.body.includes('$');
           <a href="/curriculum" class="font-display italic text-heading text-lg block mb-6 hover:text-accent">
             Curriculum
           </a>
-          {SECTION_ORDER.map(section => {
-            const articles = grouped[section];
-            if (!articles || articles.length === 0) return null;
-            return (
-              <div class="mb-5">
-                <p class="text-xs font-body font-semibold uppercase tracking-widest text-ink/40 mb-2">
-                  {SECTION_LABELS[section]}
-                </p>
-                <ul class="space-y-1">
-                  {articles.map(entry => {
-                    const href = articleHref(entry);
-                    const isCurrent = href === currentHref;
-                    return (
-                      <li>
-                        <a
-                          href={href}
-                          class={`block text-sm py-0.5 ${isCurrent ? 'text-accent font-medium' : 'text-ink/60 hover:text-ink'}`}
-                        >
-                          {entry.data.title}
-                        </a>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
+          <nav aria-label="Article navigation">
+            {SECTION_ORDER.map(section => {
+              const articles = grouped[section];
+              if (!articles || articles.length === 0) return null;
+              return (
+                <div class="mb-5">
+                  <p class="text-xs font-body font-semibold uppercase tracking-widest text-ink/40 mb-2">
+                    {SECTION_LABELS[section]}
+                  </p>
+                  <ul class="space-y-1">
+                    {articles.map(entry => {
+                      const href = articleHref(entry);
+                      const isCurrent = href === currentHref;
+                      return (
+                        <li>
+                          <a
+                            href={href}
+                            aria-current={isCurrent ? 'page' : undefined}
+                            class={`block text-sm py-0.5 ${isCurrent ? 'text-accent font-medium' : 'text-ink/60 hover:text-ink'}`}
+                          >
+                            {entry.data.title}
+                          </a>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
+          </nav>
         </div>
       </aside>
 
       <main class="py-10 min-w-0">
-        <nav class="flex items-center gap-1 text-sm text-ink/50 mb-8 flex-wrap">
+        <nav aria-label="Breadcrumb" class="flex items-center gap-1 text-sm text-ink/50 mb-4 flex-wrap">
           <a href="/curriculum" class="hover:text-ink transition-colors">Curriculum</a>
           <span>/</span>
           <a href={`/curriculum#${article.data.section}`} class="hover:text-ink transition-colors">{sectionLabel}</a>
           <span>/</span>
-          <span class="text-ink/80">{article.data.title}</span>
+          <span class="text-ink/80" aria-current="page">{article.data.title}</span>
         </nav>
+
+        <div class="lg:hidden mb-6">
+          <button
+            id="toc-toggle"
+            type="button"
+            class="text-sm border border-ink/20 rounded px-4 py-2 text-ink/70 hover:border-ink/40 hover:text-ink transition-colors"
+          >
+            Contents
+          </button>
+          <div id="toc-drawer" class="hidden mt-3 border border-ink/10 rounded-lg p-4">
+            <nav aria-label="Article navigation">
+              {SECTION_ORDER.map(section => {
+                const articles = grouped[section];
+                if (!articles || articles.length === 0) return null;
+                return (
+                  <div class="mb-4">
+                    <p class="text-xs font-body font-semibold uppercase tracking-widest text-ink/40 mb-1">
+                      {SECTION_LABELS[section]}
+                    </p>
+                    <ul class="space-y-1">
+                      {articles.map(entry => {
+                        const href = articleHref(entry);
+                        const isCurrent = href === currentHref;
+                        return (
+                          <li>
+                            <a
+                              href={href}
+                              aria-current={isCurrent ? 'page' : undefined}
+                              class={`block text-sm py-0.5 ${isCurrent ? 'text-accent font-medium' : 'text-ink/60 hover:text-ink'}`}
+                            >
+                              {entry.data.title}
+                            </a>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
 
         <h1 class="font-display italic text-heading text-4xl sm:text-5xl leading-tight mb-10">
           {article.data.title}
@@ -190,4 +235,14 @@ const hasMath = article.body.includes('$');
       });
     </script>
   )}
+
+  <script>
+    const tocToggle = document.getElementById('toc-toggle');
+    const tocDrawer = document.getElementById('toc-drawer');
+    if (tocToggle && tocDrawer) {
+      tocToggle.addEventListener('click', () => {
+        tocDrawer.classList.toggle('hidden');
+      });
+    }
+  </script>
 </BaseLayout>

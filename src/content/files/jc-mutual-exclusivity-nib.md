@@ -1,5 +1,5 @@
 ---
-title: "Mutual Exclusivity NiB:"
+title: "Mutual Exclusivity NiB"
 slug: "jc-mutual-exclusivity-nib"
 type: "brief"
 playbook: "jc"

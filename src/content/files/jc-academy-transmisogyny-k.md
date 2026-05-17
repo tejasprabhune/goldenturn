@@ -1,5 +1,5 @@
 ---
-title: "Academy Transmisogyny K:"
+title: "Academy Transmisogyny K"
 slug: "jc-academy-transmisogyny-k"
 type: "brief"
 playbook: "jc"

@@ -1,5 +1,5 @@
 ---
-title: "Medicalization Aff:"
+title: "Medicalization Aff"
 slug: "jc-medicalization-aff"
 type: "brief"
 playbook: "jc"

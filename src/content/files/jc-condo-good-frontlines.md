@@ -1,5 +1,5 @@
 ---
-title: "Condo Good Frontlines:"
+title: "Condo Good Frontlines"
 slug: "jc-condo-good-frontlines"
 type: "brief"
 playbook: "jc"

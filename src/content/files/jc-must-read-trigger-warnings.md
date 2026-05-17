@@ -1,5 +1,5 @@
 ---
-title: "Must Read Trigger Warnings:"
+title: "Must Read Trigger Warnings"
 slug: "jc-must-read-trigger-warnings"
 type: "brief"
 playbook: "jc"

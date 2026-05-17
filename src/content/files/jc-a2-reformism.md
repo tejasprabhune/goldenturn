@@ -1,5 +1,5 @@
 ---
-title: "A2 Reformism:"
+title: "A2 Reformism"
 slug: "jc-a2-reformism"
 type: "brief"
 playbook: "jc"

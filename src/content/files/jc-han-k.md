@@ -1,5 +1,5 @@
 ---
-title: "Han K:"
+title: "Han K"
 slug: "jc-han-k"
 type: "brief"
 playbook: "jc"

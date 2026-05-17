@@ -1,5 +1,5 @@
 ---
-title: "Counter Interp for Non-Topical Aff’s:"
+title: "Counter Interp for Non-Topical Aff’s"
 slug: "jc-counter-interp-for-non-topical-affs"
 type: "brief"
 playbook: "jc"

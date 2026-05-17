@@ -1,5 +1,5 @@
 ---
-title: "Racial Positionality Aff:"
+title: "Racial Positionality Aff"
 slug: "jc-racial-positionality-aff"
 type: "brief"
 playbook: "jc"

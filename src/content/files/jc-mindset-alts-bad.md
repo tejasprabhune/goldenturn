@@ -1,5 +1,5 @@
 ---
-title: "Mindset Alt’s Bad:"
+title: "Mindset Alt’s Bad"
 slug: "jc-mindset-alts-bad"
 type: "brief"
 playbook: "jc"

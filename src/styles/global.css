@@ -20,6 +20,10 @@
   a:focus-visible {
     @apply outline-2 outline-offset-2 outline-accent rounded;
   }
+
+  button:focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent rounded;
+  }
 }
 
 @layer components {
@@ -33,6 +37,15 @@
 
   .prose h3 {
     @apply font-display text-heading text-xl leading-snug mt-8 mb-2;
+  }
+
+  .prose h4 {
+    @apply font-body font-semibold text-ink text-base leading-snug mt-6 mb-1;
+  }
+
+  .prose h5,
+  .prose h6 {
+    @apply font-body font-semibold text-ink/70 text-sm leading-snug mt-4 mb-1;
   }
 
   .prose p {

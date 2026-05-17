@@ -1,0 +1,174 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Search | the golden turn">
+  <div class="max-w-4xl mx-auto px-6 py-10">
+    <h1 class="font-display italic text-heading text-4xl mb-6">Search</h1>
+
+    <input
+      id="search-input"
+      type="search"
+      placeholder="Search everything..."
+      class="w-full border border-ink/20 rounded bg-white px-4 py-3 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+    />
+
+    <div id="type-filters" class="flex gap-3 mt-4 mb-8 flex-wrap">
+      <button data-filter="" class="filter-btn active text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">All</button>
+      <button data-filter="curriculum" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Curriculum</button>
+      <button data-filter="k" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Ks</button>
+      <button data-filter="file" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Files</button>
+      <button data-filter="playbook" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Playbooks</button>
+      <button data-filter="recording" class="filter-btn text-sm border border-ink/20 rounded-full px-4 py-1.5 transition-colors">Recordings</button>
+    </div>
+
+    <p id="results-count" class="text-xs text-ink/40 mb-4"></p>
+    <div id="results" class="space-y-3"></div>
+  </div>
+</BaseLayout>
+
+<style>
+  .filter-btn {
+    color: rgb(26 26 26 / 0.6);
+    background: transparent;
+  }
+  .filter-btn:hover {
+    color: rgb(26 26 26);
+    border-color: rgb(26 26 26 / 0.4);
+  }
+  .filter-btn.active {
+    background: #fcab64;
+    border-color: #fcab64;
+    color: #1a1a1a;
+  }
+</style>
+
+<script>
+  import { algoliasearch } from 'algoliasearch';
+
+  const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
+  const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
+  const CONTENT_INDEX = 'goldenturn_content';
+  const RECORDINGS_INDEX = import.meta.env.PUBLIC_ALGOLIA_INDEX_NAME as string;
+
+  const client = algoliasearch(APP_ID, SEARCH_KEY);
+
+  const searchInput = document.getElementById('search-input') as HTMLInputElement;
+  const resultsEl = document.getElementById('results') as HTMLDivElement;
+  const resultsCount = document.getElementById('results-count') as HTMLParagraphElement;
+  const filterBtns = document.querySelectorAll<HTMLButtonElement>('.filter-btn');
+
+  let activeFilter = '';
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const TYPE_LABELS: Record<string, string> = {
+    curriculum: 'Curriculum',
+    k: 'K Reference',
+    file: 'File',
+    playbook: 'Playbook',
+    recording: 'Recording',
+  };
+
+  function escapeHtml(str: string): string {
+    return (str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderCard(type: string, title: string, url: string, description: string, external = false): string {
+    const label = TYPE_LABELS[type] ?? type;
+    const target = external ? ' target="_blank" rel="noopener noreferrer"' : '';
+    return `
+      <a href="${escapeHtml(url)}"${target} class="block border border-ink/10 rounded-lg p-4 hover:border-accent/40 transition-colors group">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-widest text-ink/30 mb-0.5">${escapeHtml(label)}</p>
+            <h3 class="font-display italic text-heading text-lg group-hover:text-accent transition-colors">${escapeHtml(title)}</h3>
+            ${description ? `<p class="text-ink/60 text-sm mt-1 line-clamp-2">${escapeHtml(description)}</p>` : ''}
+          </div>
+        </div>
+      </a>
+    `;
+  }
+
+  interface AnyHit {
+    objectID: string;
+    type?: string;
+    title?: string;
+    name?: string;
+    url?: string;
+    link?: string;
+    description?: string;
+    resolution?: string;
+    _isRecording?: boolean;
+  }
+
+  async function runSearch(query: string) {
+    const contentHits: AnyHit[] = await client
+      .searchSingleIndex({ indexName: CONTENT_INDEX, searchParams: { query, hitsPerPage: 30 } })
+      .then(r => r.hits as AnyHit[])
+      .catch(() => []);
+
+    const recordingHits: AnyHit[] = await client
+      .searchSingleIndex({ indexName: RECORDINGS_INDEX, searchParams: { query, hitsPerPage: 10 } })
+      .then(r => (r.hits as AnyHit[]).map(h => ({ ...h, _isRecording: true })))
+      .catch(() => []);
+
+    let merged: AnyHit[] = [...contentHits, ...recordingHits];
+
+    if (activeFilter) {
+      merged = merged.filter(h => {
+        if (activeFilter === 'recording') return h._isRecording;
+        return h.type === activeFilter;
+      });
+    }
+
+    resultsCount.textContent = `${merged.length} result${merged.length === 1 ? '' : 's'}`;
+    resultsEl.innerHTML = '';
+
+    for (const hit of merged) {
+      if (hit._isRecording) {
+        const title = (hit['title'] as string) ?? '';
+        const url = (hit['link'] as string) ?? '#';
+        const desc = (hit['resolution'] as string) ?? '';
+        resultsEl.insertAdjacentHTML('beforeend', renderCard('recording', title, url, desc, true));
+      } else {
+        const title = (hit.title ?? hit.name) as string ?? '';
+        const url = hit.url as string ?? '#';
+        const desc = hit.description as string ?? '';
+        resultsEl.insertAdjacentHTML('beforeend', renderCard(hit.type ?? '', title, url, desc));
+      }
+    }
+  }
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter ?? '';
+      const q = searchInput.value.trim();
+      if (q) runSearch(q);
+    });
+  });
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => runSearch(searchInput.value.trim()), 300);
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      clearTimeout(debounceTimer);
+      runSearch(searchInput.value.trim());
+    }
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get('q');
+  if (q) {
+    searchInput.value = q;
+    runSearch(q);
+  }
+</script>

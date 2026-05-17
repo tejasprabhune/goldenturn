@@ -1,5 +1,5 @@
 ---
-title: "Policymaking V. K FW:"
+title: "Policymaking V. K FW"
 slug: "jc-policymaking-v-k-fw"
 type: "brief"
 playbook: "jc"

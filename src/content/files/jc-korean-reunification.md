@@ -1,5 +1,5 @@
 ---
-title: "Korean Reunification:"
+title: "Korean Reunification"
 slug: "jc-korean-reunification"
 type: "brief"
 playbook: "jc"

@@ -1,5 +1,5 @@
 ---
-title: "NiBs Bad:"
+title: "NiBs Bad"
 slug: "jc-nibs-bad"
 type: "brief"
 playbook: "jc"

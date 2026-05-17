@@ -1,5 +1,5 @@
 ---
-title: "Gender Death Performance Aff:"
+title: "Gender Death Performance Aff"
 slug: "jc-gender-death-performance-aff"
 type: "brief"
 playbook: "jc"

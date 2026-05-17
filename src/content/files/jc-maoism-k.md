@@ -1,5 +1,5 @@
 ---
-title: "Maoism K:"
+title: "Maoism K"
 slug: "jc-maoism-k"
 type: "brief"
 playbook: "jc"

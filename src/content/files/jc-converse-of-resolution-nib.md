@@ -1,5 +1,5 @@
 ---
-title: "Converse of Resolution NiB:"
+title: "Converse of Resolution NiB"
 slug: "jc-converse-of-resolution-nib"
 type: "brief"
 playbook: "jc"

@@ -1,5 +1,5 @@
 ---
-title: "Must Check Interps:"
+title: "Must Check Interps"
 slug: "jc-must-check-interps"
 type: "brief"
 playbook: "jc"

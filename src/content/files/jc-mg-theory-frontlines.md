@@ -1,5 +1,5 @@
 ---
-title: "MG Theory Frontlines:"
+title: "MG Theory Frontlines"
 slug: "jc-mg-theory-frontlines"
 type: "brief"
 playbook: "jc"

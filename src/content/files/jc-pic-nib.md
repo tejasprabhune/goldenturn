@@ -1,5 +1,5 @@
 ---
-title: "PIC NiB:"
+title: "PIC NiB"
 slug: "jc-pic-nib"
 type: "brief"
 playbook: "jc"

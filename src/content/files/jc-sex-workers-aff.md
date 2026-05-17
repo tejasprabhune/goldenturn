@@ -1,5 +1,5 @@
 ---
-title: "Sex Workers Aff:"
+title: "Sex Workers Aff"
 slug: "jc-sex-workers-aff"
 type: "brief"
 playbook: "jc"

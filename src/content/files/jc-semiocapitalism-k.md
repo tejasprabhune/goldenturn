@@ -1,5 +1,5 @@
 ---
-title: "Semiocapitalism K:"
+title: "Semiocapitalism K"
 slug: "jc-semiocapitalism-k"
 type: "brief"
 playbook: "jc"

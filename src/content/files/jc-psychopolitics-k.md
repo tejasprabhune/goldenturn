@@ -1,5 +1,5 @@
 ---
-title: "Psychopolitics K:"
+title: "Psychopolitics K"
 slug: "jc-psychopolitics-k"
 type: "brief"
 playbook: "jc"
