@@ -155,7 +155,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   searchInput.addEventListener('input', () => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => runSearch(searchInput.value.trim()), 300);
+    debounceTimer = setTimeout(() => runSearch(searchInput.value.trim()), 150);
   });
 
   searchInput.addEventListener('keydown', (e) => {
