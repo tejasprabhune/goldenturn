@@ -1,0 +1,220 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Recordings | the golden turn">
+  <div class="max-w-5xl mx-auto px-6 py-10">
+    <h1 class="font-display italic text-heading text-4xl mb-2">Recordings</h1>
+    <p class="text-ink/60 text-sm mb-8">
+      Search the parliamentary debate round archive.
+      <a href="/recordings/add" class="text-accent hover:underline">Submit a recording.</a>
+    </p>
+
+    <div class="mb-6">
+      <input
+        id="search-input"
+        type="search"
+        placeholder="Search by team, tournament, resolution, tag..."
+        class="w-full border border-ink/20 rounded bg-white px-4 py-3 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+      />
+    </div>
+
+    <div id="facets" class="flex flex-wrap gap-3 mb-8">
+      <select
+        id="filter-year"
+        class="text-sm border border-ink/20 rounded px-3 py-1.5 bg-white text-ink/70 focus:outline-none focus:ring-1 focus:ring-accent"
+      >
+        <option value="">All years</option>
+      </select>
+      <select
+        id="filter-aff-type"
+        class="text-sm border border-ink/20 rounded px-3 py-1.5 bg-white text-ink/70 focus:outline-none focus:ring-1 focus:ring-accent"
+      >
+        <option value="">All aff types</option>
+        <option value="topical">Topical</option>
+        <option value="k-aff">K-aff</option>
+        <option value="performance">Performance</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    <p id="results-count" class="text-xs text-ink/40 mb-4"></p>
+
+    <div id="results" class="space-y-4"></div>
+
+    <div class="mt-8 text-center">
+      <button
+        id="load-more"
+        class="hidden text-sm text-ink/50 hover:text-ink border border-ink/20 rounded px-4 py-2 transition-colors"
+      >
+        Load more
+      </button>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  import { algoliasearch } from 'algoliasearch';
+
+  const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
+  const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
+  const INDEX_NAME = import.meta.env.PUBLIC_ALGOLIA_INDEX_NAME as string;
+
+  const client = algoliasearch(APP_ID, SEARCH_KEY);
+
+  const searchInput = document.getElementById('search-input') as HTMLInputElement;
+  const filterYear = document.getElementById('filter-year') as HTMLSelectElement;
+  const filterAffType = document.getElementById('filter-aff-type') as HTMLSelectElement;
+  const resultsEl = document.getElementById('results') as HTMLDivElement;
+  const resultsCount = document.getElementById('results-count') as HTMLParagraphElement;
+  const loadMoreBtn = document.getElementById('load-more') as HTMLButtonElement;
+
+  let currentPage = 0;
+  let currentQuery = '';
+  let currentYear = '';
+  let currentAffType = '';
+  let totalPages = 0;
+  let yearDropdownPopulated = false;
+
+  function buildFilters(year: string, affType: string): string {
+    const parts: string[] = [];
+    if (year) parts.push(`year:"${year}"`);
+    if (affType) parts.push(`aff_type:"${affType}"`);
+    return parts.join(' AND ');
+  }
+
+  function escapeHtml(str: string): string {
+    return (str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderCard(hit: Record<string, unknown>): string {
+    const title = escapeHtml(hit['title'] as string ?? '');
+    const link = escapeHtml(hit['link'] as string ?? '#');
+    const resolution = escapeHtml(hit['resolution'] as string ?? '');
+    const aff = escapeHtml(hit['aff'] as string ?? '');
+    const neg = escapeHtml(hit['neg'] as string ?? '');
+    const decision = escapeHtml(hit['decision'] as string ?? '');
+    const year = escapeHtml(hit['year'] as string ?? '');
+    const tournament = escapeHtml(hit['tournament'] as string ?? '');
+    const tags: string[] = Array.isArray(hit['_tags']) ? (hit['_tags'] as string[]) : [];
+
+    const tagBadges = tags
+      .map(t => `<span class="bg-accent-soft/40 px-1.5 py-0.5 rounded">${escapeHtml(t)}</span>`)
+      .join('');
+
+    return `
+      <article class="border border-ink/10 rounded-lg p-5 hover:border-accent/50 transition-colors">
+        <h2 class="font-display italic text-heading text-lg mb-1">
+          <a href="${link}" target="_blank" rel="noopener" class="hover:text-accent">${title}</a>
+        </h2>
+        <p class="text-ink/50 text-xs mb-3">${resolution}</p>
+        <div class="text-sm text-ink/80 space-y-1 mb-3">
+          <p><span class="text-ink/40">Aff</span> ${aff}</p>
+          <p><span class="text-ink/40">Neg</span> ${neg}</p>
+        </div>
+        <div class="flex flex-wrap gap-2 items-center text-xs">
+          <span class="text-ink/40">Tags</span>
+          ${tagBadges}
+          <span class="ml-auto text-ink/50">${decision}</span>
+          <span class="text-ink/40">${year}</span>
+          <span class="text-ink/40">${tournament}</span>
+        </div>
+      </article>
+    `;
+  }
+
+  function populateYearDropdown(facetYears: Record<string, number>) {
+    if (yearDropdownPopulated) return;
+    yearDropdownPopulated = true;
+
+    const years = Object.keys(facetYears).sort().reverse();
+    for (const yr of years) {
+      const opt = document.createElement('option');
+      opt.value = yr;
+      opt.textContent = yr;
+      filterYear.appendChild(opt);
+    }
+  }
+
+  async function search(page: number, append: boolean) {
+    const filters = buildFilters(currentYear, currentAffType);
+
+    const result = await client.searchSingleIndex({
+      indexName: INDEX_NAME,
+      searchParams: {
+        query: currentQuery,
+        hitsPerPage: 20,
+        page,
+        facets: ['year', 'tournament', 'aff_type'],
+        ...(filters ? { filters } : {}),
+      },
+    });
+
+    const hits = result.hits as Record<string, unknown>[];
+    const nbHits = result.nbHits ?? 0;
+    const nbPages = result.nbPages ?? 0;
+    const facets = result.facets as Record<string, Record<string, number>> | undefined;
+
+    totalPages = nbPages;
+    currentPage = page;
+
+    if (facets?.['year'] && !yearDropdownPopulated) {
+      populateYearDropdown(facets['year']);
+    }
+
+    resultsCount.textContent = `${nbHits} round${nbHits === 1 ? '' : 's'}`;
+
+    if (!append) {
+      resultsEl.innerHTML = '';
+    }
+
+    for (const hit of hits) {
+      resultsEl.insertAdjacentHTML('beforeend', renderCard(hit));
+    }
+
+    if (currentPage + 1 < totalPages) {
+      loadMoreBtn.classList.remove('hidden');
+    } else {
+      loadMoreBtn.classList.add('hidden');
+    }
+  }
+
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function onSearchInput() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      currentQuery = searchInput.value.trim();
+      yearDropdownPopulated = false;
+      search(0, false);
+    }, 300);
+  }
+
+  function onFilterChange() {
+    currentYear = filterYear.value;
+    currentAffType = filterAffType.value;
+    search(0, false);
+  }
+
+  loadMoreBtn.addEventListener('click', () => {
+    search(currentPage + 1, true);
+  });
+
+  searchInput.addEventListener('input', onSearchInput);
+  filterYear.addEventListener('change', onFilterChange);
+  filterAffType.addEventListener('change', onFilterChange);
+
+  // Handle ?tag=... on load
+  const params = new URLSearchParams(window.location.search);
+  const tagParam = params.get('tag');
+  if (tagParam) {
+    searchInput.value = tagParam;
+    currentQuery = tagParam;
+  }
+
+  search(0, false);
+</script>

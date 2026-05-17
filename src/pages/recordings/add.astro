@@ -1,0 +1,234 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Submit a Recording | the golden turn">
+  <div class="max-w-2xl mx-auto px-6 py-10">
+    <h1 class="font-display italic text-heading text-4xl mb-2">Submit a Recording</h1>
+    <p class="text-ink/60 text-sm mb-2">
+      Submissions open a GitHub issue for review. You'll need a GitHub account.
+    </p>
+    <p class="text-ink/50 text-xs mb-8">
+      <a href="/recordings" class="text-accent hover:underline">Back to recordings</a>
+    </p>
+
+    <form id="submission-form" novalidate class="space-y-0">
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Round title</label>
+        <input
+          type="text"
+          name="title"
+          placeholder="Finals - Cal MR vs Rice AL"
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Link</label>
+        <p class="text-xs text-ink/40 mb-1">Dropbox, YouTube, or Vimeo URL</p>
+        <input
+          type="text"
+          name="link"
+          placeholder="https://..."
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Resolution</label>
+        <input
+          type="text"
+          name="resolution"
+          placeholder="The USFG should..."
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Aff</label>
+        <p class="text-xs text-ink/40 mb-1">Describe aff strategy</p>
+        <input
+          type="text"
+          name="aff"
+          placeholder="topical (war, econ)"
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Neg</label>
+        <p class="text-xs text-ink/40 mb-1">Start with N-off or "1-off", "2-off"</p>
+        <input
+          type="text"
+          name="neg"
+          placeholder="2-off (framework-t, orientalism)"
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Tags</label>
+        <p class="text-xs text-ink/40 mb-1">Must start with #, comma-separated</p>
+        <input
+          type="text"
+          name="tags"
+          placeholder="#topicality, #mlm"
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Decision</label>
+        <p class="text-xs text-ink/40 mb-1">Format: N-N Aff/Neg</p>
+        <input
+          type="text"
+          name="decision"
+          placeholder="3-0 Aff"
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Year</label>
+        <p class="text-xs text-ink/40 mb-1">Format: YYYY-YY</p>
+        <input
+          type="text"
+          name="year"
+          placeholder="2020-21"
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <div class="mb-8">
+        <label class="block text-sm font-body font-medium text-ink mb-1">Tournament</label>
+        <input
+          type="text"
+          name="tournament"
+          placeholder="NPDA"
+          class="w-full border border-ink/20 rounded px-3 py-2 text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+        />
+        <p class="validation-hint text-xs text-accent mt-1 hidden"></p>
+      </div>
+
+      <button
+        type="submit"
+        class="bg-accent text-ink font-body font-medium text-sm px-6 py-2.5 rounded hover:bg-accent/80 transition-colors"
+      >
+        Open GitHub issue
+      </button>
+    </form>
+  </div>
+</BaseLayout>
+
+<script>
+  const form = document.getElementById('submission-form') as HTMLFormElement;
+
+  function getField(name: string): HTMLInputElement {
+    return form.querySelector(`[name="${name}"]`) as HTMLInputElement;
+  }
+
+  function getHint(name: string): HTMLParagraphElement {
+    return getField(name).nextElementSibling as HTMLParagraphElement;
+  }
+
+  function showHint(name: string, msg: string) {
+    const hint = getHint(name);
+    hint.textContent = msg;
+    hint.classList.remove('hidden');
+  }
+
+  function clearHint(name: string) {
+    const hint = getHint(name);
+    hint.textContent = '';
+    hint.classList.add('hidden');
+  }
+
+  function validateTags(value: string): string | null {
+    if (!value.trim()) return null;
+    const tags = value.split(',').map(t => t.trim()).filter(Boolean);
+    const bad = tags.filter(t => !t.startsWith('#'));
+    if (bad.length > 0) return 'Tags should start with #';
+    return null;
+  }
+
+  function validateDecision(value: string): string | null {
+    if (!value.trim()) return null;
+    if (!/^\d+-\d+ (Aff|Neg)$/.test(value.trim())) return 'Expected format: 3-0 Aff or 2-1 Neg';
+    return null;
+  }
+
+  function validateYear(value: string): string | null {
+    if (!value.trim()) return null;
+    if (!/^\d{4}-\d{2}$/.test(value.trim())) return 'Expected format: 2020-21';
+    return null;
+  }
+
+  function validateNeg(value: string): string | null {
+    if (!value.trim()) return null;
+    if (!/\d+-off|off/i.test(value)) return 'Consider leading with N-off, e.g. 2-off (da, cp)';
+    return null;
+  }
+
+  const validators: Record<string, (v: string) => string | null> = {
+    tags: validateTags,
+    decision: validateDecision,
+    year: validateYear,
+    neg: validateNeg,
+  };
+
+  for (const [name, validate] of Object.entries(validators)) {
+    const field = getField(name);
+    field.addEventListener('blur', () => {
+      const msg = validate(field.value);
+      if (msg) showHint(name, msg);
+      else clearHint(name);
+    });
+    field.addEventListener('input', () => {
+      const msg = validate(field.value);
+      if (msg) showHint(name, msg);
+      else clearHint(name);
+    });
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const title = getField('title').value.trim();
+    const link = getField('link').value.trim();
+    const resolution = getField('resolution').value.trim();
+    const aff = getField('aff').value.trim();
+    const neg = getField('neg').value.trim();
+    const tags = getField('tags').value.trim();
+    const decision = getField('decision').value.trim();
+    const year = getField('year').value.trim();
+    const tournament = getField('tournament').value.trim();
+
+    const issueTitle = encodeURIComponent(`Recording submission: ${title}`);
+    const body = [
+      '## Recording Submission',
+      '',
+      `**Title:** ${title}`,
+      `**Link:** ${link}`,
+      `**Resolution:** ${resolution}`,
+      `**Aff:** ${aff}`,
+      `**Neg:** ${neg}`,
+      `**Tags:** ${tags}`,
+      `**Decision:** ${decision}`,
+      `**Year:** ${year}`,
+      `**Tournament:** ${tournament}`,
+    ].join('\n');
+
+    const issueUrl = `https://github.com/tejasprabhune/goldenturn/issues/new?title=${issueTitle}&body=${encodeURIComponent(body)}&labels=recording-submission`;
+
+    window.open(issueUrl, '_blank', 'noopener,noreferrer');
+  });
+</script>
