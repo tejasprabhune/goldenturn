@@ -462,7 +462,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   search(0, false);
 </script>
 
-<style>
+<style is:global>
   .rec-card {
     border: 1px solid rgba(26,26,26,0.1);
     border-radius: 0.5rem;
@@ -552,6 +552,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .rec-card__tag[data-active="true"] {
     background: #edf09a;
     opacity: 1;
+    color: #1a1a1a;
   }
 
   .rec-card__aside {
