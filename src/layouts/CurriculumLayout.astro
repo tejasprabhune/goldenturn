@@ -1,0 +1,193 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  article: CollectionEntry<'curriculum'>;
+  allArticles: CollectionEntry<'curriculum'>[];
+}
+
+const { article, allArticles } = Astro.props;
+const { Content } = await article.render();
+
+const SECTION_ORDER = ['foundations', 'aff', 'neg', 'theory', 'advanced', 'meta'] as const;
+const SECTION_LABELS: Record<string, string> = {
+  foundations: 'Foundations',
+  aff: 'Affirmative',
+  neg: 'Negative',
+  theory: 'Theory',
+  advanced: 'Advanced',
+  meta: 'Meta',
+};
+
+function toTitleCase(str: string) {
+  return str.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+const grouped = SECTION_ORDER.reduce<Record<string, CollectionEntry<'curriculum'>[]>>((acc, section) => {
+  acc[section] = allArticles
+    .filter(a => a.data.section === section)
+    .sort((a, b) => a.data.order - b.data.order);
+  return acc;
+}, {} as Record<string, CollectionEntry<'curriculum'>[]>);
+
+function articleHref(entry: CollectionEntry<'curriculum'>) {
+  const parts = entry.id.replace(/\.mdx?$/, '').split('/');
+  const section = parts[0];
+  const slug = parts.slice(1).join('/');
+  return `/curriculum/${section}/${slug}`;
+}
+
+const currentHref = articleHref(article);
+
+const sectionLabel = SECTION_LABELS[article.data.section] ?? article.data.section;
+
+const relatedArticles = article.data.related_articles
+  .map(slug => allArticles.find(a => a.id.replace(/\.mdx?$/, '') === slug))
+  .filter((a): a is CollectionEntry<'curriculum'> => !!a);
+
+const hasRelated =
+  relatedArticles.length > 0 ||
+  article.data.related_ks.length > 0 ||
+  article.data.related_recordings_tags.length > 0 ||
+  article.data.related_files.length > 0;
+
+const hasMath = article.body.includes('$');
+---
+
+<BaseLayout title={`${article.data.title} | Curriculum | the golden turn`}>
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="lg:grid lg:grid-cols-[240px_1fr] lg:gap-12">
+      <aside class="hidden lg:block">
+        <div class="sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto pb-8 pr-2">
+          <a href="/curriculum" class="font-display italic text-heading text-lg block mb-6 hover:text-accent">
+            Curriculum
+          </a>
+          {SECTION_ORDER.map(section => {
+            const articles = grouped[section];
+            if (!articles || articles.length === 0) return null;
+            return (
+              <div class="mb-5">
+                <p class="text-xs font-body font-semibold uppercase tracking-widest text-ink/40 mb-2">
+                  {SECTION_LABELS[section]}
+                </p>
+                <ul class="space-y-1">
+                  {articles.map(entry => {
+                    const href = articleHref(entry);
+                    const isCurrent = href === currentHref;
+                    return (
+                      <li>
+                        <a
+                          href={href}
+                          class={`block text-sm py-0.5 ${isCurrent ? 'text-accent font-medium' : 'text-ink/60 hover:text-ink'}`}
+                        >
+                          {entry.data.title}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      <main class="py-10 min-w-0">
+        <nav class="flex items-center gap-1 text-sm text-ink/50 mb-8 flex-wrap">
+          <a href="/curriculum" class="hover:text-ink transition-colors">Curriculum</a>
+          <span>/</span>
+          <a href={`/curriculum#${article.data.section}`} class="hover:text-ink transition-colors">{sectionLabel}</a>
+          <span>/</span>
+          <span class="text-ink/80">{article.data.title}</span>
+        </nav>
+
+        <h1 class="font-display italic text-heading text-4xl sm:text-5xl leading-tight mb-10">
+          {article.data.title}
+        </h1>
+
+        <div class="prose">
+          <Content />
+        </div>
+
+        {hasRelated && (
+          <section class="mt-16 pt-8 border-t border-ink/10">
+            <h2 class="font-display italic text-heading text-xl mb-6">Related</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {relatedArticles.length > 0 && (
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Articles</p>
+                  <ul class="space-y-2">
+                    {relatedArticles.map(a => (
+                      <li>
+                        <a href={articleHref(a)} class="text-sm text-accent hover:underline">
+                          {a.data.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {article.data.related_ks.length > 0 && (
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Ks</p>
+                  <ul class="space-y-2">
+                    {article.data.related_ks.map(slug => (
+                      <li>
+                        <a href={`/k/${slug}`} class="text-sm text-accent hover:underline">
+                          {toTitleCase(slug)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {article.data.related_recordings_tags.length > 0 && (
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Recordings</p>
+                  <ul class="space-y-2">
+                    {article.data.related_recordings_tags.map(tag => (
+                      <li>
+                        <a href={`/recordings?tag=${encodeURIComponent(tag)}`} class="text-sm text-accent hover:underline">
+                          {tag}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {article.data.related_files.length > 0 && (
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Files</p>
+                  <ul class="space-y-2">
+                    {article.data.related_files.map(slug => (
+                      <li>
+                        <a href={`/files/${slug}`} class="text-sm text-accent hover:underline">
+                          {toTitleCase(slug)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  </div>
+
+  {hasMath && (
+    <script>
+      import { render } from 'kern-typ';
+      document.querySelectorAll('.math-inline, .math-display').forEach(el => {
+        const source = el.textContent ?? '';
+        const displayMode = el.classList.contains('math-display');
+        render(source, el as Element, { displayMode, throwOnError: false });
+      });
+    </script>
+  )}
+</BaseLayout>

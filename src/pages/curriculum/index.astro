@@ -1,0 +1,76 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+
+const SECTION_ORDER = ['foundations', 'aff', 'neg', 'theory', 'advanced', 'meta'] as const;
+const SECTION_LABELS: Record<string, string> = {
+  foundations: 'Foundations',
+  aff: 'Affirmative',
+  neg: 'Negative',
+  theory: 'Theory',
+  advanced: 'Advanced',
+  meta: 'Meta',
+};
+
+const articles = await getCollection('curriculum', ({ data }) => !data.draft);
+
+const grouped = SECTION_ORDER.reduce<Record<string, CollectionEntry<'curriculum'>[]>>((acc, section) => {
+  acc[section] = articles
+    .filter(a => a.data.section === section)
+    .sort((a, b) => a.data.order - b.data.order);
+  return acc;
+}, {} as Record<string, CollectionEntry<'curriculum'>[]>);
+
+function articleHref(entry: CollectionEntry<'curriculum'>) {
+  const parts = entry.id.replace(/\.mdx?$/, '').split('/');
+  const section = parts[0];
+  const slug = parts.slice(1).join('/');
+  return `/curriculum/${section}/${slug}`;
+}
+---
+
+<BaseLayout
+  title="Curriculum | the golden turn"
+  description="A complete guide to college parliamentary debate, from first principles to advanced theory."
+>
+  <div class="max-w-6xl mx-auto px-6 pt-16 pb-24">
+    <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-4">
+      Curriculum
+    </h1>
+    <p class="text-ink/60 text-lg max-w-2xl leading-relaxed mb-16">
+      A complete guide to college parliamentary debate, from first principles to advanced theory.
+    </p>
+
+    <div class="space-y-12">
+      {SECTION_ORDER.map(section => {
+        const sectionArticles = grouped[section];
+        if (!sectionArticles || sectionArticles.length === 0) return null;
+        return (
+          <section id={section}>
+            <h2 class="font-display italic text-heading text-2xl mb-4 pb-3 border-b border-ink/10">
+              {SECTION_LABELS[section]}
+            </h2>
+            <ul class="space-y-3">
+              {sectionArticles.map(entry => (
+                <li>
+                  <a
+                    href={articleHref(entry)}
+                    class="flex items-baseline gap-3 group hover:text-accent transition-colors"
+                  >
+                    <span class="text-ink/30 text-sm font-mono w-6 shrink-0 text-right">
+                      {String(entry.data.order).padStart(2, '0')}
+                    </span>
+                    <span class="text-ink group-hover:text-accent font-body text-base transition-colors">
+                      {entry.data.title}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
+  </div>
+</BaseLayout>
