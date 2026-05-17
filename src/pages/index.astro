@@ -4,83 +4,145 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <BaseLayout
   title="the golden turn"
-  description="An open resource for college parliamentary debate."
+  description="An open archive for college parliamentary debate."
+  minimalNav={true}
+  noFooter={true}
 >
-  <div class="home-block">
-    <h1 class="home-wordmark">the golden turn</h1>
-    <div class="home-rule" aria-hidden="true"></div>
-    <p class="home-desc">
-      an open resource for college parliamentary debate.
-      curriculum, recordings, files, playbooks, and a reference for the Ks,
-      written and collected by debaters.
-    </p>
-    <nav aria-label="Sections" class="home-nav">
-      <a href="/curriculum">curriculum</a>
-      <span aria-hidden="true">&middot;</span>
-      <a href="/recordings">recordings</a>
-      <span aria-hidden="true">&middot;</span>
-      <a href="/k">ks</a>
-      <span aria-hidden="true">&middot;</span>
-      <a href="/files">files</a>
-      <span aria-hidden="true">&middot;</span>
-      <a href="/playbooks">playbooks</a>
-      <span aria-hidden="true">&middot;</span>
-      <a href="/lectures">lectures</a>
-    </nav>
+  <div class="home">
+
+    <header class="home-header">
+      <div class="home-wordmark-block">
+        <h1 class="home-wordmark">the golden turn</h1>
+        <div class="home-rule" aria-hidden="true"></div>
+      </div>
+      <p class="home-tagline">an open archive for college parliamentary debate.</p>
+      <nav aria-label="Sections" class="home-nav">
+        <a href="/curriculum">curriculum</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/recordings">recordings</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/k">ks</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/files">files</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/playbooks">playbooks</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/lectures">lectures</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/search">search</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/contribute">contribute</a>
+      </nav>
+    </header>
+
+    <section>
+      <h2>What it is</h2>
+      <p>
+        the golden turn is an open archive for college parliamentary debate, written and
+        maintained by debaters. it consolidates written curriculum, a searchable recordings
+        index, case files and playbooks, and a reference for common kritiks. everything
+        is open source and open to contribution.
+      </p>
+    </section>
+
+    <section>
+      <h2>How it's organized</h2>
+      <p>
+        <a href="/curriculum">Curriculum</a> is a written introduction to parliamentary debate,
+        from basic theory through advanced strategy. Articles cover framing and burdens,
+        affirmative and negative construction, theory, and the Ks.
+      </p>
+      <p>
+        <a href="/recordings">Recordings</a> is a searchable index of NPDA rounds.
+        Search by team, resolution, or tag. Filter by year, tournament, and aff type.
+        Click any round to expand it and play the audio or video inline.
+      </p>
+      <p>
+        <a href="/k">Ks</a> is a reference for common kritiks run in parliamentary debate,
+        including the Cap K, Security K, and framework theory.
+      </p>
+      <p>
+        <a href="/files">Files</a> contains individual cases, briefs, blocks, and scaffolds.
+        <a href="/playbooks">Playbooks</a> are curated collections of files, with bulk download.
+      </p>
+      <p>
+        <a href="/lectures">Lectures</a> will be recorded talks and workshops. Coming soon.
+      </p>
+    </section>
+
+    <section>
+      <h2>How to contribute</h2>
+      <p>
+        the site is open source on <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer">GitHub</a>.
+        written content (curriculum articles, K pages, files) is accepted as pull requests
+        against the main branch. to submit a recording, use the
+        <a href="/recordings/add">recording submission form</a>, which opens a GitHub issue
+        for review.
+      </p>
+    </section>
+
   </div>
 </BaseLayout>
 
 <style>
-  .home-block {
-    padding-top: clamp(2.5rem, 14vh, 6rem);
-    padding-left: clamp(1.75rem, 18vw, 9rem);
-    padding-right: 2rem;
-    padding-bottom: 4rem;
-    max-width: 44rem;
+  .home {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 72px 32px 120px;
+  }
+
+  /* Header block */
+
+  .home-header {
+    margin-bottom: 56px;
+  }
+
+  .home-wordmark-block {
+    display: inline-block;
+    margin-bottom: 18px;
   }
 
   .home-wordmark {
-    font-family: 'swear-display', Georgia, serif;
+    font-family: 'swear-display', 'freight-text-pro', Georgia, serif;
     font-style: italic;
     font-weight: 600;
-    font-size: clamp(2.75rem, 4.5vw, 3.5rem);
-    line-height: 1.05;
+    font-size: 44px;
+    line-height: 1;
     letter-spacing: -0.015em;
     color: #2f4858;
-    margin: 0 0 0.875rem;
+    margin: 0 0 10px;
+    display: block;
   }
 
   .home-rule {
-    width: 88px;
+    width: 100%;
     height: 3px;
     background: #ced530;
-    margin-bottom: 1.625rem;
   }
 
-  .home-desc {
-    font-family: 'freight-text-pro', 'neue-haas-unica', Georgia, serif;
-    font-size: 1rem;
-    line-height: 1.7;
+  .home-tagline {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 15px;
     color: #1a1a1a;
-    opacity: 0.72;
-    margin: 0 0 1.75rem;
-    max-width: 32rem;
+    opacity: 0.52;
+    margin: 0 0 16px;
   }
 
   .home-nav {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem 0.6rem;
+    align-items: baseline;
+    gap: 0.25rem 0.5rem;
   }
 
   .home-nav a {
     font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 0.8125rem;
+    font-size: 13px;
     color: #1a1a1a;
-    opacity: 0.48;
+    opacity: 0.5;
     text-decoration: none;
-    transition: opacity 0.15s, color 0.15s;
+    letter-spacing: 0.02em;
+    transition: opacity 0.12s, color 0.12s;
   }
 
   .home-nav a:hover {
@@ -89,19 +151,57 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   .home-nav span {
+    font-size: 11px;
     color: #1a1a1a;
-    opacity: 0.2;
-    font-size: 0.7rem;
+    opacity: 0.22;
   }
 
-  @media (max-width: 640px) {
-    .home-block {
-      padding-left: 1.75rem;
-      padding-top: 2.5rem;
+  /* Content sections */
+
+  .home section {
+    margin-bottom: 44px;
+  }
+
+  .home h2 {
+    font-family: 'swear-display', 'freight-text-pro', Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 21px;
+    color: #2f4858;
+    margin: 0 0 13px;
+  }
+
+  .home p {
+    font-family: 'freight-text-pro', 'neue-haas-unica', Georgia, serif;
+    font-size: 15.5px;
+    line-height: 1.7;
+    color: #1a1a1a;
+    margin-bottom: 12px;
+  }
+
+  .home p:last-child {
+    margin-bottom: 0;
+  }
+
+  .home a {
+    color: #2f4858;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: rgba(26,26,26,0.2);
+    transition: text-decoration-color 0.12s;
+  }
+
+  .home a:hover {
+    text-decoration-color: #ced530;
+  }
+
+  @media (max-width: 540px) {
+    .home {
+      padding: 48px 20px 80px;
     }
 
     .home-wordmark {
-      font-size: clamp(2.5rem, 10vw, 3rem);
+      font-size: 36px;
     }
   }
 </style>
