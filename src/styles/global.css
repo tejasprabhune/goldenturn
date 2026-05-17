@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-body text-ink bg-paper min-h-screen;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display text-heading;
+  }
+
+  a {
+    @apply transition-colors duration-150;
+  }
+
+  a:focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent rounded;
+  }
+}

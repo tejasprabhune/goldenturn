@@ -1,0 +1,77 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'An open-source curriculum, recordings index, files archive, and K reference for college parliamentary debate.' } = Astro.props;
+
+const pathname = Astro.url.pathname;
+
+const navLinks = [
+  { href: '/curriculum', label: 'Curriculum' },
+  { href: '/k', label: 'Ks' },
+  { href: '/recordings', label: 'Recordings' },
+  { href: '/files', label: 'Files' },
+  { href: '/playbooks', label: 'Playbooks' },
+  { href: '/lectures', label: 'Lectures' },
+];
+
+function isActive(href: string) {
+  return pathname === href || pathname.startsWith(href + '/');
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="stylesheet" href="https://use.typekit.net/ten2ahn.css" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <header class="sticky top-0 z-50 bg-paper border-b border-ink/10">
+      <nav class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+        <a
+          href="/"
+          class="font-display italic font-semibold text-accent text-xl leading-none hover:text-accent/80"
+        >
+          the golden turn
+        </a>
+
+        <div class="flex items-center gap-6">
+          {navLinks.map(({ href, label }) => (
+            <a
+              href={href}
+              class={`text-sm font-body hover:text-accent transition-colors ${isActive(href) ? 'text-accent' : 'text-ink/70'}`}
+            >
+              {label}
+            </a>
+          ))}
+          <a
+            href="/search"
+            class={`text-sm font-body hover:text-accent transition-colors ${isActive('/search') ? 'text-accent' : 'text-ink/70'}`}
+          >
+            Search
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="border-t border-ink/10 mt-24">
+      <div class="max-w-6xl mx-auto px-6 py-10 flex items-center justify-between text-sm text-ink/50">
+        <span class="font-display italic text-accent/70">the golden turn</span>
+        <a href="/contribute" class="hover:text-ink transition-colors">contribute</a>
+      </div>
+    </footer>
+  </body>
+</html>

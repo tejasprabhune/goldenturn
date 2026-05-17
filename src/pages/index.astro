@@ -1,0 +1,82 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const sections = [
+  {
+    href: '/curriculum',
+    name: 'Curriculum',
+    description: 'The written textbook. From first principles to advanced theory.',
+  },
+  {
+    href: '/k',
+    name: 'Ks',
+    description: 'A reference for common kritiks and their theory.',
+  },
+  {
+    href: '/recordings',
+    name: 'Recordings',
+    description: 'Searchable index of parliamentary debate rounds.',
+  },
+  {
+    href: '/files',
+    name: 'Files',
+    description: 'Cases, briefs, blocks, and scaffolds.',
+  },
+  {
+    href: '/playbooks',
+    name: 'Playbooks',
+    description: 'Curated strategy collections with bulk downloads.',
+  },
+  {
+    href: '/lectures',
+    name: 'Lectures',
+    description: 'Recorded lectures and talks. Coming soon.',
+  },
+];
+---
+
+<BaseLayout title="the golden turn" description="An open-source curriculum, recordings index, files archive, and K reference for college parliamentary debate.">
+  <section class="max-w-6xl mx-auto px-6 pt-20 pb-16">
+    <h1 class="font-display italic font-semibold text-accent text-6xl sm:text-7xl leading-none mb-6">
+      the golden turn
+    </h1>
+    <p class="text-ink/70 text-lg max-w-2xl leading-relaxed">
+      An open-source curriculum, recordings index, files archive, and K reference for college parliamentary debate.
+    </p>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-6 pb-16">
+    <form action="/search" method="get">
+      <label for="search" class="sr-only">Search everything</label>
+      <input
+        id="search"
+        type="search"
+        name="q"
+        placeholder="Search everything..."
+        class="w-full max-w-xl border border-ink/20 rounded bg-white px-4 py-3 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+      />
+    </form>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-6 pb-20">
+    <h2 class="font-display italic text-heading text-2xl mb-8">Sections</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {sections.map(({ href, name, description }) => (
+        <a
+          href={href}
+          class="block border border-ink/10 rounded-lg p-6 hover:border-accent hover:bg-accent-soft/20 transition-colors group"
+        >
+          <h3 class="font-display italic text-heading text-xl mb-2 group-hover:text-accent transition-colors">
+            {name}
+          </h3>
+          <p class="text-ink/60 text-sm leading-relaxed">{description}</p>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-6 pb-24">
+    <h2 class="font-display italic text-heading text-2xl mb-4">Recent additions</h2>
+    <p class="text-ink/50 text-sm">Content coming soon.</p>
+  </section>
+</BaseLayout>
