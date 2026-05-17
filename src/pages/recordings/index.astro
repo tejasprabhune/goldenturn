@@ -194,10 +194,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   function standardizeDropbox(url: string): string {
+    if (url.includes('/scl/fi/')) {
+      // New shape: rlkey param is required, so only flip dl=0 to dl=1
+      return url.replace(/\bdl=0\b/, 'dl=1');
+    }
+    // Old /s/ shape: rewrite host, strip entire query string
     url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
     url = url.replace('dl.dropbox.com', 'dl.dropboxusercontent.com');
-    url = url.replace(/[?&]dl=[01]/, '');
-    return url;
+    return url.split('?')[0];
   }
 
   function ytVidId(url: string): string | false {
@@ -205,10 +209,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return m ? m[1] : false;
   }
 
-  function showFallback(playerEl: HTMLElement, link: string) {
+  function vimeoVidId(url: string): string | false {
+    const m = url.match(/vimeo\.com\/(?:video\/|showcase\/\d+\/video\/)?(\d{6,11})/);
+    return m ? m[1] : false;
+  }
+
+  function showFallback(playerEl: HTMLElement, originalLink: string) {
     playerEl.innerHTML = `<p class="player-fallback">
-      Media preview unavailable.
-      <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" style="color:#2f4858;opacity:1;text-decoration:underline;">Open original</a>
+      playback unavailable.
+      <a href="${escapeHtml(originalLink)}" target="_blank" rel="noopener noreferrer">open original</a>
     </p>`;
   }
 
@@ -216,6 +225,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const link = card.dataset.link || '';
     const playerEl = card.querySelector('.rec-card__player') as HTMLElement;
 
+    // YouTube
     const ytId = ytVidId(link);
     if (ytId) {
       const iframe = document.createElement('iframe');
@@ -226,6 +236,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       return;
     }
 
+    // Vimeo
+    const vimeoId = vimeoVidId(link);
+    if (vimeoId) {
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://player.vimeo.com/video/${vimeoId}`;
+      iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+      iframe.allowFullscreen = true;
+      playerEl.appendChild(iframe);
+      return;
+    }
+
+    // Dropbox and direct media files
     let mediaUrl = link;
     if (link.includes('dropbox.com')) {
       mediaUrl = standardizeDropbox(link);
@@ -237,15 +259,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const video = document.createElement('video');
       video.src = mediaUrl;
       video.controls = true;
+      video.preload = 'metadata';
       video.addEventListener('error', () => showFallback(playerEl, link));
       playerEl.appendChild(video);
       return;
     }
 
-    if (['mp3', 'm4a', 'wav', 'ogg', 'aac'].includes(ext) || link.includes('dropbox')) {
+    if (['mp3', 'm4a', 'wav', 'ogg', 'aac'].includes(ext) || link.includes('dropbox.com')) {
       const audio = document.createElement('audio');
       audio.src = mediaUrl;
       audio.controls = true;
+      audio.preload = 'metadata';
       audio.style.width = '100%';
       audio.addEventListener('error', () => showFallback(playerEl, link));
       playerEl.appendChild(audio);
@@ -625,12 +649,25 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     border: none;
   }
 
-  .rec-card__player .player-fallback {
+  .player-fallback {
     font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 0.8125rem;
+    font-size: 0.8rem;
     color: #1a1a1a;
-    opacity: 0.5;
-    padding: 1rem 0;
+    opacity: 0.45;
+    padding: 0.75rem 0;
+    margin: 0;
+  }
+
+  .player-fallback a {
+    color: #1a1a1a;
+    opacity: 1;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    margin-left: 0.375rem;
+  }
+
+  .player-fallback a:hover {
+    opacity: 0.7;
   }
 
   .rec-card__footer {
