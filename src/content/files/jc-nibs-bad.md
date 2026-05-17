@@ -1,0 +1,17 @@
+---
+title: "NiBs Bad:"
+slug: "jc-nibs-bad"
+type: "brief"
+playbook: "jc"
+tags: []
+related_articles: []
+related_ks: []
+---
+
+#### Interpretation texts: - The PMC may not contain interpretations that are necessary but insufficient for the negative to win. (violation: it did)- The PMC may not contain procedural interpretations. (violation: it did)- The PMC may not contain procedural standards. (Violation: it did)- The PMC may only read impacts and framework related to the substantive implications of their advocacy. (Violation: they read procedural impacts like fairness/education pre-emptively, not related to their advocacy [i.e. it would be fine if they talked about access in like a performance, but not if they had it as a standard to a nib], or they read impact framing not related to the aff’s impacts like “reasonability” or something)#### Standards:Education:
+
+- Substance: NIBS disincentivize substantive debate – no matter how educational or important the LOC, the AFF can drop it and go for theory to win - Topic and Depth: This kills topic education by using up PMC time and discouraging LOCs to criticize the topic and instead spend time answering theory. Kills depth of education since we have to split time between substantive and procedural debate, and kills breadth since theory debates just repeat the same claims and counter-claims every round and don’t change with the topic Clash:
+
+- Uplayer: The aff is always incentivized to go for theory in the PMR when it’s on the table, because a priori claims mean that they only have to win a risk of a violation to frame out all NEG offense- Engagement: This means substantive engagement with the block strategy never happens - the PMR can just outweigh with a priori claims and never defend case, meaning substantive clash never happens- Education: This kills education; comparing different ideas to one another is uniquely important education because debate is the only place we get that - we can learn from oratories or wikipedia, but debate provides unique opportunity for clash Fairness 
+
+- Golden Turns: Since the violation isn’t contextualized until the MG, the PMR gets golden turns to any new MO answers- Backside Rebuttals: No backside rebuttles means the judge has to intervene to weigh the MO responses against the PMR for the neg team; this kills fairness because - Intervention: Judge intervention exacerbates unconscious bias, like giving white men more credibility, which kills fairness. If judges don’t intervene, AFF wins every round, meaning there’s no reason for the neg to challenge them and debate collapses  ### **Voters**:- Competing interpretations: debate is unique in that the rules are made bottom-up by the debaters and not by the judges; reasonability leads to the imposition of judges’ understanding of what the rules should be on debaters - Drop the argument - they shouldn’t be allowed to run NIBS PMR: If they try to extend the NIB in the PMR, this becomes drop the team - they destroy fairness by forcing the block to bifurcate their time, and lead to all the harms in the standards - Prior question: This comes before their procedural shells because it’s a question of whether they should be allowed to run them in the first place; additionally, because it’s impossible for the neg to fully engage with these shells because of the fairness skew, you can’t evaluate their truth claims - Fairness- Education

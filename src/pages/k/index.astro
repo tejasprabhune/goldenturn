@@ -1,0 +1,76 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const entries = await getCollection('k');
+const sorted = entries.sort((a, b) => a.data.name.localeCompare(b.data.name));
+---
+
+<BaseLayout
+  title="Ks | the golden turn"
+  description="A reference for common kritiks in parliamentary debate."
+>
+  <div class="max-w-6xl mx-auto px-6 pt-16 pb-24">
+    <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-4">
+      Ks
+    </h1>
+    <p class="text-ink/60 text-lg max-w-2xl leading-relaxed mb-10">
+      A reference for common kritiks in parliamentary debate.
+    </p>
+
+    <div class="mb-8 max-w-sm">
+      <input
+        id="k-filter"
+        type="search"
+        placeholder="Filter by name or alias..."
+        class="w-full border border-ink/20 rounded px-3 py-2 text-sm font-body bg-paper text-ink placeholder:text-ink/40 focus:outline-none focus:border-accent"
+      />
+    </div>
+
+    <ul id="k-list" class="space-y-4">
+      {sorted.map(entry => {
+        const slug = entry.id.replace(/\.mdx?$/, '');
+        return (
+          <li
+            class="k-item"
+            data-name={entry.data.name.toLowerCase()}
+            data-aliases={(entry.data.aliases ?? []).join(' ').toLowerCase()}
+          >
+            <a
+              href={`/k/${slug}`}
+              class="font-body text-ink hover:text-accent transition-colors text-base"
+            >
+              {entry.data.name}
+            </a>
+            {entry.data.aliases && entry.data.aliases.length > 0 && (
+              <span class="ml-2 text-sm text-ink/40">
+                {entry.data.aliases.join(', ')}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+
+    <p id="k-empty" class="hidden text-ink/40 text-sm mt-4">No results.</p>
+  </div>
+</BaseLayout>
+
+<script>
+  const input = document.getElementById('k-filter') as HTMLInputElement;
+  const items = document.querySelectorAll<HTMLLIElement>('.k-item');
+  const empty = document.getElementById('k-empty')!;
+
+  input.addEventListener('input', () => {
+    const query = input.value.trim().toLowerCase();
+    let visible = 0;
+    items.forEach(item => {
+      const name = item.dataset.name ?? '';
+      const aliases = item.dataset.aliases ?? '';
+      const matches = !query || name.includes(query) || aliases.includes(query);
+      item.style.display = matches ? '' : 'none';
+      if (matches) visible++;
+    });
+    empty.classList.toggle('hidden', visible > 0);
+  });
+</script>

@@ -1,0 +1,89 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+
+export async function getStaticPaths() {
+  const playbooks = await getCollection('playbooks');
+  return playbooks.map(entry => {
+    const slug = entry.id.replace(/\/index\.mdx?$|\.mdx?$/, '');
+    return { params: { slug }, props: { entry } };
+  });
+}
+
+interface Props {
+  entry: CollectionEntry<'playbooks'>;
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+const slug = entry.id.replace(/\/index\.mdx?$|\.mdx?$/, '');
+
+const allFiles = await getCollection('files');
+const playbookFiles = allFiles.filter(f => f.data.playbook === slug);
+---
+
+<BaseLayout title={`${entry.data.title} | Playbooks | the golden turn`}>
+  <div class="max-w-3xl mx-auto px-6 py-16">
+    <nav class="flex items-center gap-1 text-sm text-ink/50 mb-8">
+      <a href="/playbooks" class="hover:text-ink transition-colors">Playbooks</a>
+      <span>/</span>
+      <span class="text-ink/80">{entry.data.title}</span>
+    </nav>
+
+    <h1 class="font-display italic text-heading text-5xl leading-tight mb-3">
+      {entry.data.title}
+    </h1>
+
+    <p class="text-sm text-ink/50 mb-4">
+      {entry.data.author && <span>{entry.data.author}</span>}
+      {entry.data.author && entry.data.year && <span class="mx-1">·</span>}
+      {entry.data.year && <span>{entry.data.year}</span>}
+    </p>
+
+    {entry.data.description && (
+      <p class="text-ink/70 text-base leading-relaxed mb-8">{entry.data.description}</p>
+    )}
+
+    {entry.data.download_url && (
+      <a
+        href={entry.data.download_url}
+        class="inline-flex items-center gap-2 mb-12 px-4 py-2 bg-accent text-paper rounded text-sm font-body hover:bg-accent/90 transition-colors"
+      >
+        Download full playbook
+      </a>
+    )}
+
+    <div class="prose mb-12">
+      <Content />
+    </div>
+
+    <section>
+      <h2 class="font-display italic text-heading text-2xl mb-6">Contents</h2>
+      {playbookFiles.length === 0 ? (
+        <p class="text-ink/50 text-sm">Individual files coming soon.</p>
+      ) : (
+        <ul class="space-y-3">
+          {playbookFiles.map(f => {
+            const fslug = f.id.replace(/\.mdx?$/, '');
+            return (
+              <li>
+                <a
+                  href={`/files/${fslug}`}
+                  class="flex items-baseline gap-3 group hover:text-accent transition-colors"
+                >
+                  <span class="text-xs font-mono bg-accent-soft/30 text-ink/50 rounded px-1.5 py-0.5 shrink-0">
+                    {f.data.type}
+                  </span>
+                  <span class="font-body text-ink group-hover:text-accent transition-colors">
+                    {f.data.title}
+                  </span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  </div>
+</BaseLayout>

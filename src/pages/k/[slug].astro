@@ -1,0 +1,113 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('k');
+  return entries.map(entry => ({
+    params: { slug: entry.id.replace(/\.mdx?$/, '') },
+    props: { entry },
+  }));
+}
+
+interface Props {
+  entry: CollectionEntry<'k'>;
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+
+const allArticles = await getCollection('curriculum', ({ data }) => !data.draft);
+const allFiles = await getCollection('files');
+
+const relatedArticles = (entry.data.related_articles ?? [])
+  .map(ref => {
+    const parts = ref.split('/');
+    const section = parts[0];
+    const slug = parts.slice(1).join('/');
+    const found = allArticles.find(a => a.id.replace(/\.mdx?$/, '') === ref);
+    return found ? { entry: found, href: `/curriculum/${section}/${slug}` } : null;
+  })
+  .filter((x): x is { entry: CollectionEntry<'curriculum'>; href: string } => x !== null);
+
+const relatedFiles = (entry.data.related_files ?? [])
+  .map(slug => allFiles.find(f => f.id.replace(/\.mdx?$/, '') === slug || f.id.replace(/\.mdx?$/, '').endsWith('/' + slug)))
+  .filter((f): f is CollectionEntry<'files'> => f !== null && f !== undefined);
+
+const hasRelated = relatedArticles.length > 0 || relatedFiles.length > 0;
+---
+
+<BaseLayout title={`${entry.data.name} | Ks | the golden turn`}>
+  <div class="max-w-3xl mx-auto px-6 py-16">
+    <nav class="flex items-center gap-1 text-sm text-ink/50 mb-8">
+      <a href="/k" class="hover:text-ink transition-colors">Ks</a>
+      <span>/</span>
+      <span class="text-ink/80">{entry.data.name}</span>
+    </nav>
+
+    <h1 class="font-display italic text-heading text-5xl leading-tight mb-3">
+      {entry.data.name}
+    </h1>
+
+    {entry.data.aliases && entry.data.aliases.length > 0 && (
+      <p class="text-sm text-ink/40 mb-4">
+        Also known as: {entry.data.aliases.join(', ')}
+      </p>
+    )}
+
+    {entry.data.tags && entry.data.tags.length > 0 && (
+      <div class="flex flex-wrap gap-2 mb-10">
+        {entry.data.tags.map(tag => (
+          <span class="text-xs font-mono bg-accent-soft/30 text-ink/60 rounded px-2 py-0.5">
+            {tag}
+          </span>
+        ))}
+      </div>
+    )}
+
+    <div class="prose">
+      <Content />
+    </div>
+
+    {hasRelated && (
+      <section class="mt-16 pt-8 border-t border-ink/10">
+        <h2 class="font-display italic text-heading text-xl mb-6">Related</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {relatedArticles.length > 0 && (
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Articles</p>
+              <ul class="space-y-2">
+                {relatedArticles.map(({ entry: a, href }) => (
+                  <li>
+                    <a href={href} class="text-sm text-accent hover:underline">
+                      {a.data.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {relatedFiles.length > 0 && (
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-widest text-ink/40 mb-3">Files</p>
+              <ul class="space-y-2">
+                {relatedFiles.map(f => {
+                  const fslug = f.id.replace(/\.mdx?$/, '');
+                  return (
+                    <li>
+                      <a href={`/files/${fslug}`} class="text-sm text-accent hover:underline">
+                        {f.data.title}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      </section>
+    )}
+  </div>
+</BaseLayout>

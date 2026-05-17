@@ -39,6 +39,7 @@ const files = defineCollection({
     playbook: z.string().optional(),
     related_articles: z.array(z.string()).optional().default([]),
     related_ks: z.array(z.string()).optional().default([]),
+    download_url: z.string().optional(),
   }),
 });
 
