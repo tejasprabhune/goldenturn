@@ -3,101 +3,160 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Submit a Recording | the golden turn">
-  <div class="max-w-2xl mx-auto px-6 pt-16 pb-24">
-    <h1 class="font-display italic text-heading text-5xl leading-tight mb-3">Submit a Recording</h1>
-    <p class="font-sans text-ink/60 text-sm mb-1">
-      Recordings go directly into the index and appear in search immediately.
-    </p>
-    <p class="font-sans text-ink/40 text-xs mb-10">
-      <a href="/recordings" class="text-heading hover:underline transition-colors">Back to recordings</a>
+  <div class="max-w-2xl mx-auto px-6 pt-12 pb-24">
+    <h1 class="font-display italic text-heading text-4xl mb-2">Submit a Recording</h1>
+    <p class="font-sans text-sm text-ink/50 mb-1">Recordings appear in search immediately.</p>
+    <p class="font-sans text-xs text-ink/35 mb-10">
+      <a href="/recordings" class="hover:text-ink transition-colors">Back to recordings</a>
     </p>
 
-    <form id="submission-form" novalidate class="space-y-0">
+    <form id="submission-form" novalidate>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Round title</label>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Round title</label>
         <input type="text" name="title" placeholder="Finals - Cal MR vs Rice AL"
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Link</label>
-        <p class="font-sans text-xs text-ink/35 mb-1">Dropbox, YouTube, or Vimeo URL</p>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Link</label>
+        <p class="form-hint">Dropbox, YouTube, or Vimeo URL</p>
         <input type="text" name="link" placeholder="https://..."
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Resolution</label>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Resolution</label>
         <input type="text" name="resolution" placeholder="The USFG should..."
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Aff</label>
-        <p class="font-sans text-xs text-ink/35 mb-1">Describe aff strategy</p>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Aff</label>
+        <p class="form-hint">Describe aff strategy</p>
         <input type="text" name="aff" placeholder="topical (war, econ)"
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Neg</label>
-        <p class="font-sans text-xs text-ink/35 mb-1">Start with N-off, e.g. 2-off</p>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Neg</label>
+        <p class="form-hint">Lead with N-off, e.g. 2-off</p>
         <input type="text" name="neg" placeholder="2-off (framework-t, orientalism)"
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Tags</label>
-        <p class="font-sans text-xs text-ink/35 mb-1">Must start with #, comma-separated</p>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Tags</label>
+        <p class="form-hint">Comma-separated, each starting with #</p>
         <input type="text" name="tags" placeholder="#topicality, #mlm"
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Decision</label>
-        <p class="font-sans text-xs text-ink/35 mb-1">Format: N-N Aff/Neg</p>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Decision</label>
+        <p class="form-hint">e.g. 3-0 Aff or 2-1 Neg</p>
         <input type="text" name="decision" placeholder="3-0 Aff"
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-6">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Year</label>
-        <p class="font-sans text-xs text-ink/35 mb-1">Format: YYYY-YY</p>
+      <div class="mb-7">
+        <label class="block font-sans text-sm text-ink mb-0.5">Year</label>
+        <p class="form-hint">e.g. 2020-21</p>
         <input type="text" name="year" placeholder="2020-21"
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
-      <div class="mb-8">
-        <label class="block font-sans text-sm font-medium text-ink mb-1">Tournament</label>
+      <div class="mb-10">
+        <label class="block font-sans text-sm text-ink mb-0.5">Tournament</label>
         <input type="text" name="tournament" placeholder="NPDA"
-          class="w-full border border-ink/15 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-        <p class="validation-hint font-sans text-xs text-ink/50 mt-1 hidden"></p>
+          class="form-input" />
+        <p class="validation-hint"></p>
       </div>
 
       <div class="flex items-center gap-4">
-        <button type="submit" id="submit-btn"
-          class="font-sans text-sm text-heading border border-heading/40 rounded px-5 py-2.5 hover:border-heading hover:bg-heading hover:text-paper transition-colors">
+        <button type="submit" id="submit-btn" class="submit-btn">
           Submit recording
         </button>
         <p id="submit-error" class="font-sans text-xs text-ink/50 hidden"></p>
       </div>
+
     </form>
 
-    <div id="success-state" class="hidden pt-4">
-      <p class="font-sans text-sm text-ink/70 mb-3">Recording submitted. It will appear in search shortly.</p>
+    <div id="success-state" class="hidden pt-2">
+      <p class="font-sans text-sm text-ink/70 mb-3">Recording submitted and live in search.</p>
       <a href="/recordings" class="font-sans text-sm text-heading hover:underline transition-colors">Back to recordings</a>
     </div>
   </div>
 </BaseLayout>
+
+<style is:global>
+  .form-input {
+    display: block;
+    width: 100%;
+    border: 1px solid rgba(26,26,26,0.15);
+    border-radius: 0.5rem;
+    background: white;
+    padding: 0.625rem 0.875rem;
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.875rem;
+    color: #1a1a1a;
+    outline: none;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .form-input::placeholder {
+    color: rgba(26,26,26,0.28);
+  }
+  .form-input:focus {
+    border-color: rgba(26,26,26,0.35);
+    box-shadow: 0 0 0 2px rgba(26,26,26,0.07);
+  }
+
+  .form-hint {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.75rem;
+    color: #1a1a1a;
+    opacity: 0.38;
+    margin-bottom: 0.375rem;
+    margin-top: 0;
+  }
+
+  .validation-hint {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.75rem;
+    color: #1a1a1a;
+    opacity: 0.45;
+    margin-top: 0.25rem;
+    min-height: 1rem;
+  }
+
+  .submit-btn {
+    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: #2f4858;
+    color: #fcefef;
+    border: none;
+    border-radius: 0.375rem;
+    padding: 0.625rem 1.25rem;
+    cursor: pointer;
+    transition: opacity 0.12s;
+  }
+  .submit-btn:hover {
+    opacity: 0.88;
+  }
+  .submit-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+</style>
 
 <script>
   import { algoliasearch } from 'algoliasearch';
@@ -121,31 +180,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return getField(name).nextElementSibling as HTMLParagraphElement;
   }
 
-  function showHint(name: string, msg: string) {
-    const hint = getHint(name);
-    hint.textContent = msg;
-    hint.classList.remove('hidden');
-  }
-
-  function clearHint(name: string) {
-    const hint = getHint(name);
-    hint.textContent = '';
-    hint.classList.add('hidden');
-  }
-
   const validators: Record<string, (v: string) => string | null> = {
     tags: (v) => {
       if (!v.trim()) return null;
       const bad = v.split(',').map(t => t.trim()).filter(t => t && !t.startsWith('#'));
-      return bad.length > 0 ? 'Tags should start with #' : null;
+      return bad.length ? 'Each tag should start with #' : null;
     },
     decision: (v) => {
       if (!v.trim()) return null;
-      return /^\d+-\d+ (Aff|Neg)$/.test(v.trim()) ? null : 'Expected format: 3-0 Aff or 2-1 Neg';
+      return /^\d+-\d+ (Aff|Neg)$/.test(v.trim()) ? null : 'Expected: 3-0 Aff or 2-1 Neg';
     },
     year: (v) => {
       if (!v.trim()) return null;
-      return /^\d{4}-\d{2}$/.test(v.trim()) ? null : 'Expected format: 2020-21';
+      return /^\d{4}-\d{2}$/.test(v.trim()) ? null : 'Expected: 2020-21';
     },
     neg: (v) => {
       if (!v.trim()) return null;
@@ -155,14 +202,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   for (const [name, validate] of Object.entries(validators)) {
     const field = getField(name);
-    field.addEventListener('blur', () => {
-      const msg = validate(field.value);
-      msg ? showHint(name, msg) : clearHint(name);
-    });
-    field.addEventListener('input', () => {
-      const msg = validate(field.value);
-      msg ? showHint(name, msg) : clearHint(name);
-    });
+    const hint = getHint(name);
+    field.addEventListener('blur', () => { hint.textContent = validate(field.value) ?? ''; });
+    field.addEventListener('input', () => { hint.textContent = validate(field.value) ?? ''; });
   }
 
   function computeAffType(tags: string[]): string {
@@ -179,14 +221,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const title = getField('title').value.trim();
-    const link = getField('link').value.trim();
+    const title      = getField('title').value.trim();
+    const link       = getField('link').value.trim();
     const resolution = getField('resolution').value.trim();
-    const aff = getField('aff').value.trim();
-    const neg = getField('neg').value.trim();
-    const tagsRaw = getField('tags').value.trim();
-    const decision = getField('decision').value.trim();
-    const year = getField('year').value.trim();
+    const aff        = getField('aff').value.trim();
+    const neg        = getField('neg').value.trim();
+    const tagsRaw    = getField('tags').value.trim();
+    const decision   = getField('decision').value.trim();
+    const year       = getField('year').value.trim();
     const tournament = getField('tournament').value.trim();
 
     const tags = tagsRaw
@@ -195,16 +237,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     const record = {
       objectID: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      title,
-      link,
-      resolution,
-      aff,
-      neg,
+      title, link, resolution, aff, neg,
       _tags: tags,
       searchable_tags: tags,
-      decision,
-      year,
-      tournament,
+      decision, year, tournament,
       teams: [],
       aff_type: computeAffType(tags),
       neg_strategy_count: computeNegStrategyCount(neg),

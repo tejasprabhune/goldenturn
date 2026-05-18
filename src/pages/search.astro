@@ -3,70 +3,52 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Search | the golden turn">
-  <div class="max-w-4xl mx-auto px-6 pt-16 pb-24">
-    <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-8">Search</h1>
+  <div class="max-w-3xl mx-auto px-6 pt-12 pb-24">
+    <h1 class="font-display italic text-heading text-4xl mb-8">Search</h1>
 
     <input
       id="search-input"
       type="search"
       placeholder="Search everything..."
-      class="w-full border border-ink/15 rounded-lg bg-paper px-4 py-3 font-sans text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+      autocomplete="off"
+      autofocus
+      class="w-full border border-ink/20 rounded-lg bg-white px-4 py-3 font-sans text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 focus:ring-ink/20 focus:border-transparent mb-8"
     />
 
-    <div id="type-filters" class="flex gap-2 mt-4 mb-8 flex-wrap">
-      <button data-filter="" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">All</button>
-      <button data-filter="curriculum" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Curriculum</button>
-      <button data-filter="k" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Ks</button>
-      <button data-filter="file" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Files</button>
-      <button data-filter="playbook" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Playbooks</button>
-      <button data-filter="recording" class="filter-btn font-sans text-xs border border-ink/15 rounded-full px-4 py-1.5 transition-colors">Recordings</button>
-    </div>
+    <p id="results-count" class="text-xs font-sans text-ink/35 mb-6 hidden"></p>
+    <div id="results"></div>
 
-    <p id="results-count" class="font-sans text-xs text-ink/40 mb-4"></p>
-    <div id="results" class="space-y-3"></div>
+    <p id="empty-state" class="font-sans text-sm text-ink/40">
+      Start typing to search across curriculum, recordings, Ks, files, and playbooks.
+    </p>
   </div>
 </BaseLayout>
-
-<style>
-  .filter-btn {
-    color: rgb(26 26 26 / 0.6);
-    background: transparent;
-  }
-  .filter-btn:hover {
-    color: rgb(26 26 26 / 0.9);
-    border-color: rgb(26 26 26 / 0.3);
-  }
-  .filter-btn.active {
-    background: #2f4858;
-    border-color: #2f4858;
-    color: #fcefef;
-  }
-</style>
 
 <script>
   import { algoliasearch } from 'algoliasearch';
 
   const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
   const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
-  const CONTENT_INDEX = 'goldenturn_content';
-  const RECORDINGS_INDEX = import.meta.env.PUBLIC_ALGOLIA_INDEX_NAME as string;
 
   const client = algoliasearch(APP_ID, SEARCH_KEY);
 
   const searchInput = document.getElementById('search-input') as HTMLInputElement;
   const resultsEl = document.getElementById('results') as HTMLDivElement;
   const resultsCount = document.getElementById('results-count') as HTMLParagraphElement;
-  const filterBtns = document.querySelectorAll<HTMLButtonElement>('.filter-btn');
+  const emptyState = document.getElementById('empty-state') as HTMLParagraphElement;
 
-  let activeFilter = '';
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let focusedIndex = -1;
+  let allLinks: HTMLAnchorElement[] = [];
 
-  const TYPE_LABELS: Record<string, string> = {
+  const GROUP_ORDER = ['curriculum', 'k', 'recording', 'file', 'playbook', 'lecture'];
+  const GROUP_LABELS: Record<string, string> = {
     curriculum: 'Curriculum',
     k: 'K Reference',
-    file: 'File',
-    playbook: 'Playbook',
-    recording: 'Recording',
+    recording: 'Recordings',
+    file: 'Files',
+    playbook: 'Playbooks',
+    lecture: 'Lectures',
   };
 
   function escapeHtml(str: string): string {
@@ -77,23 +59,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       .replace(/"/g, '&quot;');
   }
 
-  function renderCard(type: string, title: string, url: string, description: string, external = false): string {
-    const label = TYPE_LABELS[type] ?? type;
-    const target = external ? ' target="_blank" rel="noopener noreferrer"' : '';
-    return `
-      <a href="${escapeHtml(url)}"${target} class="block border border-ink/10 rounded-lg p-4 hover:border-ink/25 transition-colors group">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <p class="font-sans uppercase tracking-wide text-ink/30 mb-0.5" style="font-size: 0.65rem;">${escapeHtml(label)}</p>
-            <h3 class="font-sans font-semibold text-heading text-base">${escapeHtml(title)}</h3>
-            ${description ? `<p class="font-body text-ink/55 text-sm mt-1 line-clamp-2">${escapeHtml(description)}</p>` : ''}
-          </div>
-        </div>
-      </a>
-    `;
-  }
-
-  interface AnyHit {
+  interface Hit {
     objectID: string;
     type?: string;
     title?: string;
@@ -106,67 +72,120 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   async function runSearch(query: string) {
-    const contentHits: AnyHit[] = await client
-      .searchSingleIndex({ indexName: CONTENT_INDEX, searchParams: { query, hitsPerPage: 30 } })
-      .then(r => r.hits as AnyHit[])
-      .catch(() => []);
-
-    const recordingHits: AnyHit[] = await client
-      .searchSingleIndex({ indexName: RECORDINGS_INDEX, searchParams: { query, hitsPerPage: 10 } })
-      .then(r => (r.hits as AnyHit[]).map(h => ({ ...h, _isRecording: true })))
-      .catch(() => []);
-
-    let merged: AnyHit[] = [...contentHits, ...recordingHits];
-
-    if (activeFilter) {
-      merged = merged.filter(h => {
-        if (activeFilter === 'recording') return h._isRecording;
-        return h.type === activeFilter;
-      });
+    if (!query.trim()) {
+      resultsEl.innerHTML = '';
+      resultsCount.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+      focusedIndex = -1;
+      allLinks = [];
+      return;
     }
 
-    resultsCount.textContent = `${merged.length} result${merged.length === 1 ? '' : 's'}`;
-    resultsEl.innerHTML = '';
+    emptyState.classList.add('hidden');
 
-    for (const hit of merged) {
-      if (hit._isRecording) {
-        const title = (hit['title'] as string) ?? '';
-        const url = (hit['link'] as string) ?? '#';
-        const desc = (hit['resolution'] as string) ?? '';
-        resultsEl.insertAdjacentHTML('beforeend', renderCard('recording', title, url, desc, true));
-      } else {
-        const title = (hit.title ?? hit.name) as string ?? '';
-        const url = hit.url as string ?? '#';
-        const desc = hit.description as string ?? '';
-        resultsEl.insertAdjacentHTML('beforeend', renderCard(hit.type ?? '', title, url, desc));
+    const [contentHits, recordingHits] = await Promise.all([
+      client
+        .searchSingleIndex({ indexName: 'goldenturn_content', searchParams: { query, hitsPerPage: 40 } })
+        .then(r => r.hits as Hit[])
+        .catch(() => [] as Hit[]),
+      client
+        .searchSingleIndex({ indexName: 'all_rounds', searchParams: { query, hitsPerPage: 15 } })
+        .then(r => (r.hits as Hit[]).map(h => ({ ...h, type: 'recording', _isRecording: true })))
+        .catch(() => [] as Hit[]),
+    ]);
+
+    const all = [...contentHits, ...recordingHits];
+    const total = all.length;
+
+    // Group by type
+    const groups: Record<string, Hit[]> = {};
+    for (const hit of all) {
+      const type = hit.type ?? 'other';
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(hit);
+    }
+
+    resultsCount.textContent = `${total} result${total === 1 ? '' : 's'}`;
+    resultsCount.classList.toggle('hidden', total === 0);
+
+    resultsEl.innerHTML = '';
+    focusedIndex = -1;
+    allLinks = [];
+
+    const orderedTypes = [
+      ...GROUP_ORDER.filter(t => groups[t]?.length),
+      ...Object.keys(groups).filter(t => !GROUP_ORDER.includes(t) && groups[t]?.length),
+    ];
+
+    if (total === 0) {
+      resultsEl.innerHTML = `<p class="font-sans text-sm text-ink/40">No results for "${escapeHtml(query)}".</p>`;
+      return;
+    }
+
+    for (const type of orderedTypes) {
+      const hits = groups[type];
+      const label = GROUP_LABELS[type] ?? type;
+
+      const section = document.createElement('div');
+      section.className = 'mb-8';
+      section.innerHTML = `<p class="font-sans text-xs uppercase tracking-widest text-ink/30 mb-3">${escapeHtml(label)}</p>`;
+
+      for (const hit of hits) {
+        const isRecording = hit._isRecording;
+        const title = (hit.title ?? hit.name ?? '') as string;
+        const url = isRecording ? (hit.link ?? '#') : (hit.url ?? '#');
+        const desc = isRecording ? (hit.resolution ?? '') : (hit.description ?? '');
+        const external = isRecording;
+
+        const a = document.createElement('a');
+        a.href = escapeHtml(url);
+        if (external) {
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+        }
+        a.className = 'result-link flex flex-col px-4 py-3 -mx-4 rounded-lg hover:bg-ink/4 transition-colors';
+        a.setAttribute('data-index', String(allLinks.length));
+        a.innerHTML = `
+          <span class="font-sans font-medium text-heading text-sm leading-snug">${escapeHtml(title)}</span>
+          ${desc ? `<span class="font-sans text-ink/50 text-xs mt-0.5 line-clamp-1">${escapeHtml(desc)}</span>` : ''}
+        `;
+        section.appendChild(a);
+        allLinks.push(a);
       }
+
+      resultsEl.appendChild(section);
     }
   }
 
-  filterBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeFilter = btn.dataset.filter ?? '';
-      const q = searchInput.value.trim();
-      if (q) runSearch(q);
-    });
+  // Keyboard navigation through results
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedIndex = Math.min(focusedIndex + 1, allLinks.length - 1);
+      updateFocus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusedIndex = Math.max(focusedIndex - 1, -1);
+      updateFocus();
+    } else if (e.key === 'Enter' && focusedIndex >= 0 && allLinks[focusedIndex]) {
+      allLinks[focusedIndex].click();
+    }
   });
+
+  function updateFocus() {
+    allLinks.forEach((a, i) => {
+      a.classList.toggle('bg-ink/5', i === focusedIndex);
+    });
+    if (focusedIndex >= 0) allLinks[focusedIndex]?.scrollIntoView({ block: 'nearest' });
+  }
 
   searchInput.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => runSearch(searchInput.value.trim()), 150);
   });
 
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      clearTimeout(debounceTimer);
-      runSearch(searchInput.value.trim());
-    }
-  });
-
-  const params = new URLSearchParams(window.location.search);
-  const q = params.get('q');
+  // Pre-fill from ?q= param
+  const q = new URLSearchParams(window.location.search).get('q') ?? '';
   if (q) {
     searchInput.value = q;
     runSearch(q);
