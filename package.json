@@ -17,6 +17,8 @@
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
     "kern-typ": "^0.2.0",
+    "kern-typst": "file:../../kern/packages/kern-typst/core",
+    "kern-typst-astro": "file:../../kern/packages/kern-typst/astro",
     "mammoth": "^1.12.0",
     "tailwindcss": "^3.4.17"
   },

@@ -1,11 +1,12 @@
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import CurriculumLayout from '../../../layouts/CurriculumLayout.astro';
 
 export async function getStaticPaths() {
   const articles = await getCollection('curriculum', ({ data }) => !data.draft);
   return articles.map(entry => {
-    const parts = entry.id.replace(/\.mdx?$/, '').split('/');
+    const cleanId = entry.id.replace(/\.(mdx?|typ)$/, '');
+    const parts = cleanId.split('/');
     const section = parts[0];
     const slug = parts.slice(1).join('/');
     return { params: { section, slug }, props: { entry } };
@@ -13,7 +14,8 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
+const { Content } = await render(entry);
 const allArticles = await getCollection('curriculum', ({ data }) => !data.draft);
 ---
 
-<CurriculumLayout article={entry} allArticles={allArticles} />
+<CurriculumLayout article={entry} allArticles={allArticles} Content={Content} />

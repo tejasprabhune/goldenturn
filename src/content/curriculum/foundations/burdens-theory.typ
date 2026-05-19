@@ -1,0 +1,45 @@
+#import "/_kern_preamble.typ": article
+
+#show: article.with(
+  title: "Burdens Theory",
+  section: "foundations",
+  order: 2,
+  prerequisites: ("foundations/framing-and-goals",),
+  related_articles: ("foundations/framing-and-goals",),
+  related_ks: ("cap",),
+  related_recordings_tags: (),
+  related_files: (),
+  draft: false,
+)
+
+Every round in parliamentary debate has a structural asymmetry: one side goes first, one side defends change, one side defends the status quo. Burdens theory is the framework that explains what each side owes the judge in light of that asymmetry, and how those obligations interact as the round develops.
+
+= What is a burden?
+
+A burden is a threshold of persuasion that a party must meet for the judge to vote in their favor. There are two distinct types worth distinguishing.
+
+The *burden of proof* is the obligation to produce some affirmative showing for a claim. In most parliamentary rounds, the affirmative carries the initial burden of proof because they are the side asserting that something is true or that something should change. They go into the round owing the judge a reason to act.
+
+The *burden of persuasion* is the threshold at which the judge actually votes. In many debate frameworks, this is modeled probabilistically: the affirmative must move the judge's credence above some baseline. If we write $P("aff wins")$ as the judge's posterior probability that the affirmative's advocacy is correct, the standard condition for an affirmative ballot is roughly $P("aff wins") > 0.5$. This is a majority-of-the-evidence standard, and it is the most common default in parliamentary debate.
+
+These two burdens interact. The affirmative's burden of proof is to shift the needle at all. The burden of persuasion says where the needle must end up.
+
+= How burdens shift
+
+Burdens are not static. Once the affirmative meets its initial burden of proof, a derivative burden shifts to the negative to respond. This is sometimes called the "burden of rejoinder." If the negative does not engage an argument, the judge is generally expected to treat it as conceded.
+
+This shifting structure is why "drop the argument, drop the team" is such a common refrain in theory rounds. It reflects the underlying logic of burden-shifting: silence is a concession, and a conceded argument carries its full weight at the end of the round.
+
+Negative teams can also front-load their own burdens. Running a counterplan or kritik means the negative is no longer purely responding to affirmative ground; they are making their own affirmative claim and therefore accepting their own burden of proof for that advocacy.
+
+= Burden-related theory arguments
+
+Several common theory arguments are essentially disputes about what the correct burden structure should be.
+
+*Presumption arguments* claim that in the absence of any net offense for either side, the judge should default to the negative. The logic is that if the affirmative has not met its burden of proof, the status quo should be preserved. This matters most in tight rounds where the judge is genuinely uncertain.
+
+*Epistemic humility arguments* push back on high-confidence advocacy. If your opponent claims certainty about a complex empirical question, you can argue that the judge should discount their impact claims because the burden of persuasion requires only probability, not certainty, and overclaiming tends to be a sign of analytical weakness rather than strength.
+
+*Threshold arguments* directly contest the $P("aff wins") > 0.5$ standard. Some frameworks argue for a higher threshold when the affirmative is advocating for a drastic or irreversible policy. Others argue for a lower threshold when structural injustice is at stake and the costs of inaction are asymmetrically high.
+
+Understanding burdens at this level lets you do more than just defend your own position. It lets you actively contest the rules of evaluation, which is one of the highest-leverage plays available in a parliamentary round.

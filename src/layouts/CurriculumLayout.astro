@@ -5,10 +5,10 @@ import type { CollectionEntry } from 'astro:content';
 interface Props {
   article: CollectionEntry<'curriculum'>;
   allArticles: CollectionEntry<'curriculum'>[];
+  Content: any;
 }
 
-const { article, allArticles } = Astro.props;
-const { Content } = await article.render();
+const { article, allArticles, Content } = Astro.props;
 
 const SECTION_ORDER = ['foundations', 'aff', 'neg', 'theory', 'advanced', 'meta'] as const;
 const SECTION_LABELS: Record<string, string> = {
@@ -32,7 +32,7 @@ const grouped = SECTION_ORDER.reduce<Record<string, CollectionEntry<'curriculum'
 }, {} as Record<string, CollectionEntry<'curriculum'>[]>);
 
 function articleHref(entry: CollectionEntry<'curriculum'>) {
-  const parts = entry.id.replace(/\.mdx?$/, '').split('/');
+  const parts = entry.id.replace(/\.(mdx?|typ)$/, '').split('/');
   const section = parts[0];
   const slug = parts.slice(1).join('/');
   return `/curriculum/${section}/${slug}`;
@@ -43,7 +43,7 @@ const currentHref = articleHref(article);
 const sectionLabel = SECTION_LABELS[article.data.section] ?? article.data.section;
 
 const relatedArticles = article.data.related_articles
-  .map(slug => allArticles.find(a => a.id.replace(/\.mdx?$/, '') === slug))
+  .map(slug => allArticles.find(a => a.id.replace(/\.(mdx?|typ)$/, '') === slug))
   .filter((a): a is CollectionEntry<'curriculum'> => !!a);
 
 const hasRelated =
@@ -52,7 +52,6 @@ const hasRelated =
   article.data.related_recordings_tags.length > 0 ||
   article.data.related_files.length > 0;
 
-const hasMath = article.body.includes('$');
 ---
 
 <BaseLayout title={`${article.data.title} | Curriculum | the golden turn`}>
@@ -227,16 +226,14 @@ const hasMath = article.body.includes('$');
     </div>
   </div>
 
-  {hasMath && (
-    <script>
-      import { render } from 'kern-typ';
-      document.querySelectorAll('.math-inline, .math-display').forEach(el => {
-        const source = el.textContent ?? '';
-        const displayMode = el.classList.contains('math-display');
-        render(source, el as Element, { displayMode, throwOnError: false });
-      });
-    </script>
-  )}
+  <script>
+    import { render } from 'kern-typ';
+    document.querySelectorAll('.math-inline, .math-display').forEach(el => {
+      const source = el.textContent ?? '';
+      const displayMode = el.classList.contains('math-display');
+      render(source, el as Element, { displayMode, throwOnError: false });
+    });
+  </script>
 
   <script>
     const tocToggle = document.getElementById('toc-toggle');
