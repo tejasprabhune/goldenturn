@@ -42,21 +42,21 @@ function isActive(href: string) {
         {!minimalNav && (
           <a
             href="/"
-            class="font-display italic text-heading text-xl leading-none hover:text-accent transition-colors"
+            class="font-sans text-xs tracking-widest text-ink/30 hover:text-ink/60 transition-colors uppercase"
             aria-current={pathname === '/' ? 'page' : undefined}
           >
-            the golden turn
+            gt
           </a>
         )}
 
         {minimalNav && <span />}
 
-        <div class={`hidden md:flex items-center gap-6`}>
+        <div class={`hidden md:flex items-center gap-7`}>
           {!minimalNav && navLinks.map(({ href, label }) => (
             <a
               href={href}
               aria-current={isActive(href) ? 'page' : undefined}
-              class={`text-sm font-sans transition-colors ${isActive(href) ? 'text-ink/90' : 'text-ink/60 hover:text-accent'}`}
+              class={`text-sm font-sans tracking-wide transition-colors ${isActive(href) ? 'text-ink underline underline-offset-4 decoration-2 decoration-accent' : 'text-ink/50 hover:text-ink'}`}
             >
               {label}
             </a>
@@ -64,7 +64,7 @@ function isActive(href: string) {
           <a
             href="/search"
             aria-current={isActive('/search') ? 'page' : undefined}
-            class={`text-sm font-sans transition-colors ${isActive('/search') ? 'text-ink/90' : 'text-ink/60 hover:text-accent'}`}
+            class={`text-sm font-sans tracking-wide transition-colors ${isActive('/search') ? 'text-ink underline underline-offset-4 decoration-2 decoration-accent' : 'text-ink/50 hover:text-ink'}`}
           >
             Search
           </a>
@@ -121,7 +121,7 @@ function isActive(href: string) {
     {!noFooter && (
       <footer class="mt-24 pt-8">
         <div class="max-w-6xl mx-auto px-6 pb-10 flex items-center justify-between">
-          <span class="font-display italic text-heading/50 text-sm">the golden turn</span>
+          <span class="font-sans text-xs tracking-widest text-ink/25 uppercase">gt</span>
           <a href="/contribute" class="font-sans text-sm text-ink/40 hover:text-ink transition-colors">contribute</a>
         </div>
       </footer>

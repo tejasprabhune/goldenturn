@@ -6,11 +6,15 @@
 
 @layer base {
   body {
-    @apply font-body text-ink bg-paper min-h-screen antialiased;
+    @apply font-body text-ink bg-paper min-h-screen antialiased text-[17px];
   }
 
-  h1, h2, h3 {
+  h1 {
     @apply font-display italic text-heading;
+  }
+
+  h2, h3 {
+    @apply font-display text-heading;
   }
 
   a {
@@ -28,15 +32,15 @@
 
 @layer components {
   .prose h1 {
-    @apply font-display italic text-heading text-4xl leading-tight mb-6;
+    @apply font-display italic text-heading text-5xl leading-tight mb-8;
   }
 
   .prose h2 {
-    @apply font-display italic text-heading text-2xl mt-12 mb-4 pt-8 border-t border-ink/10;
+    @apply font-display text-heading text-3xl mt-14 mb-5 pt-9 border-t border-ink/10;
   }
 
   .prose h3 {
-    @apply font-display italic text-heading text-xl mt-8 mb-3;
+    @apply font-display text-heading text-2xl mt-10 mb-4;
   }
 
   .prose h4 {
@@ -49,11 +53,11 @@
   }
 
   .prose p {
-    @apply font-body leading-7 mb-5 text-ink;
+    @apply font-body leading-8 mb-5 text-ink text-[17px];
   }
 
   .prose a {
-    @apply text-heading underline underline-offset-2 decoration-ink/20 hover:decoration-accent transition-colors;
+    @apply text-heading underline underline-offset-[4px] decoration-[2px] decoration-accent/50 hover:decoration-accent transition-colors;
   }
 
   .prose code {
@@ -69,19 +73,19 @@
   }
 
   .prose ul {
-    @apply list-disc list-outside pl-6 mb-5 space-y-1.5;
+    @apply list-disc list-outside pl-6 mb-5 space-y-2;
   }
 
   .prose ol {
-    @apply list-decimal list-outside pl-6 mb-5 space-y-1.5;
+    @apply list-decimal list-outside pl-6 mb-5 space-y-2;
   }
 
   .prose li {
-    @apply font-body leading-7;
+    @apply font-body leading-8 text-[17px];
   }
 
   .prose blockquote {
-    @apply border-l-2 border-heading/30 pl-5 italic text-ink/70 my-6;
+    @apply border-l-2 border-heading/30 pl-5 text-ink/70 my-6;
   }
 
   .prose strong {

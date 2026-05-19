@@ -86,31 +86,31 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <style>
   .home {
-    max-width: 700px;
+    max-width: 740px;
     margin: 0 auto;
-    padding: 72px 32px 120px;
+    padding: 80px 40px 140px;
   }
 
   /* Header block */
 
   .home-header {
-    margin-bottom: 56px;
+    margin-bottom: 64px;
   }
 
   .home-wordmark-block {
     display: inline-block;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
   }
 
   .home-wordmark {
     font-family: 'swear-display', 'freight-text-pro', Georgia, serif;
     font-style: italic;
     font-weight: 600;
-    font-size: 44px;
+    font-size: 54px;
     line-height: 1;
     letter-spacing: -0.015em;
     color: #2f4858;
-    margin: 0 0 10px;
+    margin: 0 0 12px;
     display: block;
   }
 
@@ -122,24 +122,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   .home-tagline {
     font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 15px;
+    font-size: 16px;
     color: #1a1a1a;
-    opacity: 0.52;
-    margin: 0 0 16px;
+    opacity: 0.5;
+    margin: 0 0 20px;
   }
 
   .home-nav {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0.25rem 0.5rem;
+    gap: 0.25rem 0.6rem;
   }
 
   .home-nav a {
     font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 13px;
+    font-size: 14px;
     color: #1a1a1a;
-    opacity: 0.5;
+    opacity: 0.45;
     text-decoration: none;
     letter-spacing: 0.02em;
     transition: opacity 0.12s, color 0.12s;
@@ -153,30 +153,30 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   .home-nav span {
     font-size: 11px;
     color: #1a1a1a;
-    opacity: 0.22;
+    opacity: 0.2;
   }
 
   /* Content sections */
 
   .home section {
-    margin-bottom: 44px;
+    margin-bottom: 52px;
   }
 
   .home h2 {
     font-family: 'swear-display', 'freight-text-pro', Georgia, serif;
-    font-style: italic;
+    font-style: normal;
     font-weight: 600;
-    font-size: 21px;
+    font-size: 26px;
     color: #2f4858;
-    margin: 0 0 13px;
+    margin: 0 0 14px;
   }
 
   .home p {
     font-family: 'freight-text-pro', 'neue-haas-unica', Georgia, serif;
-    font-size: 15.5px;
-    line-height: 1.7;
+    font-size: 17px;
+    line-height: 1.75;
     color: #1a1a1a;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
 
   .home p:last-child {
@@ -186,9 +186,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   .home a {
     color: #2f4858;
     text-decoration: underline;
-    text-underline-offset: 2px;
-    text-decoration-color: rgba(26,26,26,0.2);
-    transition: text-decoration-color 0.12s;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 2px;
+    text-decoration-color: rgba(206, 213, 48, 0.45);
+    transition: text-decoration-color 0.15s;
   }
 
   .home a:hover {
@@ -197,11 +198,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   @media (max-width: 540px) {
     .home {
-      padding: 48px 20px 80px;
+      padding: 52px 24px 96px;
     }
 
     .home-wordmark {
-      font-size: 36px;
+      font-size: 42px;
     }
   }
 </style>
