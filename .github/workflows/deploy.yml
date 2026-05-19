@@ -25,6 +25,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Build kern packages
+        run: |
+          npm install -g pnpm
+          cd /home/runner/work/kern
+          pnpm install
+          pnpm -r build
       - run: npm ci
       - run: npm run build
         env:
