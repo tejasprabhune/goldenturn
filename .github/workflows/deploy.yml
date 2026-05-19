@@ -19,19 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout kern packages
-        run: git clone --depth 1 https://github.com/tejasprabhune/kern.git /home/runner/work/kern
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - name: Build kern packages
-        run: |
-          npm install -g pnpm
-          cd /home/runner/work/kern
-          pnpm install
-          cd /home/runner/work/kern/packages/kern-typst/core && npx tsc
-          cd /home/runner/work/kern/packages/kern-typst/astro && npx tsc
       - run: npm ci
       - run: npm run build
         env:

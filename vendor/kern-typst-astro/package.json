@@ -1,0 +1,36 @@
+{
+  "name": "kern-typst-astro",
+  "version": "0.1.0",
+  "description": "Astro Content Layer loader for Typst articles with kern math",
+  "license": "MIT",
+  "author": "Tejas Prabhune",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "kern-typst": "file:../kern-typst",
+    "fast-glob": "^3.3.2"
+  },
+  "peerDependencies": {
+    "astro": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "astro": "^5.0.0",
+    "typescript": "^5.4.5"
+  }
+}
