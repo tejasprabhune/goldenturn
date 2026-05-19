@@ -30,8 +30,8 @@ jobs:
           npm install -g pnpm
           cd /home/runner/work/kern
           pnpm install
-          pnpm --filter kern-typst run build
-          pnpm --filter kern-typst-astro run build
+          cd /home/runner/work/kern/packages/kern-typst/core && npx tsc
+          cd /home/runner/work/kern/packages/kern-typst/astro && npx tsc
       - run: npm ci
       - run: npm run build
         env:
