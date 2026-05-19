@@ -30,7 +30,8 @@ jobs:
           npm install -g pnpm
           cd /home/runner/work/kern
           pnpm install
-          pnpm -r build
+          pnpm --filter kern-typst run build
+          pnpm --filter kern-typst-astro run build
       - run: npm ci
       - run: npm run build
         env:
