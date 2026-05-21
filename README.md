@@ -17,7 +17,7 @@ Curriculum articles can be written in either MDX or [Typst](https://typst.app). 
 
 ### Adding an article
 
-Create a `.typ` file anywhere under `src/content/curriculum/`. The file's path relative to that directory becomes its URL: `src/content/curriculum/goals/from-first-principles.typ` becomes `/curriculum/goals/from-first-principles`. No Astro edits are needed; the integration picks it up automatically.
+Create a `.typ` file anywhere under `src/content/curriculum/`. The `.typ` extension is stripped from the URL: `src/content/curriculum/goals/from-first-principles.typ` is served at `/curriculum/goals/from-first-principles`. No Astro edits are needed as long as the section already exists in `sectionEnum` (see below).
 
 Declare frontmatter with a `#metadata` block at the top of the file, then write prose:
 
@@ -49,7 +49,7 @@ Math renders as inline SVG. The Typst layout engine typesets equations the same 
 
 ### Adding a section
 
-Three files need to change.
+Four files need to change.
 
 **`src/content/config.ts`** -- add the section name to `sectionEnum`:
 
@@ -57,7 +57,17 @@ Three files need to change.
 const sectionEnum = z.enum(['goals', 'your-new-section']);
 ```
 
-**`src/pages/curriculum/index.astro`** -- add the section to `SECTION_ORDER` (controls display order on the index page) and give it a label in `SECTION_LABELS`:
+**`src/pages/curriculum/index.astro`** -- add the section to `SECTION_ORDER` (controls display order on the index page) and `SECTION_LABELS`:
+
+```ts
+const SECTION_ORDER = ['goals', 'your-new-section'] as const;
+const SECTION_LABELS: Record<string, string> = {
+  goals: 'Goals',
+  'your-new-section': 'Your New Section',
+};
+```
+
+**`src/layouts/CurriculumLayout.astro`** -- the layout that renders individual article pages has its own copies of the same two constants. Update them identically:
 
 ```ts
 const SECTION_ORDER = ['goals', 'your-new-section'] as const;
