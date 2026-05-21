@@ -26,7 +26,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <option value="performance">Performance</option>
         <option value="other">Other</option>
       </select>
-      <button id="toggle-blur" aria-pressed="false" class="blur-toggle text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 transition-colors">Blur decisions</button>
+      <button id="toggle-blur" aria-pressed="true" class="blur-toggle text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 transition-colors">Blur decisions</button>
     </div>
 
     <div id="active-filters" class="active-filters" style="display:none;"></div>
@@ -59,7 +59,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const activeFiltersEl = document.getElementById('active-filters') as HTMLDivElement;
   const toggleBlurBtn = document.getElementById('toggle-blur') as HTMLButtonElement;
 
-  let decisionsBlurred = false;
+  let decisionsBlurred = true;
+  resultsEl.classList.add('decisions-blurred');
   toggleBlurBtn.addEventListener('click', () => {
     decisionsBlurred = !decisionsBlurred;
     toggleBlurBtn.setAttribute('aria-pressed', String(decisionsBlurred));
