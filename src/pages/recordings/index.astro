@@ -333,20 +333,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   async function search(page: number, append: boolean) {
     const filters = buildFilters(currentYear, currentAffType, activeTags);
+    const isBrowse = !currentQuery && !currentYear && !currentAffType && activeTags.length === 0 && page === 0;
     try {
+      let effectivePage = page;
+      if (isBrowse) {
+        const probe = await client.searchSingleIndex({
+          indexName: INDEX_NAME,
+          searchParams: { query: '', hitsPerPage: 0, page: 0 },
+        });
+        const nbPages = probe.nbPages ?? 1;
+        effectivePage = Math.floor(Math.random() * nbPages);
+      }
+
       const result = await client.searchSingleIndex({
         indexName: INDEX_NAME,
         searchParams: {
           query: currentQuery,
           hitsPerPage: 20,
-          page,
+          page: effectivePage,
           facets: ['year', 'tournament', 'aff_type'],
           ...(filters ? { filters } : {}),
         },
       });
 
       const rawHits = result.hits as Record<string, unknown>[];
-      const isBrowse = !currentQuery && !currentYear && !currentAffType && activeTags.length === 0 && page === 0;
       const hits = isBrowse ? shuffleArray(rawHits) : rawHits;
       const nbHits = result.nbHits ?? 0;
       const nbPages = result.nbPages ?? 0;
