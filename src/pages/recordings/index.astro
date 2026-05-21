@@ -86,6 +86,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return parts.join(' AND ');
   }
 
+  function shuffleArray<T>(arr: T[]): T[] {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   function escapeHtml(str: string): string {
     return (str ?? '')
       .replace(/&/g, '&amp;')
@@ -336,7 +345,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         },
       });
 
-      const hits = result.hits as Record<string, unknown>[];
+      const rawHits = result.hits as Record<string, unknown>[];
+      const isBrowse = !currentQuery && !currentYear && !currentAffType && activeTags.length === 0 && page === 0;
+      const hits = isBrowse ? shuffleArray(rawHits) : rawHits;
       const nbHits = result.nbHits ?? 0;
       const nbPages = result.nbPages ?? 0;
       const facets = result.facets as Record<string, Record<string, number>> | undefined;
