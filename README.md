@@ -13,26 +13,16 @@ The site runs at `http://localhost:4321` by default.
 
 ## Writing curriculum articles in Typst
 
-Curriculum articles can be written in either MDX or [Typst](https://typst.app). The Typst pipeline is handled by two vendored packages in `vendor/`: `kern-typst` (compiles `.typ` to HTML and renders math via kern) and `kern-typst-astro` (Astro Content Layer loader that calls it).
-
-### Prerequisite
-
-`typst` must be installed and on your `PATH`:
-
-```
-brew install typst
-```
+Curriculum articles can be written in either MDX or [Typst](https://typst.app). The Typst integration is `astro-typst`, which uses `@myriaddreamin/typst-ts-node-compiler` -- a native Node.js binding to the Typst compiler. No system `typst` binary is required.
 
 ### Adding an article
 
-Create a `.typ` file anywhere under `src/content/curriculum/`. The file's path relative to that directory becomes its URL: `src/content/curriculum/goals/from-first-principles.typ` becomes `/curriculum/goals/from-first-principles`. No Astro edits are needed; the loader picks it up automatically.
+Create a `.typ` file anywhere under `src/content/curriculum/`. The file's path relative to that directory becomes its URL: `src/content/curriculum/goals/from-first-principles.typ` becomes `/curriculum/goals/from-first-principles`. No Astro edits are needed; the integration picks it up automatically.
 
-Start with the preamble import and show rule, then write prose:
+Declare frontmatter with a `#metadata` block at the top of the file, then write prose:
 
 ```typst
-#import "/_kern_preamble.typ": article
-
-#show: article.with(
+#metadata((
   title: "Your Title",
   section: "goals",
   order: 3,
@@ -42,7 +32,7 @@ Start with the preamble import and show rule, then write prose:
   related_recordings_tags: (),
   related_files: (),
   draft: false,
-)
+))<frontmatter>
 
 Opening paragraph here.
 
@@ -53,19 +43,21 @@ Body text. Inline math: $P(A) > 0.5$. Display math:
 $ sum_(i=1)^n x_i = 1 $
 ```
 
-The fields in `article.with(...)` match the `curriculum` collection schema in `src/content/config.ts`. The `order` field controls the display order within a section. Set `draft: true` to exclude an article from the build.
+The fields match the `curriculum` collection schema in `src/content/config.ts`. The `order` field controls display order within a section. Set `draft: true` to exclude an article from the build.
+
+Math renders as inline SVG. The Typst layout engine typesets equations the same way it does for PDF output, then embeds the result as SVG within the HTML. No client-side JavaScript is involved.
 
 ### Adding a section
 
 Three files need to change.
 
-**`src/content/config.ts`** — add the section name to `sectionEnum`:
+**`src/content/config.ts`** -- add the section name to `sectionEnum`:
 
 ```ts
 const sectionEnum = z.enum(['goals', 'your-new-section']);
 ```
 
-**`src/pages/curriculum/index.astro`** — add the section to `SECTION_ORDER` (controls display order on the index page) and give it a human-readable label in `SECTION_LABELS`:
+**`src/pages/curriculum/index.astro`** -- add the section to `SECTION_ORDER` (controls display order on the index page) and give it a label in `SECTION_LABELS`:
 
 ```ts
 const SECTION_ORDER = ['goals', 'your-new-section'] as const;
@@ -75,19 +67,11 @@ const SECTION_LABELS: Record<string, string> = {
 };
 ```
 
-Then create a subdirectory `src/content/curriculum/your-new-section/` and add `.typ` files with `section: "your-new-section"` in their frontmatter. The article page route (`src/pages/curriculum/[section]/[slug].astro`) requires no changes; it is already fully dynamic.
+Then create a subdirectory `src/content/curriculum/your-new-section/` and add `.typ` files with `section: "your-new-section"` in their frontmatter. The article page route (`src/pages/curriculum/[section]/[slug].astro`) requires no changes; it is fully dynamic.
 
 ### How it works
 
-When the dev server or build runs, the `typstLoader` in `vendor/kern-typst-astro` finds every `*.typ` file under `src/content/curriculum/`, compiles each one with `typst compile --format html`, extracts the frontmatter (base64-encoded JSON embedded in a `<meta>` tag by the preamble), and stores the resulting HTML in the content store alongside any MDX entries. The `render()` call in the curriculum page template then serves that HTML directly.
-
-Math expressions are compiled by typst to Typst repr strings, which kern then renders client-side to HTML. Typst's standard `$...$` (inline) and `$ ... $` (display) syntax works as you would expect.
-
-HMR works. When you save a `.typ` file in dev mode, the watcher rebuilds only that entry and any entries that share a dependency (such as a shared include file).
-
-### LSP and editor support
-
-The root `_kern_preamble.typ` file exists so that editors with typst-lsp support (tinymist, typst-concealer) can resolve the `/_kern_preamble.typ` import when you open a `.typ` file directly. It is the same file that the compiler copies into place at build time; keep them in sync if you modify the preamble.
+The `astro-typst` integration registers `.typ` as a content entry type. When the dev server or build encounters a `.typ` file in a content collection, it compiles it to HTML via the Typst compiler, extracts the `<frontmatter>` metadata, and returns a `Content` component that renders the compiled HTML. HMR works: saving a `.typ` file in dev mode invalidates the relevant modules in Vite's module graph and hot-reloads the page.
 
 ## Contributing
 
@@ -96,7 +80,7 @@ Content contributions are welcome. The contribution guide lives at [goldenturn.o
 ## Tech stack
 
 - [Astro](https://astro.build) with TypeScript and MDX
-- [Typst](https://typst.app) for curriculum articles (via vendored `kern-typst` and `kern-typst-astro`)
+- [Typst](https://typst.app) for curriculum articles (via `astro-typst`)
 - [Tailwind CSS](https://tailwindcss.com) for styling
 - [Algolia](https://www.algolia.com) for search
 - [Adobe Typekit](https://fonts.adobe.com) for typography (kit `ten2ahn`)

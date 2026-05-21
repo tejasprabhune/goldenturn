@@ -1,14 +1,9 @@
 import { defineCollection, z } from 'astro:content';
-import { glob } from 'astro/loaders';
-import { typstLoader, combineLoaders } from 'kern-typst-astro';
 
-const sectionEnum = z.enum(['foundations', 'aff', 'neg', 'theory', 'advanced', 'meta']);
+const sectionEnum = z.enum(['goals']);
 
 const curriculum = defineCollection({
-  loader: combineLoaders(
-    glob({ pattern: '**/*.{md,mdx}', base: './src/content/curriculum' }),
-    typstLoader({ pattern: '**/*.typ', base: './src/content/curriculum' }),
-  ),
+  type: 'content',
   schema: z.object({
     title: z.string(),
     section: sectionEnum,

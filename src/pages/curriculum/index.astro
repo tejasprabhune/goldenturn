@@ -3,14 +3,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 
-const SECTION_ORDER = ['foundations', 'aff', 'neg', 'theory', 'advanced', 'meta'] as const;
+const SECTION_ORDER = ['goals'] as const;
 const SECTION_LABELS: Record<string, string> = {
-  foundations: 'Foundations',
-  aff: 'Affirmative',
-  neg: 'Negative',
-  theory: 'Theory',
-  advanced: 'Advanced',
-  meta: 'Meta',
+  goals: 'Goals',
 };
 
 const articles = await getCollection('curriculum', ({ data }) => !data.draft);

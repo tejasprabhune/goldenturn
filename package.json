@@ -12,13 +12,14 @@
   "dependencies": {
     "@astrojs/mdx": "^4.3.0",
     "@astrojs/tailwind": "^5.1.5",
+    "@myriaddreamin/typst-ts-node-compiler": "0.7.0-rc2",
+    "@myriaddreamin/typst-ts-renderer": "0.7.0-rc2",
+    "@myriaddreamin/typst.ts": "0.7.0-rc2",
     "algoliasearch": "^5.52.1",
     "astro": "^5.7.10",
+    "astro-typst": "^0.12.3",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
-    "kern-typ": "^0.2.0",
-    "kern-typst": "file:./vendor/kern-typst",
-    "kern-typst-astro": "file:./vendor/kern-typst-astro",
     "mammoth": "^1.12.0",
     "tailwindcss": "^3.4.17"
   },
