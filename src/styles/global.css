@@ -1,5 +1,3 @@
-@import 'kern-typ/kern.css';
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -92,11 +90,4 @@
     @apply font-semibold text-ink;
   }
 
-  .math-inline {
-    @apply font-mono italic text-sm;
-  }
-
-  .math-display {
-    @apply font-mono italic text-sm block text-center my-4;
-  }
 }
