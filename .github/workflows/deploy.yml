@@ -19,18 +19,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
         env:
           PUBLIC_ALGOLIA_APP_ID: CS1MDMNJTO
           PUBLIC_ALGOLIA_SEARCH_KEY: ${{ secrets.ALGOLIA_SEARCH_KEY }}
           PUBLIC_ALGOLIA_INDEX_NAME: all_rounds
           ALGOLIA_ADMIN_KEY: ${{ secrets.ALGOLIA_ADMIN_KEY }}
-      - run: npx tsx scripts/index_content.ts
+      - run: pnpm exec tsx scripts/index_content.ts
         env:
           PUBLIC_ALGOLIA_APP_ID: CS1MDMNJTO
           PUBLIC_ALGOLIA_SEARCH_KEY: ${{ secrets.ALGOLIA_SEARCH_KEY }}
