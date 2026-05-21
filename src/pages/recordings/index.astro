@@ -26,6 +26,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <option value="performance">Performance</option>
         <option value="other">Other</option>
       </select>
+      <button id="toggle-blur" aria-pressed="false" class="blur-toggle text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 transition-colors">Blur decisions</button>
     </div>
 
     <div id="active-filters" class="active-filters" style="display:none;"></div>
@@ -56,6 +57,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const resultsCount = document.getElementById('results-count') as HTMLParagraphElement;
   const loadMoreBtn = document.getElementById('load-more') as HTMLButtonElement;
   const activeFiltersEl = document.getElementById('active-filters') as HTMLDivElement;
+  const toggleBlurBtn = document.getElementById('toggle-blur') as HTMLButtonElement;
+
+  let decisionsBlurred = false;
+  toggleBlurBtn.addEventListener('click', () => {
+    decisionsBlurred = !decisionsBlurred;
+    toggleBlurBtn.setAttribute('aria-pressed', String(decisionsBlurred));
+    resultsEl.classList.toggle('decisions-blurred', decisionsBlurred);
+  });
 
   let currentPage = 0;
   let currentQuery = '';
@@ -738,5 +747,20 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
   .clear-filters:hover {
     opacity: 0.8;
+  }
+
+  .blur-toggle[aria-pressed="true"] {
+    background: #edf09a;
+    border-color: transparent;
+    color: #1a1a1a;
+    opacity: 1;
+  }
+
+  .decisions-blurred .rec-card__decision {
+    filter: blur(4px);
+    transition: filter 0.2s ease;
+  }
+  .rec-card__decision {
+    transition: filter 0.2s ease;
   }
 </style>
