@@ -18,7 +18,7 @@ const grouped = SECTION_ORDER.reduce<Record<string, CollectionEntry<'curriculum'
 }, {} as Record<string, CollectionEntry<'curriculum'>[]>);
 
 function articleHref(entry: CollectionEntry<'curriculum'>) {
-  const parts = entry.id.replace(/\.mdx?$/, '').split('/');
+  const parts = entry.id.replace(/\.(mdx?|typ)$/, '').split('/');
   const section = parts[0];
   const slug = parts.slice(1).join('/');
   return `/curriculum/${section}/${slug}`;
