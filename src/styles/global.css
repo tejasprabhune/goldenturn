@@ -90,4 +90,8 @@
     @apply font-semibold text-ink;
   }
 
+  .prose .typst-frame {
+    @apply block mx-auto my-6;
+  }
+
 }
