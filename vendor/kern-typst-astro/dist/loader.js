@@ -94,4 +94,3 @@ async function processFile(filePath, base, projectRoot, ctx) {
 function fileToId(filePath, base) {
     return relative(base, filePath).replace(/\.typ$/, '');
 }
-//# sourceMappingURL=loader.js.map

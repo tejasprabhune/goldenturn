@@ -7,4 +7,3 @@ export function combineLoaders(...loaders) {
         },
     };
 }
-//# sourceMappingURL=index.js.map
