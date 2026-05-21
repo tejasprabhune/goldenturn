@@ -1,4 +1,4 @@
-import { resolve, relative } from 'path';
+import { resolve, relative, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { readFile } from 'fs/promises';
 import fg from 'fast-glob';
@@ -11,7 +11,7 @@ export function typstLoader(options) {
             const { store, logger, parseData, generateDigest, watcher, config } = context;
             const projectRoot = fileURLToPath(config.root);
             const base = resolve(projectRoot, options.base);
-            const files = await fg(pattern, { cwd: base, absolute: true });
+            const files = await fg(pattern, { cwd: base, absolute: true, ignore: ['**/_kern_*.typ'] });
             const depMap = new Map();
             await Promise.all(files.map(async (filePath) => {
                 await processFile(filePath, base, projectRoot, { store, logger, parseData, generateDigest, depMap });
@@ -35,6 +35,8 @@ export function typstLoader(options) {
                 });
                 watcher.on('add', async (newPath) => {
                     if (!newPath.endsWith('.typ'))
+                        return;
+                    if (basename(newPath).startsWith('_kern_'))
                         return;
                     await processFile(resolve(newPath), base, projectRoot, {
                         store,

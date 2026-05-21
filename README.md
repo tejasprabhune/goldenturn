@@ -23,18 +23,20 @@ Curriculum articles can be written in either MDX or [Typst](https://typst.app). 
 brew install typst
 ```
 
-### Article format
+### Adding an article
 
-Create a `.typ` file anywhere under `src/content/curriculum/`. Start with the preamble import and show rule, then write prose:
+Create a `.typ` file anywhere under `src/content/curriculum/`. The file's path relative to that directory becomes its URL: `src/content/curriculum/goals/from-first-principles.typ` becomes `/curriculum/goals/from-first-principles`. No Astro edits are needed; the loader picks it up automatically.
+
+Start with the preamble import and show rule, then write prose:
 
 ```typst
 #import "/_kern_preamble.typ": article
 
 #show: article.with(
   title: "Your Title",
-  section: "foundations",
+  section: "goals",
   order: 3,
-  prerequisites: ("foundations/framing-and-goals",),
+  prerequisites: ("goals/from-first-principles",),
   related_articles: (),
   related_ks: (),
   related_recordings_tags: (),
@@ -51,7 +53,29 @@ Body text. Inline math: $P(A) > 0.5$. Display math:
 $ sum_(i=1)^n x_i = 1 $
 ```
 
-The fields in `article.with(...)` match the `curriculum` collection schema defined in `src/content.config.ts`. The `section` field must be one of `foundations`, `aff`, `neg`, `theory`, `advanced`, or `meta`. The `order` field controls the display order within a section.
+The fields in `article.with(...)` match the `curriculum` collection schema in `src/content/config.ts`. The `order` field controls the display order within a section. Set `draft: true` to exclude an article from the build.
+
+### Adding a section
+
+Three files need to change.
+
+**`src/content/config.ts`** — add the section name to `sectionEnum`:
+
+```ts
+const sectionEnum = z.enum(['goals', 'your-new-section']);
+```
+
+**`src/pages/curriculum/index.astro`** — add the section to `SECTION_ORDER` (controls display order on the index page) and give it a human-readable label in `SECTION_LABELS`:
+
+```ts
+const SECTION_ORDER = ['goals', 'your-new-section'] as const;
+const SECTION_LABELS: Record<string, string> = {
+  goals: 'Goals',
+  'your-new-section': 'Your New Section',
+};
+```
+
+Then create a subdirectory `src/content/curriculum/your-new-section/` and add `.typ` files with `section: "your-new-section"` in their frontmatter. The article page route (`src/pages/curriculum/[section]/[slug].astro`) requires no changes; it is already fully dynamic.
 
 ### How it works
 
