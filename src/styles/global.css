@@ -92,6 +92,8 @@
 
   .prose .typst-frame {
     @apply block mx-auto my-6;
+    width: 100%;
+    height: auto;
   }
 
 }
