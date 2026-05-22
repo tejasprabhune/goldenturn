@@ -10,9 +10,10 @@ interface Props {
 
 const { article, allArticles, Content } = Astro.props;
 
-const SECTION_ORDER = ['goals'] as const;
+const SECTION_ORDER = ['goals', 'foundations'] as const;
 const SECTION_LABELS: Record<string, string> = {
   goals: 'Goals',
+  foundations: 'Foundations',
 };
 
 function toTitleCase(str: string) {
@@ -53,7 +54,7 @@ const hasRelated =
   <div class="max-w-6xl mx-auto px-6">
     <div class="lg:grid lg:gap-12" style="grid-template-columns: 220px 1fr">
       <aside class="hidden lg:block">
-        <div class="sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto pb-8 pr-2">
+        <div class="sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto pt-8 pb-8 pr-2">
           <a href="/curriculum" class="font-display italic text-heading text-base block mb-6 hover:text-accent transition-colors">
             Curriculum
           </a>
