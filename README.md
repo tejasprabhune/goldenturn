@@ -47,23 +47,39 @@ The fields match the `curriculum` collection schema in `src/content/config.ts`. 
 
 Math renders as inline SVG. The Typst layout engine typesets equations the same way it does for PDF output, then embeds the result as SVG within the HTML. No client-side JavaScript is involved.
 
-### Diagrams with CeTZ
+### Diagrams, callout boxes, and other visual packages
 
-Typst's HTML exporter does not convert drawing primitives to SVG on its own. To embed a CeTZ diagram inline, use the `diagram` helper from `_setup.typ`, which wraps the canvas in `html.frame` -- a Typst 0.14 function that renders arbitrary content as an inline SVG within HTML output.
+Typst's HTML exporter does not convert drawing primitives or package-rendered visuals to SVG on its own. Use the `frame` helper from `_setup.typ`, which wraps content in `html.frame` -- a Typst 0.14 function that renders arbitrary content as an inline SVG within HTML output. This works for CeTZ diagrams, showybox callouts, and any other package that relies on Typst layout primitives.
+
+CeTZ diagram:
 
 ```typst
 #import "@preview/cetz:0.4.2"
-#import "../_setup.typ": diagram
+#import "../_setup.typ": frame
 
-#diagram(cetz.canvas({
+#frame(cetz.canvas({
   import cetz.draw: *
   // drawing code
 }))
 ```
 
+Showybox callout:
+
+```typst
+#import "@preview/showybox:2.0.4": showybox
+#import "../_setup.typ": frame
+
+#frame(showybox(
+  title: "Title",
+  frame: (border-color: blue, body-color: blue.lighten(95%))
+)[
+  Content here.
+])
+```
+
 Adjust the import path for your directory depth: `"../_setup.typ"` from a one-level subdirectory like `goals/`, `"../../_setup.typ"` from two levels deep.
 
-One caveat: `html.frame` is only defined when Typst's HTML features are active, which is always the case when astro-typst compiles the file. tinymist and other PDF-preview tools will show an error on articles that call `diagram`. The compiled output on the site is unaffected.
+One caveat: `html.frame` is only defined when Typst's HTML features are active, which is always the case when astro-typst compiles the file. tinymist and other PDF-preview tools will show an error on articles that call `frame`. The compiled output on the site is unaffected.
 
 ### Adding a section
 

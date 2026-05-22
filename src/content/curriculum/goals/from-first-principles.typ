@@ -10,8 +10,6 @@
   draft: false,
 ))<frontmatter>
 
-#import "@preview/cetz:0.4.2"
-#import "../_setup.typ": diagram
 
 A brief introduction to myself, this curriculum, and what I hope you get from this workshop-style course.
 
@@ -68,37 +66,14 @@ You should hope to gain the following from this course:
 - an understanding of the criticism and how to deploy it and answer it
 - a plan on how to execute each speech effectively in round
 - methods of practicing effectively and preparation before tournaments
-and hopefully more. We'll take our time and try to keep things 
-straightforward. Please email me at `prabhune[at]berkeley.edu` or
+and hopefully more.
+
+To be clear, this is not necessarily
+the friendliest guide for the absolute newcomer to debate. We will take
+a semi-formal approach to many topics and readers are advised to
+already have been committed to studying debate.
+
+Please email me at `prabhune[at]berkeley.edu` or
 `tejas.prabhune[at]gmail.com` if you have any questions or want to
 request an article on anything in specific.
-
-#diagram(cetz.canvas({
-    import cetz.draw: *;
-    import cetz.angle: angle, right-angle;
-    anchor("O", (0, 0));
-    let ang = 75deg;
-    arc(
-        "O",
-        start: 0deg,
-        delta: ang,
-        radius: 5,
-        anchor: "origin",
-        name: "arc",
-        fill: blue.lighten(70%),
-    )
-    anchor("P", "arc.end");
-    anchor("R", "arc.start");
-    anchor("Q", ("P", "|-", "O"))
-    content("P", $P$, anchor: "south", padding: 1em/4);
-    content("O", $O$, anchor: "north", padding: 1em/4);
-    content("Q", $Q$, anchor: "north", padding: 1em/4);
-    content("R", $R$, anchor: "north", padding: 1em/4);
-    line("P", "Q", "R", fill: red.lighten(70%), close: true, name: "PQR");
-    line("P", "O", "Q");
-    angle("O", "R", "P", label: $theta$, label-radius: 150%);
-    right-angle("Q", "R", "P", label: none);
-    content("PQR", $B(theta)$);
-    content(("arc.chord-center", 50%, "arc.arc-center"), $A(theta)$, angle: ang/2 - 90deg, padding: 1em/6);
-}))
 
