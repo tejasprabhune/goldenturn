@@ -1,6 +1,6 @@
 import { defineCollection, z } from 'astro:content';
 
-const sectionEnum = z.enum(['goals']);
+const sectionEnum = z.enum(['goals', 'foundations']);
 
 const curriculum = defineCollection({
   type: 'content',

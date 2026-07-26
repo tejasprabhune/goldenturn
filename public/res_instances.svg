@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 316.69 165.47">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        font-size: 7.12px;
+      }
+
+      .cls-1, .cls-2, .cls-3, .cls-4, .cls-5 {
+        font-family: IosevkaNF, 'Iosevka Nerd Font';
+      }
+
+      .cls-1, .cls-5 {
+        fill: #f15a29;
+      }
+
+      .cls-6 {
+        stroke: #f15a29;
+      }
+
+      .cls-6, .cls-7, .cls-8, .cls-9, .cls-10 {
+        stroke-miterlimit: 10;
+      }
+
+      .cls-6, .cls-7, .cls-8, .cls-10 {
+        fill: none;
+      }
+
+      .cls-7 {
+        stroke: #99ca3c;
+      }
+
+      .cls-8 {
+        stroke: #608a3c;
+      }
+
+      .cls-11 {
+        fill: #231f20;
+      }
+
+      .cls-12 {
+        fill: url(#linear-gradient);
+        opacity: .07;
+      }
+
+      .cls-9 {
+        fill: #fff;
+      }
+
+      .cls-9, .cls-10 {
+        stroke: #000;
+      }
+
+      .cls-2, .cls-4 {
+        fill: #608a3c;
+      }
+
+      .cls-3, .cls-4, .cls-5 {
+        font-size: 12px;
+      }
+
+      .cls-10 {
+        stroke-width: .25px;
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="131.96" y1="79.97" x2="131.96" y2="159.13" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f15a29"/>
+      <stop offset=".21" stop-color="#f15c2b"/>
+      <stop offset=".35" stop-color="#f16334"/>
+      <stop offset=".47" stop-color="#f26e44"/>
+      <stop offset=".59" stop-color="#f47f59"/>
+      <stop offset=".69" stop-color="#f69576"/>
+      <stop offset=".79" stop-color="#f8b098"/>
+      <stop offset=".88" stop-color="#facfc1"/>
+      <stop offset=".97" stop-color="#fef3ef"/>
+      <stop offset="1" stop-color="#fff"/>
+    </linearGradient>
+  </defs>
+  <rect class="cls-12" x="16.16" y="79.97" width="231.59" height="79.15"/>
+  <path class="cls-7" d="M16.16,80.09c39.85-42.21,67.74-46.48,85.72-42.77,19.85,4.1,27.61,17.91,48.68,21.38,29.7,4.9,56.42-15.6,73.77-32.79"/>
+  <path class="cls-8" d="M16.16,80.02c31.38-15.02,54.83-14.35,70.79-10.63,15.1,3.52,28.4,10.91,54.36,12.84,16.48,1.22,26.68-.61,35.84-6.6,7.18-4.69,8.86-8.77,15.23-11.91,12.1-5.97,25.48-.89,35.54,4.96"/>
+  <path class="cls-6" d="M234.18,110.87c-21.55-12.54-38.47-13.74-49.48-12.79-28.38,2.44-47.33-1.72-75.58,27.19-27.46,28.11-60.93,30.46-65.13,12.9-6.44-26.91-24.43-26.13-27.82-58.08"/>
+  <path class="cls-9" d="M2.68,79.97h245.08"/>
+  <path class="cls-9" d="M16.16,8.2v150.92"/>
+  <text class="cls-3" transform="translate(251.33 82.59)"><tspan x="0" y="0">status quo</tspan></text>
+  <text class="cls-4" transform="translate(21.8 16.96)"><tspan x="0" y="0">good</tspan></text>
+  <text class="cls-5" transform="translate(22.47 157)"><tspan x="0" y="0">bad</tspan></text>
+  <text class="cls-1" transform="translate(111.99 154.36)"><tspan x="0" y="0">neg: prove aff’s choice exists here</tspan></text>
+  <text class="cls-2" transform="translate(146.36 14.69)"><tspan x="0" y="0">aff: chooses one instance</tspan></text>
+  <circle class="cls-11" cx="241.93" cy="152.57" r="1.51"/>
+  <g>
+    <line class="cls-11" x1="241.93" y1="152.57" x2="241.93" y2="80.09"/>
+    <g>
+      <line class="cls-10" x1="241.93" y1="152.57" x2="241.93" y2="81.6"/>
+      <path d="M241.93,80.09c.26.71.71,1.59,1.19,2.14l-1.19-.43-1.19.43c.48-.55.93-1.43,1.19-2.14Z"/>
+    </g>
+  </g>
+  <g>
+    <line class="cls-11" x1="241.93" y1="152.57" x2="229.62" y2="108.34"/>
+    <g>
+      <line class="cls-10" x1="241.93" y1="152.57" x2="230.03" y2="109.8"/>
+      <path d="M229.62,108.34c.44.61,1.11,1.34,1.72,1.74l-1.26-.1-1.03.73c.31-.65.51-1.62.57-2.38Z"/>
+    </g>
+  </g>
+  <g>
+    <line class="cls-11" x1="241.93" y1="152.57" x2="192.96" y2="93.52"/>
+    <g>
+      <line class="cls-10" x1="241.93" y1="152.57" x2="193.92" y2="94.68"/>
+      <path d="M192.96,93.52c.66.38,1.56.77,2.28.89l-1.19.43-.64,1.09c.02-.72-.2-1.69-.45-2.4Z"/>
+    </g>
+  </g>
+  <circle class="cls-11" cx="241.93" cy="13.18" r="1.51"/>
+  <g>
+    <line class="cls-10" x1="241.93" y1="13.18" x2="217.02" y2="61.92"/>
+    <path d="M216.33,63.27c.09-.75.09-1.74-.09-2.44l.86.92,1.25.16c-.67.27-1.47.85-2.03,1.36Z"/>
+  </g>
+</svg>
