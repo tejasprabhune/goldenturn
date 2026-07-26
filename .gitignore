@@ -7,3 +7,6 @@ dist/
 .astro/
 PROJECT_PLAN.md
 STYLE_GUIDE.md
+
+# ingest working files
+scripts/ingest/manifest.json
