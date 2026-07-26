@@ -4,21 +4,25 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
-  minimalNav?: boolean;
+  variant?: 'default' | 'home';
   noFooter?: boolean;
 }
 
-const { title, description = 'An open-source curriculum, recordings index, files archive, and K reference for college parliamentary debate.', minimalNav = false, noFooter = false } = Astro.props;
+const {
+  title,
+  description = 'An open-source curriculum and recordings index for college parliamentary debate.',
+  variant = 'default',
+  noFooter = false,
+} = Astro.props;
 
 const pathname = Astro.url.pathname;
+const isHome = variant === 'home';
 
 const navLinks = [
-  { href: '/curriculum', label: 'Curriculum' },
-  { href: '/k', label: 'Ks' },
-  { href: '/recordings', label: 'Recordings' },
-  { href: '/files', label: 'Files' },
-  { href: '/playbooks', label: 'Playbooks' },
-  { href: '/lectures', label: 'Lectures' },
+  { href: '/curriculum', label: 'curriculum' },
+  { href: '/recordings', label: 'recordings' },
+  { href: '/lectures', label: 'lectures' },
+  { href: '/search', label: 'search' },
 ];
 
 function isActive(href: string) {
@@ -33,85 +37,54 @@ function isActive(href: string) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     {description && <meta name="description" content={description} />}
-    <link rel="stylesheet" href="https://use.typekit.net/ten2ahn.css" />
+    <link rel="preload" href="/fonts/PPEditorialNew-Ultralight.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/NeueMontreal-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
-    <header class="sticky top-0 z-50 bg-paper/95 backdrop-blur-sm border-b border-ink/10">
-      <nav aria-label="Main navigation" class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-        {!minimalNav && (
-          <a
-            href="/"
-            class="font-sans text-xs tracking-widest text-ink/30 hover:text-ink/60 transition-colors uppercase"
-            aria-current={pathname === '/' ? 'page' : undefined}
-          >
-            gt
-          </a>
-        )}
+    <header class={isHome ? 'masthead masthead--home' : 'masthead'}>
+      <div class="shell masthead-inner">
+        <a href="/" class="masthead-mark" aria-label="the golden turn, home">
+          <span class={isHome ? 'wordmark' : 'wordmark wordmark-sm'}>the golden turn</span>
+        </a>
 
-        {minimalNav && <span />}
-
-        <div class={`hidden md:flex items-center gap-7`}>
-          {!minimalNav && navLinks.map(({ href, label }) => (
+        <nav aria-label="Main navigation" class="masthead-nav">
+          {navLinks.map(({ href, label }) => (
             <a
               href={href}
               aria-current={isActive(href) ? 'page' : undefined}
-              class={`text-sm font-sans tracking-wide transition-colors ${isActive(href) ? 'text-ink underline underline-offset-4 decoration-2 decoration-accent' : 'text-ink/50 hover:text-ink'}`}
+              class={isActive(href) ? 'masthead-link is-current' : 'masthead-link'}
             >
               {label}
             </a>
           ))}
-          <a
-            href="/search"
-            aria-current={isActive('/search') ? 'page' : undefined}
-            class={`text-sm font-sans tracking-wide transition-colors ${isActive('/search') ? 'text-ink underline underline-offset-4 decoration-2 decoration-accent' : 'text-ink/50 hover:text-ink'}`}
-          >
-            Search
-          </a>
-        </div>
+        </nav>
 
-        <div class="flex items-center gap-3 md:hidden">
-          <a
-            href="/search"
-            class="text-sm font-sans text-ink/60 hover:text-accent transition-colors"
-          >
-            Search
-          </a>
-          {!minimalNav && (
-            <button
-              id="mobile-menu-toggle"
-              type="button"
-              aria-label="Open navigation menu"
-              class="text-ink/60 hover:text-accent transition-colors p-1"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
-                <line x1="2" y1="5" x2="18" y2="5" />
-                <line x1="2" y1="10" x2="18" y2="10" />
-                <line x1="2" y1="15" x2="18" y2="15" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </nav>
-
-      {!minimalNav && (
-        <div
-          id="mobile-menu"
-          class="hidden md:hidden border-t border-ink/10 bg-paper"
+        <button
+          id="mobile-menu-toggle"
+          type="button"
+          aria-label="Open navigation menu"
+          aria-expanded="false"
+          aria-controls="mobile-menu"
+          class="masthead-toggle"
         >
-          <nav aria-label="Mobile navigation" class="px-6 py-4 flex flex-col gap-4">
-            {navLinks.map(({ href, label }) => (
-              <a
-                href={href}
-                aria-current={isActive(href) ? 'page' : undefined}
-                class={`text-sm font-sans transition-colors ${isActive(href) ? 'text-ink/90' : 'text-ink/60 hover:text-accent'}`}
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
-        </div>
-      )}
+          <span class="label">menu</span>
+        </button>
+      </div>
+
+      <div id="mobile-menu" class="masthead-drawer" hidden>
+        <nav aria-label="Mobile navigation" class="shell masthead-drawer-inner">
+          {navLinks.map(({ href, label }) => (
+            <a
+              href={href}
+              aria-current={isActive(href) ? 'page' : undefined}
+              class={isActive(href) ? 'masthead-link is-current' : 'masthead-link'}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+      </div>
     </header>
 
     <main>
@@ -119,32 +92,431 @@ function isActive(href: string) {
     </main>
 
     {!noFooter && (
-      <footer class="mt-24 pt-8">
-        <div class="max-w-6xl mx-auto px-6 pb-10 flex items-center justify-between">
-          <span class="font-sans text-xs tracking-widest text-ink/25 uppercase">gt</span>
-          <a href="/contribute" class="font-sans text-sm text-ink/40 hover:text-ink transition-colors">contribute</a>
+      <footer class="site-footer">
+        <div class="shell site-footer-inner">
+          <span class="wordmark footer-mark">npda</span>
+
+          <div class="footer-grid">
+            <div class="footer-col">
+              <p class="label label-muted">maintained by</p>
+              <p class="footer-line">Tejas Prabhune</p>
+              <p class="footer-line">
+                <a href="https://tejasprabhune.github.io" target="_blank" rel="noopener noreferrer" class="footer-link">tejasprabhune.github.io</a>
+              </p>
+              <p class="footer-line">
+                <a href="mailto:prabhune@berkeley.edu" class="footer-link">prabhune@berkeley.edu</a>
+              </p>
+            </div>
+
+            <div class="footer-col">
+              <p class="label label-muted">sections</p>
+              {navLinks.map(({ href, label }) => (
+                <p class="footer-line"><a href={href} class="footer-link">{label}</a></p>
+              ))}
+            </div>
+
+            <div class="footer-col">
+              <p class="label label-muted">source</p>
+              <p class="footer-line"><a href="/contribute" class="footer-link">contribute</a></p>
+              <p class="footer-line">
+                <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer" class="footer-link">github</a>
+              </p>
+            </div>
+          </div>
         </div>
       </footer>
     )}
+
+    <div id="search-overlay" class="search-overlay" hidden>
+      <div class="search-overlay-backdrop" data-close></div>
+      <div class="search-overlay-panel" role="dialog" aria-modal="true" aria-label="Search">
+        <input
+          id="overlay-input"
+          type="search"
+          class="search-overlay-input"
+          placeholder="search everything"
+          autocomplete="off"
+          aria-label="Search everything"
+        />
+        <p class="label label-muted search-overlay-hint">enter to see all results, esc to close</p>
+        <div id="overlay-results" class="search-overlay-results"></div>
+      </div>
+    </div>
   </body>
 </html>
 
+<style>
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+  }
+
+  .masthead--home {
+    background: var(--sky);
+    border-bottom-color: var(--ink);
+  }
+
+  /* The wordmark sets the bar height; padding is only enough to clear the
+     descenders. */
+  .masthead-inner {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.45rem;
+  }
+
+  /* On the home page the nav takes its own line above the mark so the wordmark
+     can run the full measure without wrapping. */
+  .masthead--home .masthead-inner {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    padding-top: 0.85rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .masthead--home .masthead-mark {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    margin-top: 0.75rem;
+  }
+
+  @media (min-width: 900px) {
+    .masthead--home .masthead-inner {
+      padding-top: 1.25rem;
+      padding-bottom: 2.5rem;
+    }
+
+    .masthead--home .masthead-mark {
+      margin-top: 1.5rem;
+    }
+  }
+
+  .masthead--home .masthead-nav {
+    grid-row: 1;
+    grid-column: 2;
+    padding-bottom: 0;
+  }
+
+  .masthead--home .masthead-toggle {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .masthead-mark {
+    text-decoration: none;
+    min-width: 0;
+  }
+
+  .masthead-mark .wordmark {
+    font-size: clamp(1.8rem, 5vw, 3.1rem);
+  }
+
+  .masthead--home .masthead-mark .wordmark {
+    font-size: clamp(2.5rem, 13.5vw, 11rem);
+  }
+
+  .masthead-nav {
+    display: none;
+    align-items: baseline;
+    gap: 1.5rem;
+    padding-bottom: 0.35rem;
+  }
+
+  @media (min-width: 900px) {
+    .masthead-nav {
+      display: flex;
+    }
+
+    .masthead-toggle {
+      display: none;
+    }
+  }
+
+  .masthead-link {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 1.0625rem;
+    font-weight: 500;
+    color: rgba(23, 21, 15, 0.7);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.06s linear;
+  }
+
+  .masthead-link:hover {
+    color: var(--ink);
+  }
+
+  .masthead-link.is-current {
+    color: var(--ink);
+    box-shadow: inset 0 -0.55em 0 var(--gold);
+  }
+
+  .masthead-toggle {
+    background: none;
+    border: none;
+    padding: 0.5rem 0;
+    color: rgba(23, 21, 15, 0.62);
+    cursor: pointer;
+  }
+
+  .masthead-toggle:hover {
+    color: var(--ink);
+  }
+
+  .masthead-drawer {
+    border-top: 1px solid var(--rule);
+  }
+
+  .masthead-drawer[hidden] {
+    display: none;
+  }
+
+  .masthead-drawer-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding-top: 1rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .site-footer {
+    margin-top: 7rem;
+    border-top: 1px solid var(--ink);
+    background: var(--sky);
+  }
+
+  .site-footer-inner {
+    padding-top: 2.5rem;
+    padding-bottom: 3rem;
+  }
+
+  .footer-mark {
+    font-size: clamp(4rem, 18vw, 14rem);
+    margin-bottom: 3.5rem;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    border-top: 1px solid var(--ink);
+    padding-top: 1.5rem;
+  }
+
+  @media (min-width: 700px) {
+    .footer-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .footer-col p.label {
+    margin-bottom: 0.75rem;
+  }
+
+  .footer-line {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    margin: 0 0 0.2rem;
+    color: var(--ink);
+  }
+
+  .footer-link {
+    color: var(--ink);
+    text-decoration: none;
+    box-shadow: inset 0 -1px 0 rgba(23, 21, 15, 0.3);
+    transition: box-shadow 0.06s linear, background-color 0.06s linear;
+  }
+
+  .footer-link:hover {
+    background: var(--gold);
+    box-shadow: inset 0 -1px 0 var(--ink);
+  }
+
+  .search-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12vh;
+  }
+
+  .search-overlay[hidden] {
+    display: none;
+  }
+
+  .search-overlay-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(23, 21, 15, 0.35);
+  }
+
+  .search-overlay-panel {
+    position: relative;
+    width: min(42rem, calc(100vw - 2rem));
+    max-height: 70vh;
+    overflow-y: auto;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    padding: 1.25rem;
+  }
+
+  .search-overlay-input {
+    width: 100%;
+    font-family: 'PP Editorial New', Georgia, serif;
+    font-weight: 300;
+    font-size: 2rem;
+    line-height: 1.1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--rule);
+    padding: 0 0 0.5rem;
+    color: var(--ink);
+    outline: none;
+  }
+
+  .search-overlay-input::placeholder {
+    color: rgba(23, 21, 15, 0.3);
+  }
+
+  .search-overlay-hint {
+    margin: 0.75rem 0 0;
+  }
+
+  .search-overlay-results {
+    margin-top: 1rem;
+  }
+</style>
+
 <script>
-  // Mobile menu toggle
+  import { algoliasearch } from 'algoliasearch';
+
   const mobileToggle = document.getElementById('mobile-menu-toggle');
   const mobileMenu = document.getElementById('mobile-menu');
   if (mobileToggle && mobileMenu) {
     mobileToggle.addEventListener('click', () => {
-      mobileMenu.classList.toggle('hidden');
+      const open = mobileMenu.hasAttribute('hidden');
+      mobileMenu.toggleAttribute('hidden', !open);
+      mobileToggle.setAttribute('aria-expanded', String(open));
     });
   }
 
-  // Keyboard shortcut: press / to jump to search page
-  document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+  const overlay = document.getElementById('search-overlay') as HTMLDivElement | null;
+  const overlayInput = document.getElementById('overlay-input') as HTMLInputElement | null;
+  const overlayResults = document.getElementById('overlay-results') as HTMLDivElement | null;
+
+  const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
+  const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
+  const client = APP_ID && SEARCH_KEY ? algoliasearch(APP_ID, SEARCH_KEY) : null;
+
+  function escapeHtml(str: string): string {
+    return (str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  interface Hit {
+    objectID: string;
+    type?: string;
+    title?: string;
+    name?: string;
+    url?: string;
+    link?: string;
+    description?: string;
+    resolution?: string;
+    _isRecording?: boolean;
+  }
+
+  // Only sections that are live on the site.
+  const LIVE_TYPES = ['curriculum', 'recording', 'lecture'];
+
+  let debounce: ReturnType<typeof setTimeout> | undefined;
+
+  function openOverlay() {
+    if (!overlay || !overlayInput) return;
+    overlay.removeAttribute('hidden');
+    overlayInput.focus();
+    overlayInput.select();
+  }
+
+  function closeOverlay() {
+    if (!overlay) return;
+    overlay.setAttribute('hidden', '');
+  }
+
+  async function runOverlaySearch(query: string) {
+    if (!overlayResults) return;
+    if (!query.trim() || !client) {
+      overlayResults.innerHTML = '';
+      return;
+    }
+
+    const [contentHits, recordingHits] = await Promise.all([
+      client
+        .searchSingleIndex({ indexName: 'goldenturn_content', searchParams: { query, hitsPerPage: 6 } })
+        .then(r => r.hits as Hit[])
+        .catch(() => [] as Hit[]),
+      client
+        .searchSingleIndex({ indexName: 'all_rounds', searchParams: { query, hitsPerPage: 6 } })
+        .then(r => (r.hits as Hit[]).map(h => ({ ...h, type: 'recording', _isRecording: true })))
+        .catch(() => [] as Hit[]),
+    ]);
+
+    const hits = [...contentHits, ...recordingHits]
+      .filter(h => LIVE_TYPES.includes(h.type ?? ''))
+      .slice(0, 8);
+
+    if (hits.length === 0) {
+      overlayResults.innerHTML = `<p class="page-lede" style="margin-top: 0.5rem;">No results.</p>`;
+      return;
+    }
+
+    overlayResults.innerHTML = hits
+      .map(hit => {
+        const title = escapeHtml((hit.title ?? hit.name ?? '') as string);
+        const url = escapeHtml(hit._isRecording ? (hit.link ?? '#') : (hit.url ?? '#'));
+        const desc = escapeHtml(hit._isRecording ? (hit.resolution ?? '') : (hit.description ?? ''));
+        const target = hit._isRecording ? ' target="_blank" rel="noopener noreferrer"' : '';
+        return `<a class="result-link" href="${url}"${target}>
+          <span class="result-title">${title}</span>
+          ${desc ? `<span class="result-desc">${desc}</span>` : ''}
+        </a>`;
+      })
+      .join('');
+  }
+
+  overlayInput?.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => runOverlaySearch(overlayInput.value.trim()), 120);
+  });
+
+  overlayInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      window.location.href = '/search';
+      const q = overlayInput.value.trim();
+      window.location.href = q ? `/search?q=${encodeURIComponent(q)}` : '/search';
     }
   });
 
+  overlay?.querySelector('[data-close]')?.addEventListener('click', closeOverlay);
+
+  document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement?.tagName;
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    if (e.key === '/' && !typing) {
+      e.preventDefault();
+      openOverlay();
+    } else if (e.key === 'Escape' && overlay && !overlay.hasAttribute('hidden')) {
+      closeOverlay();
+    }
+  });
 </script>

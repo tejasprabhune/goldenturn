@@ -3,23 +3,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Search | the golden turn">
-  <div class="max-w-3xl mx-auto px-6 pt-12 pb-24">
-    <h1 class="font-display italic text-heading text-4xl mb-8">Search</h1>
+  <div class="shell-prose page-head">
+    <h1 class="page-title">search</h1>
+  </div>
 
+  <div class="shell-prose page-body">
     <input
       id="search-input"
       type="search"
-      placeholder="Search everything..."
+      placeholder="Search everything"
       autocomplete="off"
       autofocus
-      class="w-full border border-ink/20 rounded-lg bg-white px-4 py-3 font-sans text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 focus:ring-ink/20 focus:border-transparent mb-8"
+      class="field"
+      style="width: 100%; margin-bottom: 2rem;"
     />
 
-    <p id="results-count" class="text-xs font-sans text-ink/35 mb-6 hidden"></p>
+    <p id="results-count" class="label label-muted hidden" style="margin-bottom: 1.5rem;"></p>
     <div id="results"></div>
 
-    <p id="empty-state" class="font-sans text-sm text-ink/40">
-      Start typing to search across curriculum, recordings, Ks, files, and playbooks.
+    <p id="empty-state" class="page-lede">
+      Start typing to search across curriculum, recordings, and lectures.
     </p>
   </div>
 </BaseLayout>
@@ -41,14 +44,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   let focusedIndex = -1;
   let allLinks: HTMLAnchorElement[] = [];
 
-  const GROUP_ORDER = ['curriculum', 'k', 'recording', 'file', 'playbook', 'lecture'];
+  // Ks, files, and playbooks are offline, so their hits are dropped.
+  const GROUP_ORDER = ['curriculum', 'recording', 'lecture'];
   const GROUP_LABELS: Record<string, string> = {
-    curriculum: 'Curriculum',
-    k: 'K Reference',
-    recording: 'Recordings',
-    file: 'Files',
-    playbook: 'Playbooks',
-    lecture: 'Lectures',
+    curriculum: 'curriculum',
+    recording: 'recordings',
+    lecture: 'lectures',
   };
 
   function escapeHtml(str: string): string {
@@ -94,7 +95,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         .catch(() => [] as Hit[]),
     ]);
 
-    const all = [...contentHits, ...recordingHits];
+    const all = [...contentHits, ...recordingHits].filter(h => GROUP_ORDER.includes(h.type ?? ''));
     const total = all.length;
 
     // Group by type
@@ -118,7 +119,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     ];
 
     if (total === 0) {
-      resultsEl.innerHTML = `<p class="font-sans text-sm text-ink/40">No results for "${escapeHtml(query)}".</p>`;
+      resultsEl.innerHTML = `<p class="page-lede">No results for "${escapeHtml(query)}".</p>`;
       return;
     }
 
@@ -127,8 +128,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const label = GROUP_LABELS[type] ?? type;
 
       const section = document.createElement('div');
-      section.className = 'mb-8';
-      section.innerHTML = `<p class="font-sans text-xs uppercase tracking-widest text-ink/30 mb-3">${escapeHtml(label)}</p>`;
+      section.className = 'result-group';
+      section.innerHTML = `<p class="section-head">${escapeHtml(label)}</p>`;
 
       for (const hit of hits) {
         const isRecording = hit._isRecording;
@@ -143,11 +144,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
         }
-        a.className = 'result-link flex flex-col px-4 py-3 -mx-4 rounded-lg hover:bg-ink/4 transition-colors';
+        a.className = 'result-link';
         a.setAttribute('data-index', String(allLinks.length));
         a.innerHTML = `
-          <span class="font-sans font-medium text-heading text-sm leading-snug">${escapeHtml(title)}</span>
-          ${desc ? `<span class="font-sans text-ink/50 text-xs mt-0.5 line-clamp-1">${escapeHtml(desc)}</span>` : ''}
+          <span class="result-title">${escapeHtml(title)}</span>
+          ${desc ? `<span class="result-desc">${escapeHtml(desc)}</span>` : ''}
         `;
         section.appendChild(a);
         allLinks.push(a);
@@ -174,7 +175,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   function updateFocus() {
     allLinks.forEach((a, i) => {
-      a.classList.toggle('bg-ink/5', i === focusedIndex);
+      a.classList.toggle('is-focused', i === focusedIndex);
     });
     if (focusedIndex >= 0) allLinks[focusedIndex]?.scrollIntoView({ block: 'nearest' });
   }

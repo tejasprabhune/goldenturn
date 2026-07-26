@@ -3,40 +3,38 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Recordings | the golden turn">
-  <div class="max-w-[72rem] mx-auto px-6 py-12">
-    <div class="mb-10 flex items-baseline justify-between flex-wrap gap-4">
-      <h1 class="font-display italic text-heading" style="font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1; margin: 0;">Recordings</h1>
-      <a href="/recordings/add" class="text-sm font-sans text-ink/50 hover:text-ink transition-colors">Submit a recording</a>
-    </div>
+  <div class="shell page-head rec-head">
+    <h1 class="page-title">recordings</h1>
+    <a href="/recordings/add" class="label label-muted rec-submit">submit a recording</a>
+  </div>
 
-    <div class="mb-6">
-      <input id="search-input" type="search" aria-label="Search recordings"
-        placeholder="Search rounds, teams, resolutions..."
-        class="w-full border border-ink/15 rounded-lg bg-white px-4 py-3 text-sm font-sans text-ink placeholder-ink/30 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-    </div>
+  <div class="shell page-body">
+    <input id="search-input" type="search" aria-label="Search recordings"
+      placeholder="Search rounds, teams, resolutions"
+      class="field" style="width: 100%; margin-bottom: 1rem;" />
 
-    <div class="flex flex-wrap gap-3 mb-6">
-      <select id="filter-year" class="text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 focus:outline-none focus:ring-1 focus:ring-accent">
+    <div class="toolbar">
+      <select id="filter-year" class="field" aria-label="Filter by year">
         <option value="">All years</option>
       </select>
-      <select id="filter-aff-type" class="text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 focus:outline-none focus:ring-1 focus:ring-accent">
+      <select id="filter-aff-type" class="field" aria-label="Filter by aff type">
         <option value="">All aff types</option>
         <option value="topical">Topical</option>
         <option value="k-aff">K-aff</option>
         <option value="performance">Performance</option>
         <option value="other">Other</option>
       </select>
-      <button id="toggle-blur" aria-pressed="true" class="blur-toggle text-xs font-sans border border-ink/15 rounded-md px-3 py-2 bg-white text-ink/60 transition-colors">Blur decisions</button>
+      <button id="toggle-blur" aria-pressed="true" class="chip blur-toggle">Blur decisions</button>
     </div>
 
     <div id="active-filters" class="active-filters" style="display:none;"></div>
 
-    <p id="results-count" class="text-xs font-sans text-ink/35 mb-5"></p>
+    <p id="results-count" class="label label-muted" style="margin-bottom: 1.25rem;"></p>
 
-    <div id="results" class="space-y-3"></div>
+    <div id="results" class="rec-results"></div>
 
-    <div class="mt-10 text-center">
-      <button id="load-more" class="hidden text-xs font-sans text-ink/40 hover:text-ink border border-ink/15 rounded-md px-5 py-2 transition-colors">Load more</button>
+    <div style="margin-top: 2.5rem;">
+      <button id="load-more" class="chip hidden">Load more</button>
     </div>
   </div>
 </BaseLayout>
@@ -183,8 +181,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <div class="rec-card__tags">${tagPills}</div>
           </div>
           <div class="rec-card__aside">
-            <span class="rec-card__decision">${decision}</span>
-            <span class="rec-card__meta">${year} · ${tournament}</span>
+            <span class="rec-card__decision" role="button" tabindex="0" aria-label="Reveal decision">${decision}</span>
+            <span class="rec-card__meta">${year}, ${tournament}</span>
           </div>
         </div>
         <div class="rec-card__body" hidden>
@@ -312,12 +310,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       injectPlayer(card);
       card.dataset.playerInjected = 'true';
     }
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       const rect = card.getBoundingClientRect();
       if (rect.top < 80) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        card.scrollIntoView({ block: 'start' });
       }
-    }, 50);
+    });
   }
 
   function collapseCard(card: HTMLElement) {
@@ -329,7 +327,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if (card.getAttribute('data-expanded') === 'false') {
         body.setAttribute('hidden', '');
       }
-    }, 260);
+    }, 100);
   }
 
   async function search(page: number, append: boolean) {
@@ -402,6 +400,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   resultsEl.addEventListener('click', (e) => {
     const target = e.target as Element;
 
+    // A blurred decision reveals itself on click instead of expanding the card.
+    const decision = target.closest('.rec-card__decision') as HTMLElement | null;
+    if (decision && decisionsBlurred) {
+      e.stopPropagation();
+      decision.dataset.revealed = decision.dataset.revealed === 'true' ? 'false' : 'true';
+      return;
+    }
+
     const tagBtn = target.closest('[data-tag]') as HTMLElement | null;
     if (tagBtn && tagBtn.closest('.rec-card')) {
       const tag = tagBtn.getAttribute('data-tag')!;
@@ -456,6 +462,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       expandedObjectID = oid;
     }
     updateURL();
+  });
+
+  // Cards and decisions are div/span buttons, so Enter and Space need wiring.
+  resultsEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const target = e.target as Element;
+    if (target.closest('.rec-card__decision') || target.closest('.rec-card__header')) {
+      e.preventDefault();
+      (target as HTMLElement).click();
+    }
   });
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -520,44 +536,63 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 </script>
 
 <style is:global>
+  .rec-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .rec-submit {
+    text-decoration: none;
+  }
+
+  .rec-submit:hover {
+    color: var(--ink);
+  }
+
+  .rec-results {
+    border-top: 1px solid var(--rule);
+  }
+
   .rec-card {
-    border: 1px solid rgba(26,26,26,0.1);
-    border-radius: 0.5rem;
-    overflow: hidden;
-    transition: border-color 0.15s;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-inline: 0.75rem;
+    margin-inline: -0.75rem;
+    transition: background-color 60ms linear;
   }
   .rec-card:hover {
-    border-color: rgba(26,26,26,0.2);
+    background: var(--sky-wash);
   }
   .rec-card[data-expanded="true"] {
-    border-color: rgba(26,26,26,0.25);
-    box-shadow: 0 2px 12px rgba(26,26,26,0.06);
+    background: var(--paper-raised);
+    border-bottom-color: var(--rule);
   }
 
   .rec-card__header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(4.5rem, max-content);
     gap: 1rem;
-    padding: 1.125rem 1.25rem;
+    padding: 1.125rem 0;
     cursor: pointer;
   }
 
   .rec-card__title {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-style: normal;
-    font-size: 1.0625rem;
-    font-weight: 600;
-    color: #1a1a1a;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--ink);
     margin: 0 0 0.25rem;
     line-height: 1.3;
   }
 
   .rec-card__resolution {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.8125rem;
-    color: #2f4858;
+    color: var(--ink-muted);
     margin: 0 0 0.625rem;
-    opacity: 0.8;
   }
 
   .rec-card__strategies {
@@ -568,21 +603,20 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .rec-card__strategy {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.8125rem;
-    color: #1a1a1a;
+    color: var(--ink);
     margin: 0;
     line-height: 1.4;
   }
 
   .rec-card__label {
     font-size: 0.6875rem;
-    font-weight: 600;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #1a1a1a;
-    opacity: 0.38;
-    margin-right: 0.4rem;
+    letter-spacing: 0.14em;
+    color: rgba(23, 21, 15, 0.4);
+    margin-right: 0.5rem;
   }
 
   .rec-card__tags {
@@ -593,23 +627,21 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .rec-card__tag {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.7rem;
     letter-spacing: 0.03em;
-    background: rgba(26,26,26,0.06);
-    border-radius: 999px;
+    background: transparent;
+    border: 1px solid var(--rule);
     padding: 0.15rem 0.55rem;
-    color: #1a1a1a;
-    opacity: 0.7;
+    color: rgba(23, 21, 15, 0.6);
     cursor: pointer;
-    border: none;
-    transition: background 0.12s, opacity 0.12s;
+    transition: background 60ms linear, color 60ms linear, border-color 60ms linear;
   }
   .rec-card__tag:hover,
   .rec-card__tag[data-active="true"] {
-    background: #edf09a;
-    opacity: 1;
-    color: #1a1a1a;
+    background: var(--gold);
+    border-color: var(--ink);
+    color: var(--ink);
   }
 
   .rec-card__aside {
@@ -617,20 +649,21 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     flex-direction: column;
     align-items: flex-end;
     justify-content: space-between;
+    gap: 0.5rem;
     max-width: 9rem;
     flex-shrink: 0;
   }
 
   .rec-card__decision {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: #2f4858;
-    color: #fcefef;
+    letter-spacing: 0.1em;
+    background: var(--gold);
+    border: 1px solid var(--ink);
+    color: var(--ink);
     padding: 0.2rem 0.5rem;
-    border-radius: 0.25rem;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -638,19 +671,41 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .rec-card__meta {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.75rem;
-    color: #1a1a1a;
-    opacity: 0.38;
+    color: rgba(23, 21, 15, 0.4);
     text-align: right;
     line-height: 1.4;
+  }
+
+  /* Narrow screens cannot spare a whole column for the decision, so it drops
+     to a row under the card with the year and tournament. */
+  @media (max-width: 720px) {
+    .rec-card__header {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+
+    .rec-card__aside {
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 0.5rem 0.75rem;
+      max-width: none;
+      margin-top: 0.75rem;
+    }
+
+    .rec-card__meta {
+      text-align: left;
+    }
   }
 
   .rec-card__body {
     overflow: hidden;
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 0.25s ease;
+    transition: grid-template-rows 90ms linear;
   }
   .rec-card__body:not([hidden]) {
     grid-template-rows: 1fr;
@@ -664,19 +719,23 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .rec-card__body-inner {
-    padding: 0 1.25rem 1.25rem;
-    border-top: 1px solid rgba(26,26,26,0.07);
+    padding: 0 0 1.25rem;
+  }
+
+  /* Only draw the divider when open; a collapsed body is zero height but its
+     border would still paint as a second rule under the card. */
+  .rec-card[data-expanded='true'] .rec-card__body-inner {
+    border-top: 1px solid var(--rule-soft);
   }
 
   .rec-card__player {
-    margin-bottom: 1rem;
+    margin: 1rem 0;
   }
 
   .rec-card__player iframe,
   .rec-card__player video,
   .rec-card__player audio {
     width: 100%;
-    border-radius: 0.375rem;
     display: block;
   }
 
@@ -686,24 +745,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .player-fallback {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.8rem;
-    color: #1a1a1a;
-    opacity: 0.45;
+    color: rgba(23, 21, 15, 0.5);
     padding: 0.75rem 0;
     margin: 0;
   }
 
   .player-fallback a {
-    color: #1a1a1a;
-    opacity: 1;
+    color: var(--ink);
     text-decoration: underline;
     text-underline-offset: 2px;
     margin-left: 0.375rem;
-  }
-
-  .player-fallback a:hover {
-    opacity: 0.7;
   }
 
   .rec-card__footer {
@@ -711,78 +764,78 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     justify-content: flex-end;
     gap: 1.25rem;
     padding-top: 0.875rem;
-    border-top: 1px solid rgba(26,26,26,0.07);
+    border-top: 1px solid var(--rule-soft);
     margin-top: 0.875rem;
   }
 
   .rec-card__action {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 0.8rem;
-    color: #1a1a1a;
-    opacity: 0.45;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(23, 21, 15, 0.5);
     background: none;
     border: none;
     cursor: pointer;
     padding: 0;
     text-decoration: none;
-    transition: opacity 0.12s;
+    transition: color 60ms linear;
   }
   .rec-card__action:hover {
-    opacity: 1;
+    color: var(--ink);
   }
 
   .active-filters {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
     align-items: center;
   }
   .active-filter-chip {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.75rem;
-    background: #edf09a;
-    border-radius: 999px;
+    background: var(--gold);
+    border: 1px solid var(--ink);
     padding: 0.2rem 0.55rem;
-    color: #1a1a1a;
+    color: var(--ink);
     cursor: pointer;
-    border: none;
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    transition: background 0.12s;
   }
   .active-filter-chip:hover {
-    background: #ced530;
+    background: var(--sky);
   }
   .clear-filters {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.75rem;
-    color: #1a1a1a;
-    opacity: 0.4;
+    color: rgba(23, 21, 15, 0.45);
     background: none;
     border: none;
     cursor: pointer;
     padding: 0;
     margin-left: 0.25rem;
-    transition: opacity 0.12s;
+    transition: color 60ms linear;
   }
   .clear-filters:hover {
-    opacity: 0.8;
+    color: var(--ink);
   }
 
   .blur-toggle[aria-pressed="true"] {
-    background: #edf09a;
-    border-color: transparent;
-    color: #1a1a1a;
-    opacity: 1;
+    background: var(--sky);
+    border-color: var(--ink);
+    color: var(--ink);
   }
 
   .decisions-blurred .rec-card__decision {
-    filter: blur(4px);
-    transition: filter 0.2s ease;
+    filter: blur(9px);
+    cursor: pointer;
+  }
+  .decisions-blurred .rec-card__decision[data-revealed="true"] {
+    filter: none;
   }
   .rec-card__decision {
-    transition: filter 0.2s ease;
+    transition: filter 80ms linear;
   }
 </style>

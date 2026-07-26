@@ -3,11 +3,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="404 - the golden turn" description="Page not found.">
-  <div class="min-h-[60vh] flex flex-col items-center justify-center text-center px-6">
-    <p class="font-display italic text-heading text-9xl leading-none mb-6">404</p>
-    <p class="font-body text-ink/50 text-lg mb-8">Page not found.</p>
-    <a href="/" class="font-sans text-sm text-ink/40 hover:text-ink underline underline-offset-4 transition-colors">
-      Back to home
-    </a>
+  <div class="shell page-head page-body">
+    <p class="label label-muted">404</p>
+    <h1 class="page-title" style="margin-top: 1rem;">page not found</h1>
+    <p class="page-lede">
+      That page does not exist. Try the <a href="/" class="link">home page</a> or
+      <a href="/search" class="link">search</a>.
+    </p>
   </div>
 </BaseLayout>

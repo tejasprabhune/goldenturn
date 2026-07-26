@@ -12,13 +12,9 @@ const { article, allArticles, Content } = Astro.props;
 
 const SECTION_ORDER = ['goals', 'foundations'] as const;
 const SECTION_LABELS: Record<string, string> = {
-  goals: 'Goals',
-  foundations: 'Foundations',
+  goals: 'goals',
+  foundations: 'foundations',
 };
-
-function toTitleCase(str: string) {
-  return str.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
 
 const grouped = SECTION_ORDER.reduce<Record<string, CollectionEntry<'curriculum'>[]>>((acc, section) => {
   acc[section] = allArticles
@@ -35,39 +31,76 @@ function articleHref(entry: CollectionEntry<'curriculum'>) {
 }
 
 const currentHref = articleHref(article);
-
 const sectionLabel = SECTION_LABELS[article.data.section] ?? article.data.section;
 
 const relatedArticles = article.data.related_articles
   .map(slug => allArticles.find(a => a.id.replace(/\.(mdx?|typ)$/, '') === slug))
   .filter((a): a is CollectionEntry<'curriculum'> => !!a);
 
+// K and file sections are hidden while those parts of the site are offline.
 const hasRelated =
   relatedArticles.length > 0 ||
-  article.data.related_ks.length > 0 ||
-  article.data.related_recordings_tags.length > 0 ||
-  article.data.related_files.length > 0;
-
+  article.data.related_recordings_tags.length > 0;
 ---
 
 <BaseLayout title={`${article.data.title} | Curriculum | the golden turn`}>
-  <div class="max-w-6xl mx-auto px-6">
-    <div class="lg:grid lg:gap-12" style="grid-template-columns: 220px 1fr">
-      <aside class="hidden lg:block">
-        <div class="sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto pt-8 pb-8 pr-2">
-          <a href="/curriculum" class="font-display italic text-heading text-base block mb-6 hover:text-accent transition-colors">
-            Curriculum
-          </a>
+  <div class="shell article-grid">
+    <aside class="article-aside">
+      <div class="article-aside-inner">
+        <a href="/curriculum" class="label label-muted aside-home">curriculum index</a>
+        <nav aria-label="Article navigation">
+          {SECTION_ORDER.map(section => {
+            const articles = grouped[section];
+            if (!articles || articles.length === 0) return null;
+            return (
+              <div class="aside-section">
+                <p class="label label-muted aside-label">{SECTION_LABELS[section]}</p>
+                <ul class="aside-list">
+                  {articles.map(entry => {
+                    const href = articleHref(entry);
+                    const isCurrent = href === currentHref;
+                    return (
+                      <li>
+                        <a
+                          href={href}
+                          aria-current={isCurrent ? 'page' : undefined}
+                          class={isCurrent ? 'aside-link is-current' : 'aside-link'}
+                        >
+                          {entry.data.title}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </nav>
+      </div>
+    </aside>
+
+    <main class="article-main">
+      <nav aria-label="Breadcrumb" class="crumbs">
+        <a href="/curriculum">curriculum</a>
+        <span aria-hidden="true">/</span>
+        <a href={`/curriculum#${article.data.section}`}>{sectionLabel}</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">{article.data.title}</span>
+      </nav>
+
+      <div class="article-toc-mobile">
+        <button id="toc-toggle" type="button" class="chip" aria-expanded="false" aria-controls="toc-drawer">
+          contents
+        </button>
+        <div id="toc-drawer" class="toc-drawer" hidden>
           <nav aria-label="Article navigation">
             {SECTION_ORDER.map(section => {
               const articles = grouped[section];
               if (!articles || articles.length === 0) return null;
               return (
-                <div class="mb-5">
-                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-2" style="font-size: 0.65rem;">
-                    {SECTION_LABELS[section]}
-                  </p>
-                  <ul class="space-y-1">
+                <div class="aside-section">
+                  <p class="label label-muted aside-label">{SECTION_LABELS[section]}</p>
+                  <ul class="aside-list">
                     {articles.map(entry => {
                       const href = articleHref(entry);
                       const isCurrent = href === currentHref;
@@ -76,8 +109,7 @@ const hasRelated =
                           <a
                             href={href}
                             aria-current={isCurrent ? 'page' : undefined}
-                            class={`block font-sans py-0.5 transition-colors ${isCurrent ? 'text-heading font-medium' : 'text-ink/50 hover:text-ink/90'}`}
-                            style="font-size: 0.8125rem;"
+                            class={isCurrent ? 'aside-link is-current' : 'aside-link'}
                           >
                             {entry.data.title}
                           </a>
@@ -90,145 +122,152 @@ const hasRelated =
             })}
           </nav>
         </div>
-      </aside>
+      </div>
 
-      <main class="py-14 min-w-0">
-        <nav aria-label="Breadcrumb" class="flex items-center gap-1 font-sans text-ink/40 mb-4 flex-wrap" style="font-size: 0.75rem;">
-          <a href="/curriculum" class="hover:text-ink transition-colors">Curriculum</a>
-          <span>/</span>
-          <a href={`/curriculum#${article.data.section}`} class="hover:text-ink transition-colors">{sectionLabel}</a>
-          <span>/</span>
-          <span class="text-ink/60" aria-current="page">{article.data.title}</span>
-        </nav>
+      <h1 class="page-title article-title">{article.data.title}</h1>
 
-        <div class="lg:hidden mb-6">
-          <button
-            id="toc-toggle"
-            type="button"
-            class="font-sans text-sm border border-ink/20 rounded px-4 py-2 text-ink/70 hover:border-ink/40 hover:text-ink transition-colors"
-          >
-            Contents
-          </button>
-          <div id="toc-drawer" class="hidden mt-3 border border-ink/10 rounded-lg p-4">
-            <nav aria-label="Article navigation">
-              {SECTION_ORDER.map(section => {
-                const articles = grouped[section];
-                if (!articles || articles.length === 0) return null;
-                return (
-                  <div class="mb-4">
-                    <p class="font-sans uppercase tracking-widest text-ink/30 mb-1" style="font-size: 0.65rem;">
-                      {SECTION_LABELS[section]}
-                    </p>
-                    <ul class="space-y-1">
-                      {articles.map(entry => {
-                        const href = articleHref(entry);
-                        const isCurrent = href === currentHref;
-                        return (
-                          <li>
-                            <a
-                              href={href}
-                              aria-current={isCurrent ? 'page' : undefined}
-                              class={`block font-sans py-0.5 transition-colors ${isCurrent ? 'text-heading font-medium' : 'text-ink/50 hover:text-ink/90'}`}
-                              style="font-size: 0.8125rem;"
-                            >
-                              {entry.data.title}
-                            </a>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
-            </nav>
-          </div>
-        </div>
+      <div class="prose">
+        <Content />
+      </div>
 
-        <h1 class="font-display italic text-heading text-4xl sm:text-5xl leading-tight mb-10">
-          {article.data.title}
-        </h1>
-
-        <div class="prose">
-          <Content />
-        </div>
-
-        {hasRelated && (
-          <section class="mt-16 pt-8 border-t border-ink/10">
-            <p class="font-sans uppercase tracking-widest text-ink/30 mb-6" style="font-size: 0.75rem;">Related</p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {relatedArticles.length > 0 && (
-                <div>
-                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Articles</p>
-                  <ul class="space-y-2">
-                    {relatedArticles.map(a => (
-                      <li>
-                        <a href={articleHref(a)} class="font-sans text-sm text-heading hover:underline transition-colors">
-                          {a.data.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {article.data.related_ks.length > 0 && (
-                <div>
-                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Ks</p>
-                  <ul class="space-y-2">
-                    {article.data.related_ks.map(slug => (
-                      <li>
-                        <a href={`/k/${slug}`} class="font-sans text-sm text-heading hover:underline transition-colors">
-                          {toTitleCase(slug)}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {article.data.related_recordings_tags.length > 0 && (
-                <div>
-                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Recordings</p>
-                  <ul class="space-y-2">
-                    {article.data.related_recordings_tags.map(tag => (
-                      <li>
-                        <a href={`/recordings?tag=${encodeURIComponent(tag)}`} class="font-sans text-sm text-heading hover:underline transition-colors">
-                          {tag}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {article.data.related_files.length > 0 && (
-                <div>
-                  <p class="font-sans uppercase tracking-widest text-ink/30 mb-3" style="font-size: 0.65rem;">Files</p>
-                  <ul class="space-y-2">
-                    {article.data.related_files.map(slug => (
-                      <li>
-                        <a href={`/files/${slug}`} class="font-sans text-sm text-heading hover:underline transition-colors">
-                          {toTitleCase(slug)}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+      {hasRelated && (
+        <section class="related" aria-label="Related">
+          {relatedArticles.length > 0 && (
+            <div>
+              <p class="label label-muted">articles</p>
+              <ul>
+                {relatedArticles.map(a => (
+                  <li><a href={articleHref(a)}>{a.data.title}</a></li>
+                ))}
+              </ul>
             </div>
-          </section>
-        )}
-      </main>
-    </div>
-  </div>
+          )}
 
-  <script>
-    const tocToggle = document.getElementById('toc-toggle');
-    const tocDrawer = document.getElementById('toc-drawer');
-    if (tocToggle && tocDrawer) {
-      tocToggle.addEventListener('click', () => {
-        tocDrawer.classList.toggle('hidden');
-      });
-    }
-  </script>
+          {article.data.related_recordings_tags.length > 0 && (
+            <div>
+              <p class="label label-muted">recordings</p>
+              <ul>
+                {article.data.related_recordings_tags.map(tag => (
+                  <li><a href={`/recordings?tag=${encodeURIComponent(tag)}`}>{tag}</a></li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+    </main>
+  </div>
 </BaseLayout>
+
+<style>
+  .article-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0 3rem;
+  }
+
+  .article-aside {
+    display: none;
+    border-right: 1px solid var(--rule-soft);
+  }
+
+  @media (min-width: 1024px) {
+    .article-grid {
+      grid-template-columns: 14rem 1fr;
+    }
+
+    .article-aside {
+      display: block;
+    }
+
+    .article-toc-mobile {
+      display: none;
+    }
+  }
+
+  .article-aside-inner {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+    padding: 3.25rem 1.5rem 3rem 0;
+  }
+
+  .aside-home {
+    display: block;
+    text-decoration: none;
+    margin-bottom: 2rem;
+  }
+
+  .aside-home:hover {
+    color: var(--ink);
+  }
+
+  .aside-section {
+    margin-bottom: 1.75rem;
+  }
+
+  .aside-label {
+    margin-bottom: 0.6rem;
+  }
+
+  .aside-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .aside-link {
+    display: block;
+    font-size: 0.875rem;
+    line-height: 1.35;
+    padding: 0.3rem 0;
+    color: rgba(23, 21, 15, 0.55);
+    text-decoration: none;
+  }
+
+  .aside-link:hover {
+    color: var(--ink);
+  }
+
+  .aside-link.is-current {
+    color: var(--ink);
+    box-shadow: inset 0 -0.35em 0 var(--gold);
+  }
+
+  .article-main {
+    padding-top: 3.25rem;
+    padding-bottom: 5rem;
+    min-width: 0;
+  }
+
+  .article-title {
+    margin-bottom: 2.5rem;
+  }
+
+  .article-toc-mobile {
+    margin-bottom: 2rem;
+  }
+
+  .toc-drawer {
+    margin-top: 1rem;
+    padding: 1.25rem;
+    border: 1px solid var(--rule);
+  }
+
+  .toc-drawer[hidden] {
+    display: none;
+  }
+</style>
+
+<script>
+  const tocToggle = document.getElementById('toc-toggle');
+  const tocDrawer = document.getElementById('toc-drawer');
+  if (tocToggle && tocDrawer) {
+    tocToggle.addEventListener('click', () => {
+      const open = tocDrawer.hasAttribute('hidden');
+      tocDrawer.toggleAttribute('hidden', !open);
+      tocToggle.setAttribute('aria-expanded', String(open));
+    });
+  }
+</script>

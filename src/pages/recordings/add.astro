@@ -3,157 +3,154 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Submit a Recording | the golden turn">
-  <div class="max-w-2xl mx-auto px-6 pt-12 pb-24">
-    <h1 class="font-display italic text-heading text-4xl mb-2">Submit a Recording</h1>
-    <p class="font-sans text-sm text-ink/50 mb-1">Recordings appear in search immediately.</p>
-    <p class="font-sans text-xs text-ink/35 mb-10">
-      <a href="/recordings" class="hover:text-ink transition-colors">Back to recordings</a>
-    </p>
+  <div class="shell-prose page-head">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/recordings">recordings</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">submit</span>
+    </nav>
+    <h1 class="page-title">submit a recording</h1>
+    <p class="page-lede">Recordings appear in search immediately.</p>
+  </div>
 
+  <div class="shell-prose page-body">
     <form id="submission-form" novalidate>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Round title</label>
-        <input type="text" name="title" placeholder="Finals - Cal MR vs Rice AL"
+        <label class="form-label" for="field-title">Round title</label>
+        <input type="text" id="field-title" name="title" placeholder="Finals - Cal MR vs Rice AL"
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Link</label>
+        <label class="form-label" for="field-link">Link</label>
         <p class="form-hint">Dropbox, YouTube, or Vimeo URL</p>
-        <input type="text" name="link" placeholder="https://..."
+        <input type="text" id="field-link" name="link" placeholder="https://..."
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Resolution</label>
-        <input type="text" name="resolution" placeholder="The USFG should..."
+        <label class="form-label" for="field-resolution">Resolution</label>
+        <input type="text" id="field-resolution" name="resolution" placeholder="The USFG should..."
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Aff</label>
+        <label class="form-label" for="field-aff">Aff</label>
         <p class="form-hint">Describe aff strategy</p>
-        <input type="text" name="aff" placeholder="topical (war, econ)"
+        <input type="text" id="field-aff" name="aff" placeholder="topical (war, econ)"
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Neg</label>
+        <label class="form-label" for="field-neg">Neg</label>
         <p class="form-hint">Lead with N-off, e.g. 2-off</p>
-        <input type="text" name="neg" placeholder="2-off (framework-t, orientalism)"
+        <input type="text" id="field-neg" name="neg" placeholder="2-off (framework-t, orientalism)"
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Tags</label>
+        <label class="form-label" for="field-tags">Tags</label>
         <p class="form-hint">Comma-separated, each starting with #</p>
-        <input type="text" name="tags" placeholder="#topicality, #mlm"
+        <input type="text" id="field-tags" name="tags" placeholder="#topicality, #mlm"
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Decision</label>
+        <label class="form-label" for="field-decision">Decision</label>
         <p class="form-hint">e.g. 3-0 Aff or 2-1 Neg</p>
-        <input type="text" name="decision" placeholder="3-0 Aff"
+        <input type="text" id="field-decision" name="decision" placeholder="3-0 Aff"
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="block font-sans text-sm text-ink mb-0.5">Year</label>
+        <label class="form-label" for="field-year">Year</label>
         <p class="form-hint">e.g. 2020-21</p>
-        <input type="text" name="year" placeholder="2020-21"
+        <input type="text" id="field-year" name="year" placeholder="2020-21"
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-10">
-        <label class="block font-sans text-sm text-ink mb-0.5">Tournament</label>
-        <input type="text" name="tournament" placeholder="NPDA"
+        <label class="form-label" for="field-tournament">Tournament</label>
+        <input type="text" id="field-tournament" name="tournament" placeholder="NPDA"
           class="form-input" />
         <p class="validation-hint"></p>
       </div>
 
       <div class="flex items-center gap-4">
-        <button type="submit" id="submit-btn" class="submit-btn">
+        <button type="submit" id="submit-btn" class="btn submit-btn">
           Submit recording
         </button>
-        <p id="submit-error" class="font-sans text-xs text-ink/50 hidden"></p>
+        <p id="submit-error" class="form-hint hidden" style="margin: 0;"></p>
       </div>
 
     </form>
 
     <div id="success-state" class="hidden pt-2">
-      <p class="font-sans text-sm text-ink/70 mb-3">Recording submitted and live in search.</p>
-      <a href="/recordings" class="font-sans text-sm text-heading hover:underline transition-colors">Back to recordings</a>
+      <p class="page-lede" style="margin-top: 0;">Recording submitted and live in search.</p>
+      <a href="/recordings" class="link">Back to recordings</a>
     </div>
   </div>
 </BaseLayout>
 
 <style is:global>
+  .form-label {
+    display: block;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink);
+    margin-bottom: 0.4rem;
+  }
+
   .form-input {
     display: block;
     width: 100%;
-    border: 1px solid rgba(26,26,26,0.15);
-    border-radius: 0.5rem;
-    background: white;
-    padding: 0.625rem 0.875rem;
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    border: 1px solid var(--rule);
+    background: var(--paper-raised);
+    padding: 0.625rem 0.75rem;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.875rem;
-    color: #1a1a1a;
+    color: var(--ink);
     outline: none;
     transition: border-color 0.12s, box-shadow 0.12s;
   }
   .form-input::placeholder {
-    color: rgba(26,26,26,0.28);
+    color: rgba(23, 21, 15, 0.3);
   }
   .form-input:focus {
-    border-color: rgba(26,26,26,0.35);
-    box-shadow: 0 0 0 2px rgba(26,26,26,0.07);
+    border-color: var(--sky-deep);
+    box-shadow: inset 0 0 0 1px var(--sky-deep);
   }
 
   .form-hint {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.75rem;
-    color: #1a1a1a;
-    opacity: 0.38;
-    margin-bottom: 0.375rem;
+    color: rgba(23, 21, 15, 0.45);
+    margin-bottom: 0.4rem;
     margin-top: 0;
   }
 
   .validation-hint {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.75rem;
-    color: #1a1a1a;
-    opacity: 0.45;
-    margin-top: 0.25rem;
+    color: rgba(23, 21, 15, 0.5);
+    margin-top: 0.3rem;
     min-height: 1rem;
   }
 
-  .submit-btn {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 0.875rem;
-    font-weight: 600;
-    background: #2f4858;
-    color: #fcefef;
-    border: none;
-    border-radius: 0.375rem;
-    padding: 0.625rem 1.25rem;
-    cursor: pointer;
-    transition: opacity 0.12s;
-  }
-  .submit-btn:hover {
-    opacity: 0.88;
-  }
   .submit-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: default;
   }
 </style>

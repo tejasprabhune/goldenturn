@@ -1,53 +1,91 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+const REPO = 'https://github.com/tejasprabhune/goldenturn';
+
+const sections = [
+  {
+    label: 'curriculum articles',
+    body: `Fork the repo, add an MDX file to src/content/curriculum/[section]/, and submit a pull
+      request. Articles use frontmatter for metadata (title, section, order) and MDX for content.`,
+  },
+];
 ---
 
 <BaseLayout title="Contribute | the golden turn">
-  <div class="max-w-2xl mx-auto px-6 pt-16 pb-24">
-    <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-4">Contribute</h1>
-    <p class="font-body text-ink/70 leading-relaxed mb-12">the golden turn is open-source and community-maintained. Here's how to contribute.</p>
+  <div class="shell page-head">
+    <h1 class="page-title">contribute</h1>
+    <p class="page-lede">
+      the golden turn is open source and community maintained. Everything below happens on
+      <a href={REPO} target="_blank" rel="noopener noreferrer" class="link">GitHub</a>.
+    </p>
+  </div>
 
-    <section class="mb-10">
-      <h2 class="font-display italic text-heading text-xl mb-3">Writing curriculum articles</h2>
-      <p class="font-body text-ink/80 leading-relaxed">
-        Fork the repo, add an MDX file to <code class="font-mono text-sm bg-ink/5 rounded px-1 py-0.5">src/content/curriculum/[section]/</code>,
-        and submit a pull request. Articles use frontmatter for metadata (title, section, order) and MDX for content.
-        See the <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer" class="text-heading underline underline-offset-2 decoration-ink/20 hover:decoration-accent transition-colors">GitHub repo</a> for examples.
-      </p>
+  <div class="shell page-body">
+    {sections.map(section => (
+      <section class="block">
+        <p class="label label-muted block-label">{section.label}</p>
+        <div class="block-body">
+          <p class="block-text">{section.body}</p>
+        </div>
+      </section>
+    ))}
+
+    <section class="block">
+      <p class="label label-muted block-label">recordings</p>
+      <div class="block-body">
+        <p class="block-text">
+          Use the <a href="/recordings/add" class="link">recording submission form</a> to submit a
+          round link. Submissions go through a brief review: a GitHub issue is opened, and once
+          approved an admin adds the record to the search index.
+        </p>
+      </div>
     </section>
 
-    <section class="mb-10">
-      <h2 class="font-display italic text-heading text-xl mb-3">Adding a K page</h2>
-      <p class="font-body text-ink/80 leading-relaxed">
-        Same process as curriculum articles. Add an MDX file to <code class="font-mono text-sm bg-ink/5 rounded px-1 py-0.5">src/content/k/</code>
-        with a name, aliases, and tags in the frontmatter. Submit a pull request on
-        <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer" class="text-heading underline underline-offset-2 decoration-ink/20 hover:decoration-accent transition-colors">GitHub</a>.
-      </p>
-    </section>
-
-    <section class="mb-10">
-      <h2 class="font-display italic text-heading text-xl mb-3">Submitting a recording</h2>
-      <p class="font-body text-ink/80 leading-relaxed">
-        Use the form at <a href="/recordings/add" class="text-heading underline underline-offset-2 decoration-ink/20 hover:decoration-accent transition-colors">/recordings/add</a> to submit a round link.
-        Submissions go through a brief review process: a GitHub issue is opened, and once approved, an admin adds the record to the Algolia index.
-      </p>
-    </section>
-
-    <section class="mb-10">
-      <h2 class="font-display italic text-heading text-xl mb-3">Uploading files</h2>
-      <p class="font-body text-ink/80 leading-relaxed">
-        Add a Markdown file to <code class="font-mono text-sm bg-ink/5 rounded px-1 py-0.5">src/content/files/</code> with a
-        <code class="font-mono text-sm bg-ink/5 rounded px-1 py-0.5">download_url</code> pointing to a hosted file (Google Drive, Dropbox, etc.),
-        then submit a pull request on <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer" class="text-heading underline underline-offset-2 decoration-ink/20 hover:decoration-accent transition-colors">GitHub</a>.
-      </p>
-    </section>
-
-    <section class="mb-10">
-      <h2 class="font-display italic text-heading text-xl mb-3">Reporting issues</h2>
-      <p class="font-body text-ink/80 leading-relaxed">
-        Found a bug or have a suggestion? Open a GitHub issue at the
-        <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer" class="text-heading underline underline-offset-2 decoration-ink/20 hover:decoration-accent transition-colors">tejasprabhune/goldenturn</a> repo.
-      </p>
+    <section class="block">
+      <p class="label label-muted block-label">issues</p>
+      <div class="block-body">
+        <p class="block-text">
+          Found a bug or have a suggestion? Open an issue on the
+          <a href={REPO} target="_blank" rel="noopener noreferrer" class="link">repo</a>.
+        </p>
+      </div>
     </section>
   </div>
 </BaseLayout>
+
+<style>
+  .block {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem 2rem;
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    border-top: 1px solid var(--rule);
+  }
+
+  @media (min-width: 900px) {
+    .block {
+      grid-template-columns: repeat(12, 1fr);
+    }
+
+    .block-label {
+      grid-column: 1 / span 2;
+    }
+
+    .block-body {
+      grid-column: 3 / span 8;
+    }
+  }
+
+  .block-label {
+    padding-top: 0.3rem;
+  }
+
+  .block-text {
+    font-size: 1rem;
+    line-height: 1.7;
+    max-width: 60ch;
+    margin: 0;
+  }
+</style>

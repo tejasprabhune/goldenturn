@@ -2,92 +2,591 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'PP Editorial New';
+  src: url('/fonts/PPEditorialNew-Ultralight.woff2') format('woff2');
+  font-weight: 100 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PP Editorial New';
+  src: url('/fonts/PPEditorialNew-UltralightItalic.woff2') format('woff2');
+  font-weight: 100 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Neue Montreal';
+  src: url('/fonts/NeueMontreal-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Neue Montreal';
+  src: url('/fonts/NeueMontreal-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Neue Montreal';
+  src: url('/fonts/NeueMontreal-Medium.woff2') format('woff2');
+  font-weight: 500 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Neue Montreal';
+  src: url('/fonts/NeueMontreal-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 @layer base {
+  :root {
+    --gutter: 1.5rem;
+    --rule: rgba(23, 21, 15, 0.14);
+    --rule-soft: rgba(23, 21, 15, 0.08);
+    --paper: #f2efe6;
+    --paper-raised: #faf8f2;
+    --ink: #17150f;
+    --ink-muted: rgba(23, 21, 15, 0.6);
+    --sky: #a2d6f9;
+    --sky-deep: #6fb4e0;
+    --sky-wash: #e2effa;
+    --gold: #fdd85d;
+    --gold-deep: #b58a12;
+  }
+
+  @media (min-width: 768px) {
+    :root {
+      --gutter: 2.5rem;
+    }
+  }
+
   body {
-    @apply font-body text-ink bg-paper min-h-screen antialiased text-[17px];
+    @apply font-body text-ink bg-paper min-h-screen antialiased;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.6;
+    position: relative;
   }
 
-  h1 {
-    @apply font-display italic text-heading;
+  /* The paper grain. Fixed, non-interactive, and low enough that it reads as
+     stock rather than as an image. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
   }
 
-  h2, h3 {
-    @apply font-display text-heading;
+  body > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-ink;
+    font-weight: 300;
+    letter-spacing: -0.01em;
   }
 
   a {
-    @apply transition-colors duration-150;
+    @apply transition-colors;
+    transition-duration: 60ms;
+    transition-timing-function: linear;
   }
 
-  a:focus-visible {
-    @apply outline-2 outline-offset-2 outline-accent rounded;
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid theme('colors.sky-deep');
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
-  button:focus-visible {
-    @apply outline-2 outline-offset-2 outline-accent rounded;
+  /* The native clear button ships in Chrome's blue and breaks the palette. */
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  ::selection {
+    background: theme('colors.gold');
+    color: theme('colors.ink');
   }
 }
 
 @layer components {
+  /* Swiss shell: one column measure, one gutter, used by every page. */
+  .shell {
+    width: 100%;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  /* Prose pages sit on the same left grid edge as the masthead; the measure is
+     capped on the children rather than by centering the column. */
+  .shell-prose {
+    width: 100%;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  .shell-prose > * {
+    max-width: 46rem;
+  }
+
+  .rule {
+    border-top: 1px solid var(--rule);
+  }
+
+  .rule-soft {
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  /* The small uppercase index labels that carry the grid. */
+  .label {
+    @apply font-sans uppercase;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    line-height: 1.2;
+  }
+
+  .label-muted {
+    color: rgba(23, 21, 15, 0.45);
+  }
+
+  /* The wordmark: gold face, ink border. The border sits outside the glyph so
+     the ultralight strokes keep their weight instead of being eaten. */
+  .wordmark {
+    @apply font-display lowercase;
+    font-weight: 300;
+    color: theme('colors.gold');
+    letter-spacing: -0.02em;
+    line-height: 0.86;
+    display: block;
+    white-space: nowrap;
+    text-shadow:
+      1px 0 0 theme('colors.ink'),
+      -1px 0 0 theme('colors.ink'),
+      0 1px 0 theme('colors.ink'),
+      0 -1px 0 theme('colors.ink'),
+      1px 1px 0 theme('colors.ink'),
+      -1px 1px 0 theme('colors.ink'),
+      1px -1px 0 theme('colors.ink'),
+      -1px -1px 0 theme('colors.ink');
+  }
+
+  .wordmark-sm {
+    text-shadow:
+      0.5px 0 0 theme('colors.ink'),
+      -0.5px 0 0 theme('colors.ink'),
+      0 0.5px 0 theme('colors.ink'),
+      0 -0.5px 0 theme('colors.ink');
+  }
+
+  .link {
+    color: theme('colors.ink');
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: rgba(23, 21, 15, 0.3);
+    transition: text-decoration-color 60ms linear, background-color 60ms linear;
+  }
+
+  .link:hover {
+    text-decoration-color: theme('colors.ink');
+    background-color: theme('colors.gold');
+  }
+
+  /* Index rows: the repeated list unit across curriculum, files, ks, playbooks. */
+  /* The inset padding plus negative margin keeps text on the grid while the
+     hover field bleeds past it on both sides. */
+  .row {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr auto;
+    gap: 0 1.25rem;
+    align-items: baseline;
+    padding: 0.6rem 0.75rem;
+    margin-inline: -0.75rem;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  .row-list > li:first-child .row {
+    border-top: none;
+  }
+
+  a.row {
+    text-decoration: none;
+    color: var(--ink);
+  }
+
+  .row:hover {
+    background-color: theme('colors.sky-wash');
+  }
+
+  a.row:hover .row-title {
+    box-shadow: inset 0 -0.1em 0 theme('colors.gold');
+  }
+
+  .row-list {
+    list-style: none;
+    margin: 0 0 3rem;
+    padding: 0;
+  }
+
+  /* Sharing a baseline leaves the small index sitting optically low against the
+     larger title, so it is nudged up to match optical centers. */
+  .row-index {
+    @apply font-sans;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    color: rgba(23, 21, 15, 0.4);
+    font-variant-numeric: tabular-nums;
+    position: relative;
+    top: -0.16em;
+  }
+
+  .row-title {
+    @apply font-body;
+    font-size: 1rem;
+    color: theme('colors.ink');
+    /* Keeps the hover underline hugging the words instead of the grid track. */
+    justify-self: start;
+  }
+
+  .row-meta {
+    @apply font-sans;
+    font-size: 0.75rem;
+    color: rgba(23, 21, 15, 0.45);
+  }
+
+  .field {
+    @apply font-sans;
+    background: theme('colors.paper-raised');
+    border: 1px solid var(--rule);
+    border-radius: 0;
+    color: theme('colors.ink');
+    font-size: 0.875rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .field::placeholder {
+    color: rgba(23, 21, 15, 0.35);
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: theme('colors.sky-deep');
+    box-shadow: inset 0 0 0 1px theme('colors.sky-deep');
+  }
+
+  .chip {
+    @apply font-sans uppercase;
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    border: 1px solid var(--rule);
+    padding: 0.35rem 0.7rem;
+    color: rgba(23, 21, 15, 0.6);
+    background: transparent;
+    transition: background-color 60ms linear, border-color 60ms linear, color 60ms linear;
+  }
+
+  .chip:hover {
+    border-color: theme('colors.ink');
+    color: theme('colors.ink');
+  }
+
+  .chip[data-active='true'],
+  .chip.is-active {
+    background: theme('colors.sky');
+    border-color: theme('colors.ink');
+    color: theme('colors.ink');
+  }
+
+  /* Shared page furniture so index pages stay on one grid. */
+  .page-head {
+    padding-top: 3.25rem;
+    padding-bottom: 2.25rem;
+  }
+
+  .page-title {
+    @apply font-display lowercase text-ink;
+    font-weight: 300;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  .page-lede {
+    @apply font-body;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--ink-muted);
+    max-width: 46ch;
+    margin: 1.25rem 0 0;
+  }
+
+  .page-body {
+    padding-bottom: 5rem;
+  }
+
+  .section-head {
+    @apply label label-muted;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 0.25rem;
+  }
+
+  /* Search results are built in the browser, so their styles live here rather
+     than in a scoped block. */
+  .result-group {
+    margin-bottom: 2.5rem;
+  }
+
+  .result-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.7rem 0.5rem;
+    margin-inline: -0.5rem;
+    text-decoration: none;
+    border-bottom: 1px solid var(--rule-soft);
+    transition: background-color 60ms linear;
+  }
+
+  .result-link:hover,
+  .result-link.is-focused {
+    background: theme('colors.sky-wash');
+  }
+
+  .result-title {
+    @apply font-body;
+    font-size: 0.9375rem;
+    color: theme('colors.ink');
+  }
+
+  .result-desc {
+    @apply font-sans;
+    font-size: 0.8125rem;
+    color: rgba(23, 21, 15, 0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .crumbs {
+    @apply label label-muted;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .crumbs a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .crumbs a:hover {
+    color: theme('colors.ink');
+  }
+
+  .btn {
+    @apply label;
+    display: inline-block;
+    border: 1px solid theme('colors.ink');
+    color: theme('colors.ink');
+    padding: 0.6rem 1.1rem;
+    text-decoration: none;
+    background: transparent;
+    cursor: pointer;
+    transition: background-color 60ms linear;
+  }
+
+  .btn:hover {
+    background: theme('colors.gold');
+  }
+
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .tag {
+    @apply font-sans;
+    font-size: 0.75rem;
+    background: theme('colors.sky-wash');
+    border: 1px solid rgba(23, 21, 15, 0.1);
+    padding: 0.15rem 0.55rem;
+    color: rgba(23, 21, 15, 0.7);
+  }
+
+  .related {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 2rem;
+  }
+
+  .related ul {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+  }
+
+  .related li {
+    margin-bottom: 0.4rem;
+  }
+
+  .related a {
+    @apply link font-sans;
+    font-size: 0.9375rem;
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: 1.75rem;
+  }
+
+  .prose {
+    max-width: 40rem;
+  }
+
   .prose h1 {
-    @apply font-display italic text-heading text-5xl leading-tight mb-8;
+    @apply font-display text-ink;
+    font-weight: 300;
+    font-size: clamp(2.25rem, 5vw, 3.25rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin-bottom: 2rem;
   }
 
   .prose h2 {
-    @apply font-display text-heading text-3xl mt-14 mb-5 pt-9 border-t border-ink/10;
+    @apply font-display text-ink;
+    font-weight: 300;
+    font-size: 1.875rem;
+    line-height: 1.15;
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule-soft);
   }
 
   .prose h3 {
-    @apply font-display text-heading text-2xl mt-10 mb-4;
+    @apply font-display text-ink;
+    font-weight: 300;
+    font-size: 1.375rem;
+    margin-top: 2.25rem;
+    margin-bottom: 0.75rem;
   }
 
   .prose h4 {
-    @apply font-sans font-semibold text-ink text-base mt-6 mb-2;
+    @apply font-sans text-ink;
+    font-weight: 500;
+    font-size: 0.9375rem;
+    margin-top: 1.75rem;
+    margin-bottom: 0.5rem;
   }
 
   .prose h5,
   .prose h6 {
-    @apply font-sans font-semibold text-ink/70 text-sm mt-4 mb-1;
+    @apply label label-muted;
+    margin-top: 1.5rem;
+    margin-bottom: 0.4rem;
   }
 
   .prose p {
-    @apply font-body leading-8 mb-5 text-ink text-[17px];
+    @apply font-body text-ink;
+    font-size: 1rem;
+    line-height: 1.7;
+    margin-bottom: 1.15rem;
   }
 
   .prose a {
-    @apply text-heading underline underline-offset-[4px] decoration-[2px] decoration-accent/50 hover:decoration-accent transition-colors;
+    @apply link;
   }
 
   .prose code {
-    @apply font-mono text-sm bg-ink/5 rounded px-1 py-0.5;
+    @apply font-mono;
+    font-size: 0.85em;
+    background: rgba(162, 214, 249, 0.35);
+    padding: 0.1em 0.3em;
   }
 
   .prose pre {
-    @apply font-mono text-sm bg-ink/5 rounded-lg p-5 overflow-x-auto mb-6;
+    @apply font-mono;
+    font-size: 0.8125rem;
+    background: theme('colors.paper-raised');
+    border: 1px solid var(--rule);
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
   }
 
   .prose pre code {
-    @apply bg-transparent p-0;
+    background: transparent;
+    padding: 0;
   }
 
   .prose ul {
-    @apply list-disc list-outside pl-6 mb-5 space-y-2;
+    @apply list-disc list-outside;
+    padding-left: 1.25rem;
+    margin-bottom: 1.15rem;
   }
 
   .prose ol {
-    @apply list-decimal list-outside pl-6 mb-5 space-y-2;
+    @apply list-decimal list-outside;
+    padding-left: 1.25rem;
+    margin-bottom: 1.15rem;
   }
 
   .prose li {
-    @apply font-body leading-8 text-[17px];
+    @apply font-body;
+    font-size: 1rem;
+    line-height: 1.7;
+    margin-bottom: 0.35rem;
   }
 
   .prose blockquote {
-    @apply border-l-2 border-heading/30 pl-5 text-ink/70 my-6;
+    border-left: 2px solid theme('colors.sky-deep');
+    padding-left: 1.25rem;
+    color: rgba(23, 21, 15, 0.7);
+    margin: 1.75rem 0;
   }
 
   .prose strong {
-    @apply font-semibold text-ink;
+    font-weight: 500;
   }
 
   .prose .typst-frame {
@@ -96,4 +595,11 @@
     height: auto;
   }
 
+  /* Typst figures carry their own intrinsic width, which overflows narrow
+     viewports unless it is capped here. */
+  .prose svg,
+  .prose img {
+    max-width: 100%;
+    height: auto;
+  }
 }

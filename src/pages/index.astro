@@ -5,204 +5,61 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <BaseLayout
   title="the golden turn"
   description="An open archive for college parliamentary debate."
-  minimalNav={true}
-  noFooter={true}
+  variant="home"
 >
-  <div class="home">
+  <section class="shell lead-block">
+    <p class="lead">
+      an open archive for college parliamentary debate, written and maintained by debaters.
+    </p>
+    <p class="lead-hint">
+      press <kbd class="key">/</kbd> to search, e.g. cal mr
+    </p>
 
-    <header class="home-header">
-      <div class="home-wordmark-block">
-        <h1 class="home-wordmark">the golden turn</h1>
-        <div class="home-rule" aria-hidden="true"></div>
-      </div>
-      <p class="home-tagline">an open archive for college parliamentary debate.</p>
-      <nav aria-label="Sections" class="home-nav">
-        <a href="/curriculum">curriculum</a>
-        <span aria-hidden="true">&middot;</span>
-        <a href="/recordings">recordings</a>
-        <span aria-hidden="true">&middot;</span>
-        <a href="/k">ks</a>
-        <span aria-hidden="true">&middot;</span>
-        <a href="/files">files</a>
-        <span aria-hidden="true">&middot;</span>
-        <a href="/playbooks">playbooks</a>
-        <span aria-hidden="true">&middot;</span>
-        <a href="/lectures">lectures</a>
-        <span aria-hidden="true">&middot;</span>
-        <a href="/search">search</a>
-        <span aria-hidden="true">&middot;</span>
-        <a href="/contribute">contribute</a>
-      </nav>
-    </header>
-
-    <section>
-      <h2>What it is</h2>
-      <p>
-        the golden turn is an open archive for college parliamentary debate, written and
-        maintained by debaters. it consolidates written curriculum, a searchable recordings
-        index, case files and playbooks, and a reference for common kritiks. everything
-        is open source and open to contribution.
-      </p>
-    </section>
-
-    <section>
-      <h2>How it's organized</h2>
-      <p>
-        <a href="/curriculum">Curriculum</a> is a written introduction to parliamentary debate,
-        from basic theory through advanced strategy. Articles cover framing and burdens,
-        affirmative and negative construction, theory, and the Ks.
-      </p>
-      <p>
-        <a href="/recordings">Recordings</a> is a searchable index of NPDA rounds.
-        Search by team, resolution, or tag. Filter by year, tournament, and aff type.
-        Click any round to expand it and play the audio or video inline.
-      </p>
-      <p>
-        <a href="/k">Ks</a> is a reference for common kritiks run in parliamentary debate,
-        including the Cap K, Security K, and framework theory.
-      </p>
-      <p>
-        <a href="/files">Files</a> contains individual cases, briefs, blocks, and scaffolds.
-        <a href="/playbooks">Playbooks</a> are curated collections of files, with bulk download.
-      </p>
-      <p>
-        <a href="/lectures">Lectures</a> will be recorded talks and workshops. Coming soon.
-      </p>
-    </section>
-
-    <section>
-      <h2>How to contribute</h2>
-      <p>
-        the site is open source on <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer">GitHub</a>.
-        written content (curriculum articles, K pages, files) is accepted as pull requests
-        against the main branch. to submit a recording, use the
-        <a href="/recordings/add">recording submission form</a>, which opens a GitHub issue
-        for review.
-      </p>
-    </section>
-
-  </div>
+    <p class="block-text">
+      The site is open source on <a href="https://github.com/tejasprabhune/goldenturn" target="_blank" rel="noopener noreferrer" class="link">GitHub</a>.
+      Written content is accepted as pull requests against the main branch. To submit a
+      recording, use the <a href="/recordings/add" class="link">recording submission form</a>.
+      Full instructions live on the <a href="/contribute" class="link">contribute page</a>.
+    </p>
+  </section>
 </BaseLayout>
 
 <style>
-  .home {
-    max-width: 740px;
-    margin: 0 auto;
-    padding: 80px 40px 140px;
+  .lead-block {
+    padding-top: 3rem;
+    padding-bottom: 6rem;
   }
 
-  /* Header block */
-
-  .home-header {
-    margin-bottom: 64px;
-  }
-
-  .home-wordmark-block {
-    display: inline-block;
-    margin-bottom: 20px;
-  }
-
-  .home-wordmark {
-    font-family: 'swear-display', 'freight-text-pro', Georgia, serif;
-    font-style: italic;
-    font-weight: 600;
-    font-size: 54px;
-    line-height: 1;
+  .lead {
+    font-family: 'PP Editorial New', Georgia, serif;
+    font-weight: 300;
+    font-size: clamp(1.75rem, 4.4vw, 3.5rem);
+    line-height: 1.1;
     letter-spacing: -0.015em;
-    color: #2f4858;
-    margin: 0 0 12px;
-    display: block;
+    max-width: 22ch;
+    margin: 0;
   }
 
-  .home-rule {
-    width: 100%;
-    height: 3px;
-    background: #ced530;
+  .lead-hint {
+    font-size: 0.9375rem;
+    color: var(--ink-muted);
+    margin: 2rem 0 0;
   }
 
-  .home-tagline {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 16px;
-    color: #1a1a1a;
-    opacity: 0.5;
-    margin: 0 0 20px;
+  .key {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    border: 1px solid var(--ink);
+    background: var(--gold);
+    padding: 0.05rem 0.4rem;
+    color: var(--ink);
   }
 
-  .home-nav {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 0.6rem;
-  }
-
-  .home-nav a {
-    font-family: 'neue-haas-unica', system-ui, sans-serif;
-    font-size: 14px;
-    color: #1a1a1a;
-    opacity: 0.45;
-    text-decoration: none;
-    letter-spacing: 0.02em;
-    transition: opacity 0.12s, color 0.12s;
-  }
-
-  .home-nav a:hover {
-    opacity: 1;
-    color: #2f4858;
-  }
-
-  .home-nav span {
-    font-size: 11px;
-    color: #1a1a1a;
-    opacity: 0.2;
-  }
-
-  /* Content sections */
-
-  .home section {
-    margin-bottom: 52px;
-  }
-
-  .home h2 {
-    font-family: 'swear-display', 'freight-text-pro', Georgia, serif;
-    font-style: normal;
-    font-weight: 600;
-    font-size: 26px;
-    color: #2f4858;
-    margin: 0 0 14px;
-  }
-
-  .home p {
-    font-family: 'freight-text-pro', 'neue-haas-unica', Georgia, serif;
-    font-size: 17px;
-    line-height: 1.75;
-    color: #1a1a1a;
-    margin-bottom: 14px;
-  }
-
-  .home p:last-child {
-    margin-bottom: 0;
-  }
-
-  .home a {
-    color: #2f4858;
-    text-decoration: underline;
-    text-underline-offset: 4px;
-    text-decoration-thickness: 2px;
-    text-decoration-color: rgba(206, 213, 48, 0.45);
-    transition: text-decoration-color 0.15s;
-  }
-
-  .home a:hover {
-    text-decoration-color: #ced530;
-  }
-
-  @media (max-width: 540px) {
-    .home {
-      padding: 52px 24px 96px;
-    }
-
-    .home-wordmark {
-      font-size: 42px;
-    }
+  .block-text {
+    font-size: 1rem;
+    line-height: 1.7;
+    max-width: 56ch;
+    margin: 1.75rem 0 0;
+    color: var(--ink-muted);
   }
 </style>

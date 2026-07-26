@@ -4,17 +4,28 @@ export default {
   theme: {
     extend: {
       colors: {
-        paper: '#fcefef',
-        ink: '#1a1a1a',
-        heading: '#2f4858',
-        accent: '#ced530',
-        'accent-soft': '#edf09a',
+        paper: '#f2efe6',
+        'paper-raised': '#faf8f2',
+        ink: '#17150f',
+        sky: '#a2d6f9',
+        'sky-deep': '#6fb4e0',
+        'sky-wash': '#e2effa',
+        gold: '#fdd85d',
+        'gold-deep': '#b58a12',
+        // heading and accent are the original token names, remapped so pages
+        // that still reference them land on the new palette.
+        heading: '#17150f',
+        accent: '#fdd85d',
+        'accent-soft': '#a2d6f9',
       },
       fontFamily: {
-        display: ['swear-display', 'Georgia', 'serif'],
-        body: ['freight-text-pro', 'neue-haas-unica', 'Georgia', 'serif'],
-        sans: ['neue-haas-unica', 'system-ui', 'sans-serif'],
+        display: ['"PP Editorial New"', 'Georgia', 'serif'],
+        body: ['"Neue Montreal"', 'system-ui', 'sans-serif'],
+        sans: ['"Neue Montreal"', 'system-ui', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
+      letterSpacing: {
+        label: '0.14em',
       },
     },
   },

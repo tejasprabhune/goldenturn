@@ -3,9 +3,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 
-const SECTION_ORDER = ['goals'] as const;
+const SECTION_ORDER = ['goals', 'foundations'] as const;
 const SECTION_LABELS: Record<string, string> = {
-  goals: 'Goals',
+  goals: 'goals',
+  foundations: 'foundations',
 };
 
 const articles = await getCollection('curriculum', ({ data }) => !data.draft);
@@ -29,43 +30,32 @@ function articleHref(entry: CollectionEntry<'curriculum'>) {
   title="Curriculum | the golden turn"
   description="A complete guide to college parliamentary debate, from first principles to advanced theory."
 >
-  <div class="max-w-5xl mx-auto px-6 pt-16 pb-24">
-    <h1 class="font-display italic text-heading text-5xl sm:text-6xl leading-tight mb-4">
-      Curriculum
-    </h1>
-    <p class="font-body text-ink/60 text-base max-w-xl leading-relaxed mb-16">
+  <div class="shell page-head">
+    <h1 class="page-title">curriculum</h1>
+    <p class="page-lede">
       A complete guide to college parliamentary debate, from first principles to advanced theory.
     </p>
+  </div>
 
-    <div class="space-y-14">
-      {SECTION_ORDER.map(section => {
-        const sectionArticles = grouped[section];
-        if (!sectionArticles || sectionArticles.length === 0) return null;
-        return (
-          <section id={section}>
-            <p class="font-sans uppercase tracking-widest text-ink/30 mb-4 pb-3 border-b border-ink/10" style="font-size: 0.75rem;">
-              {SECTION_LABELS[section]}
-            </p>
-            <ul class="space-y-3">
-              {sectionArticles.map(entry => (
-                <li>
-                  <a
-                    href={articleHref(entry)}
-                    class="flex items-baseline gap-3 group"
-                  >
-                    <span class="text-ink/30 font-mono shrink-0 text-right" style="font-size: 0.75rem; width: 1.5rem;">
-                      {String(entry.data.order).padStart(2, '0')}
-                    </span>
-                    <span class="font-body text-ink group-hover:underline decoration-accent underline-offset-2 transition-colors">
-                      {entry.data.title}
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-    </div>
+  <div class="shell page-body">
+    {SECTION_ORDER.map(section => {
+      const sectionArticles = grouped[section];
+      if (!sectionArticles || sectionArticles.length === 0) return null;
+      return (
+        <section id={section}>
+          <p class="section-head">{SECTION_LABELS[section]}</p>
+          <ul class="row-list">
+            {sectionArticles.map((entry, i) => (
+              <li>
+                <a href={articleHref(entry)} class="row">
+                  <span class="row-index">{String(i + 1).padStart(2, '0')}</span>
+                  <span class="row-title">{entry.data.title}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      );
+    })}
   </div>
 </BaseLayout>
