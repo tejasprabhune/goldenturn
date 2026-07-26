@@ -1,0 +1,254 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {
+  fetchAllRecordings,
+  recordingSlug,
+  tagLabel,
+  mediaKind,
+  youtubeId,
+  vimeoId,
+  directMediaUrl,
+  type Recording,
+} from '../../lib/recordings';
+
+export async function getStaticPaths() {
+  const recordings = await fetchAllRecordings();
+  return recordings.map(entry => ({
+    params: { slug: recordingSlug(entry) },
+    props: { entry },
+  }));
+}
+
+interface Props {
+  entry: Recording;
+}
+
+const { entry } = Astro.props;
+
+const kind = mediaKind(entry.link);
+const ytId = kind === 'youtube' ? youtubeId(entry.link) : null;
+const vimId = kind === 'vimeo' ? vimeoId(entry.link) : null;
+const mediaUrl = directMediaUrl(entry.link);
+
+const meta = [entry.year, entry.tournament].filter(Boolean).join(', ');
+const tags = (entry._tags ?? []).filter(t => t.startsWith('#'));
+
+const facts: Array<[string, string]> = [];
+if (entry.aff) facts.push(['aff', entry.aff]);
+if (entry.neg) facts.push(['neg', entry.neg]);
+if (entry.aff_type) facts.push(['aff type', entry.aff_type]);
+if (typeof entry.neg_strategy_count === 'number') {
+  facts.push(['neg strategies', `${entry.neg_strategy_count}-off`]);
+}
+---
+
+<BaseLayout
+  title={`${entry.title} | Recordings | the golden turn`}
+  description={entry.resolution ?? 'A recorded parliamentary debate round.'}
+>
+  <div class="shell page-head">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/recordings">recordings</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{entry.title}</span>
+    </nav>
+
+    <h1 class="page-title rec-title">{entry.title}</h1>
+    {meta && <p class="page-lede">{meta}</p>}
+  </div>
+
+  <div class="shell page-body rec-layout">
+    <div class="rec-main">
+      {entry.resolution && (
+        <section class="rec-block">
+          <p class="label label-muted">resolution</p>
+          <p class="rec-resolution">{entry.resolution}</p>
+        </section>
+      )}
+
+      <section class="rec-block">
+        <p class="label label-muted">player</p>
+        <div class="rec-player">
+          {ytId && (
+            <iframe
+              src={`https://www.youtube.com/embed/${ytId}`}
+              title={`Video of ${entry.title}`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+            />
+          )}
+          {vimId && (
+            <iframe
+              src={`https://player.vimeo.com/video/${vimId}`}
+              title={`Video of ${entry.title}`}
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowfullscreen
+            />
+          )}
+          {kind === 'video' && <video src={mediaUrl} controls preload="metadata"></video>}
+          {kind === 'audio' && <audio src={mediaUrl} controls preload="metadata"></audio>}
+          {kind === 'unknown' && (
+            <p class="page-lede" style="margin-top: 0;">
+              Playback for this source is not wired up yet.
+            </p>
+          )}
+        </div>
+
+        <p class="rec-player-note label label-muted">
+          waveform, speech markers, and transcript land here once ingest runs
+        </p>
+
+        <p class="rec-original">
+          <a href={entry.link} target="_blank" rel="noopener noreferrer" class="link">open original source</a>
+        </p>
+      </section>
+    </div>
+
+    <aside class="rec-side">
+      {facts.length > 0 && (
+        <section class="rec-block">
+          <p class="label label-muted">strategy</p>
+          <dl class="rec-facts">
+            {facts.map(([term, value]) => (
+              <>
+                <dt class="label label-muted">{term}</dt>
+                <dd>{value}</dd>
+              </>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      {entry.decision && (
+        <section class="rec-block">
+          <p class="label label-muted">decision</p>
+          <p>
+            <button id="decision" class="rec-decision" data-revealed="false" aria-label="Reveal decision">
+              {entry.decision}
+            </button>
+          </p>
+        </section>
+      )}
+
+      {tags.length > 0 && (
+        <section class="rec-block">
+          <p class="label label-muted">tags</p>
+          <div class="tag-list">
+            {tags.map(tag => (
+              <a class="tag" href={`/recordings?tag=${encodeURIComponent(tag)}`}>{tagLabel(tag)}</a>
+            ))}
+          </div>
+        </section>
+      )}
+    </aside>
+  </div>
+</BaseLayout>
+
+<style>
+  .rec-title {
+    max-width: 20ch;
+  }
+
+  .rec-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 900px) {
+    .rec-layout {
+      grid-template-columns: minmax(0, 1fr) 16rem;
+      gap: 3rem;
+    }
+  }
+
+  .rec-block {
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    margin-bottom: 2rem;
+  }
+
+  .rec-block > .label {
+    margin-bottom: 0.75rem;
+  }
+
+  .rec-resolution {
+    font-family: 'PP Editorial New', Georgia, serif;
+    font-weight: 300;
+    font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0;
+    max-width: 40ch;
+  }
+
+  .rec-player :is(iframe, video, audio) {
+    width: 100%;
+    display: block;
+    border: none;
+  }
+
+  .rec-player :is(iframe, video) {
+    aspect-ratio: 16 / 9;
+    background: var(--ink);
+  }
+
+  .rec-player-note {
+    margin: 1rem 0 0;
+  }
+
+  .rec-original {
+    margin: 1.25rem 0 0;
+    font-size: 0.9375rem;
+  }
+
+  .rec-facts {
+    margin: 0;
+  }
+
+  .rec-facts dt {
+    margin-bottom: 0.3rem;
+  }
+
+  .rec-facts dd {
+    margin: 0 0 1.1rem;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  .rec-decision {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: var(--gold);
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    padding: 0.25rem 0.55rem;
+    cursor: pointer;
+    filter: blur(9px);
+    transition: filter 80ms linear;
+  }
+
+  .rec-decision[data-revealed='true'] {
+    filter: none;
+    cursor: default;
+  }
+
+  .tag-list a.tag {
+    text-decoration: none;
+  }
+
+  .tag-list a.tag:hover {
+    background: var(--gold);
+    border-color: var(--ink);
+  }
+</style>
+
+<script>
+  const decision = document.getElementById('decision');
+  decision?.addEventListener('click', () => {
+    decision.dataset.revealed = 'true';
+  });
+</script>

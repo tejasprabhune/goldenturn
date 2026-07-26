@@ -41,6 +41,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <script>
   import { algoliasearch } from 'algoliasearch';
+  import { recordingHref } from '../../lib/recordings';
 
   const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
   const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
@@ -181,7 +182,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <div class="rec-card__tags">${tagPills}</div>
           </div>
           <div class="rec-card__aside">
-            <span class="rec-card__decision" role="button" tabindex="0" aria-label="Reveal decision">${decision}</span>
+            <div class="rec-card__aside-top">
+              <span class="rec-card__decision" role="button" tabindex="0" aria-label="Reveal decision">${decision}</span>
+              <a class="rec-card__open" href="${escapeHtml(recordingHref({ title: hit['title'] as string ?? '', objectID: hit['objectID'] as string ?? '' }))}" aria-label="Open the page for ${title}">&#8599;</a>
+            </div>
             <span class="rec-card__meta">${year}, ${tournament}</span>
           </div>
         </div>
@@ -652,6 +656,27 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gap: 0.5rem;
     max-width: 9rem;
     flex-shrink: 0;
+  }
+
+  .rec-card__aside-top {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .rec-card__open {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1;
+    color: rgba(23, 21, 15, 0.45);
+    text-decoration: none;
+    padding: 0.1rem 0.25rem;
+    transition: background-color 60ms linear, color 60ms linear;
+  }
+
+  .rec-card__open:hover {
+    background: var(--gold);
+    color: var(--ink);
   }
 
   .rec-card__decision {

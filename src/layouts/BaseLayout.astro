@@ -138,7 +138,7 @@ function isActive(href: string) {
           autocomplete="off"
           aria-label="Search everything"
         />
-        <p class="label label-muted search-overlay-hint">enter to see all results, esc to close</p>
+        <p class="label label-muted search-overlay-hint">up and down to browse, enter to open, esc to close</p>
         <div id="overlay-results" class="search-overlay-results"></div>
       </div>
     </div>
@@ -396,6 +396,7 @@ function isActive(href: string) {
 
 <script>
   import { algoliasearch } from 'algoliasearch';
+  import { recordingHref } from '../lib/recordings';
 
   const mobileToggle = document.getElementById('mobile-menu-toggle');
   const mobileMenu = document.getElementById('mobile-menu');
@@ -439,12 +440,15 @@ function isActive(href: string) {
   const LIVE_TYPES = ['curriculum', 'recording', 'lecture'];
 
   let debounce: ReturnType<typeof setTimeout> | undefined;
+  let overlayLinks: HTMLAnchorElement[] = [];
+  let focused = -1;
 
   function openOverlay() {
     if (!overlay || !overlayInput) return;
     overlay.removeAttribute('hidden');
     overlayInput.focus();
     overlayInput.select();
+    focused = -1;
   }
 
   function closeOverlay() {
@@ -456,6 +460,8 @@ function isActive(href: string) {
     if (!overlayResults) return;
     if (!query.trim() || !client) {
       overlayResults.innerHTML = '';
+      overlayLinks = [];
+      focused = -1;
       return;
     }
 
@@ -476,21 +482,38 @@ function isActive(href: string) {
 
     if (hits.length === 0) {
       overlayResults.innerHTML = `<p class="page-lede" style="margin-top: 0.5rem;">No results.</p>`;
+      overlayLinks = [];
+      focused = -1;
       return;
     }
 
     overlayResults.innerHTML = hits
       .map(hit => {
         const title = escapeHtml((hit.title ?? hit.name ?? '') as string);
-        const url = escapeHtml(hit._isRecording ? (hit.link ?? '#') : (hit.url ?? '#'));
+        const url = escapeHtml(
+          hit._isRecording
+            ? recordingHref({ title: hit.title ?? '', objectID: hit.objectID })
+            : (hit.url ?? '#')
+        );
         const desc = escapeHtml(hit._isRecording ? (hit.resolution ?? '') : (hit.description ?? ''));
-        const target = hit._isRecording ? ' target="_blank" rel="noopener noreferrer"' : '';
-        return `<a class="result-link" href="${url}"${target}>
+        return `<a class="result-link" href="${url}">
           <span class="result-title">${title}</span>
           ${desc ? `<span class="result-desc">${desc}</span>` : ''}
         </a>`;
       })
       .join('');
+
+    overlayLinks = Array.from(overlayResults.querySelectorAll('a.result-link'));
+    focused = -1;
+  }
+
+  function moveFocus(delta: number) {
+    if (overlayLinks.length === 0) return;
+    focused = focused + delta;
+    if (focused < -1) focused = overlayLinks.length - 1;
+    if (focused >= overlayLinks.length) focused = -1;
+    overlayLinks.forEach((a, i) => a.classList.toggle('is-focused', i === focused));
+    if (focused >= 0) overlayLinks[focused].scrollIntoView({ block: 'nearest' });
   }
 
   overlayInput?.addEventListener('input', () => {
@@ -499,8 +522,18 @@ function isActive(href: string) {
   });
 
   overlayInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
+      moveFocus(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveFocus(-1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (focused >= 0 && overlayLinks[focused]) {
+        window.location.href = overlayLinks[focused].href;
+        return;
+      }
       const q = overlayInput.value.trim();
       window.location.href = q ? `/search?q=${encodeURIComponent(q)}` : '/search';
     }
