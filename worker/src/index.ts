@@ -13,6 +13,44 @@ export interface Env {
 }
 
 const ACCEPT_THRESHOLD = 5;
+// Workers cap PBKDF2 at 100k iterations; requesting more throws at runtime.
+const PBKDF2_ITERATIONS = 100_000;
+
+function b64(buf: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
+function unb64(s: string): Uint8Array {
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+
+/** PBKDF2-SHA256 with a per-user salt; the parameters travel with the hash. */
+async function derive(password: string, salt: Uint8Array, iterations: number): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, 256,
+  );
+  return b64(bits);
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await derive(password, salt, PBKDF2_ITERATIONS);
+  return `${PBKDF2_ITERATIONS}:${b64(salt.buffer)}:${hash}`;
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [iterStr, saltStr, expected] = stored.split(':');
+  if (!iterStr || !saltStr || !expected) return false;
+  const actual = await derive(password, unb64(saltStr), Number(iterStr));
+  // Constant-time compare so a wrong password cannot be narrowed by timing.
+  if (actual.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < actual.length; i++) diff |= actual.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
 
 interface User {
   id: string;
@@ -106,19 +144,38 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
   },
 
   'POST /auth/session': async (req, env) => {
-    const body = await req.json<{ email?: string; displayName?: string }>().catch(() => ({}));
+    const body = await req.json<{ email?: string; password?: string; displayName?: string }>()
+      .catch(() => ({}));
     const email = (body.email ?? '').trim().toLowerCase();
+    const password = body.password ?? '';
     if (!email || !email.includes('@')) return json({ error: 'valid email required' }, { status: 400 });
+    if (password.length < 8) return json({ error: 'password must be at least 8 characters' }, { status: 400 });
 
-    let user = await env.DB.prepare(`SELECT id, email, display_name, rep FROM users WHERE email = ?1`)
-      .bind(email).first<User>();
+    const existing = await env.DB.prepare(
+      `SELECT id, email, display_name, rep, password_hash FROM users WHERE email = ?1`
+    ).bind(email).first<User & { password_hash: string | null }>();
 
-    if (!user) {
+    let user: User;
+    if (existing) {
+      if (!existing.password_hash) {
+        // Account predates passwords; the first sign-in sets one.
+        await env.DB.prepare(`UPDATE users SET password_hash = ?1 WHERE id = ?2`)
+          .bind(await hashPassword(password), existing.id).run();
+      } else if (!(await verifyPassword(password, existing.password_hash))) {
+        await logEvent(env, 'auth.failed', existing.id, null, {});
+        return json({ error: 'wrong password for that email' }, { status: 401 });
+      }
+      user = {
+        id: existing.id, email: existing.email,
+        display_name: existing.display_name, rep: existing.rep,
+      };
+    } else {
       const uid = id();
       const name = (body.displayName ?? email.split('@')[0]).slice(0, 60);
       await env.DB.prepare(
-        `INSERT INTO users (id, email, display_name, created_at, rep) VALUES (?1, ?2, ?3, ?4, 0)`
-      ).bind(uid, email, name, now()).run();
+        `INSERT INTO users (id, email, display_name, created_at, rep, password_hash)
+         VALUES (?1, ?2, ?3, ?4, 0, ?5)`
+      ).bind(uid, email, name, now(), await hashPassword(password)).run();
       user = { id: uid, email, display_name: name, rep: 0 };
       await logEvent(env, 'user.created', uid, null, {});
     }

@@ -132,12 +132,11 @@ function isActive(href: string) {
     <dialog class="signin" id="signin-dialog">
       <form method="dialog" class="signin-form" id="signin-form">
         <p class="label label-muted">Sign in</p>
-        <p class="signin-copy">
-          Reading is open to everyone. An account is only needed to propose
-          edits, vote, and keep notes.
-        </p>
         <label class="signin-label" for="signin-email">Email</label>
         <input class="field" type="email" id="signin-email" required autocomplete="email" />
+        <label class="signin-label" for="signin-password">Password</label>
+        <input class="field" type="password" id="signin-password" required minlength="8"
+               autocomplete="current-password" />
         <label class="signin-label" for="signin-name">Display name</label>
         <input class="field" type="text" id="signin-name" maxlength="60" autocomplete="nickname" />
         <p class="signin-error" id="signin-error" hidden></p>
@@ -454,10 +453,11 @@ function isActive(href: string) {
     if (submitter?.value !== 'ok') return;
     e.preventDefault();
     const email = (document.getElementById('signin-email') as HTMLInputElement).value.trim();
+    const password = (document.getElementById('signin-password') as HTMLInputElement).value;
     const name = (document.getElementById('signin-name') as HTMLInputElement).value.trim();
     const err = document.getElementById('signin-error')!;
     try {
-      await signIn(email, name || undefined);
+      await signIn(email, password, name || undefined);
       err.hidden = true;
       signinDialog?.close();
       renderAuth();

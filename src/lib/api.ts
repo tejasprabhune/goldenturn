@@ -69,18 +69,23 @@ async function call<T>(path: string, init: RequestInit = {}, auth = false): Prom
 
   const res = await fetch(`${API}${path}`, { ...init, headers: { ...headers, ...(init.headers ?? {}) } });
   if (res.status === 401) {
-    if (auth) signOut();
-    throw new NotSignedIn();
+    // Sign-in rejects with 401 for a bad password; that is not a lost session.
+    if (path !== '/auth/session') {
+      if (auth) signOut();
+      throw new NotSignedIn();
+    }
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).error ?? 'sign in failed');
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((body as any).error ?? `request failed (${res.status})`);
   return body as T;
 }
 
-export async function signIn(email: string, displayName?: string): Promise<User> {
+export async function signIn(email: string, password: string, displayName?: string): Promise<User> {
   const { token, user } = await call<{ token: string; user: User }>('/auth/session', {
     method: 'POST',
-    body: JSON.stringify({ email, displayName }),
+    body: JSON.stringify({ email, password, displayName }),
   });
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
