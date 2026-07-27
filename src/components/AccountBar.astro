@@ -44,6 +44,11 @@ const { slug = '' } = Astro.props;
         </form>
       </div>
 
+      <div class="account-block account-block--wide" id="notes-block" hidden>
+        <p class="label label-muted">Your notes on this round</p>
+        <ul class="note-list" id="my-notes"></ul>
+      </div>
+
       <div class="account-block account-block--wide">
         <p class="label label-muted">Your tags</p>
         <div class="tag-list" id="my-tags"></div>
@@ -157,28 +162,6 @@ const { slug = '' } = Astro.props;
     flex: 1;
     min-width: 0;
   }
-
-  .note-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .note-list li {
-    display: flex;
-    gap: 0.6rem;
-    align-items: baseline;
-    padding: 0.3rem 0;
-    border-bottom: 1px solid var(--rule-soft);
-    font-size: 0.875rem;
-  }
-
-  .note-at {
-    font-variant-numeric: tabular-nums;
-    color: var(--sky-deep);
-    cursor: pointer;
-    text-decoration: underline;
-  }
 </style>
 
 <script>
@@ -240,9 +223,12 @@ const { slug = '' } = Astro.props;
           tagBox.appendChild(el);
         }
 
-        const noteBox = document.getElementById('my-notes');
-        if (noteBox) noteBox.innerHTML = '';
-        for (const n of noteBox ? notes : []) {
+        // The list only earns its space once there is something in it.
+        const noteBox = document.getElementById('my-notes')!;
+        const notesBlock = document.getElementById('notes-block')!;
+        noteBox.innerHTML = '';
+        notesBlock.hidden = notes.length === 0;
+        for (const n of notes) {
           const li = document.createElement('li');
           const at = document.createElement('span');
           at.className = 'note-at';

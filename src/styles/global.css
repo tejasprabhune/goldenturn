@@ -713,6 +713,30 @@
     min-width: 2.6rem;
   }
 
+  /* Note rows are built in the browser as notes are added. */
+
+  .note-list li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    font-size: 0.875rem;
+  }
+
+  .note-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .note-at {
+    font-variant-numeric: tabular-nums;
+    color: var(--sky-deep);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
   .chart-wrap {
     position: relative;
   }
