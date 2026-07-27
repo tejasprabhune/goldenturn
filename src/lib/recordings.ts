@@ -103,3 +103,22 @@ export async function fetchAllRecordings(): Promise<Recording[]> {
 
   return all;
 }
+
+/**
+ * Slugs that have audio and peaks in R2, published by the ingest pipeline.
+ * Fetched once at build time so pages know whether to render the player.
+ */
+export async function fetchMediaIndex(): Promise<{ playable: Set<string>; transcribed: Set<string> }> {
+  try {
+    const res = await fetch('https://media.goldenturn.org/index.json');
+    if (!res.ok) throw new Error(String(res.status));
+    const json = await res.json();
+    return {
+      playable: new Set<string>(json.playable ?? []),
+      transcribed: new Set<string>(json.transcribed ?? []),
+    };
+  } catch (e) {
+    console.warn('[recordings] media index unavailable; players will fall back to embeds.');
+    return { playable: new Set(), transcribed: new Set() };
+  }
+}

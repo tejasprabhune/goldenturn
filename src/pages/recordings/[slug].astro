@@ -1,34 +1,44 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import RecordingPlayer from '../../components/RecordingPlayer.astro';
 import {
   fetchAllRecordings,
+  fetchMediaIndex,
   recordingSlug,
   tagLabel,
   mediaKind,
   youtubeId,
   vimeoId,
-  directMediaUrl,
   type Recording,
 } from '../../lib/recordings';
 
 export async function getStaticPaths() {
-  const recordings = await fetchAllRecordings();
-  return recordings.map(entry => ({
-    params: { slug: recordingSlug(entry) },
-    props: { entry },
-  }));
+  const [recordings, media] = await Promise.all([fetchAllRecordings(), fetchMediaIndex()]);
+  return recordings.map(entry => {
+    const slug = recordingSlug(entry);
+    return {
+      params: { slug },
+      props: { entry, slug, hasMedia: media.playable.has(slug) },
+    };
+  });
 }
 
 interface Props {
   entry: Recording;
+  slug: string;
+  hasMedia: boolean;
 }
 
-const { entry } = Astro.props;
+const { entry, slug, hasMedia } = Astro.props;
 
 const kind = mediaKind(entry.link);
 const ytId = kind === 'youtube' ? youtubeId(entry.link) : null;
 const vimId = kind === 'vimeo' ? vimeoId(entry.link) : null;
-const mediaUrl = directMediaUrl(entry.link);
+const videoEmbed = ytId
+  ? { kind: 'youtube' as const, id: ytId }
+  : vimId
+    ? { kind: 'vimeo' as const, id: vimId }
+    : null;
 
 const meta = [entry.year, entry.tournament].filter(Boolean).join(', ');
 const tags = (entry._tags ?? []).filter(t => t.startsWith('#'));
@@ -68,36 +78,13 @@ if (typeof entry.neg_strategy_count === 'number') {
 
       <section class="rec-block">
         <p class="label label-muted">player</p>
-        <div class="rec-player">
-          {ytId && (
-            <iframe
-              src={`https://www.youtube.com/embed/${ytId}`}
-              title={`Video of ${entry.title}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowfullscreen
-            />
-          )}
-          {vimId && (
-            <iframe
-              src={`https://player.vimeo.com/video/${vimId}`}
-              title={`Video of ${entry.title}`}
-              allow="autoplay; fullscreen; picture-in-picture"
-              allowfullscreen
-            />
-          )}
-          {kind === 'video' && <video src={mediaUrl} controls preload="metadata"></video>}
-          {kind === 'audio' && <audio src={mediaUrl} controls preload="metadata"></audio>}
-          {kind === 'unknown' && (
-            <p class="page-lede" style="margin-top: 0;">
-              Playback for this source is not wired up yet.
-            </p>
-          )}
-        </div>
-
-        <p class="rec-player-note label label-muted">
-          waveform, speech markers, and transcript land here once ingest runs
-        </p>
-
+        <RecordingPlayer
+          slug={slug}
+          title={entry.title}
+          hasMedia={hasMedia}
+          videoEmbed={videoEmbed}
+          sourceLink={entry.link}
+        />
         <p class="rec-original">
           <a href={entry.link} target="_blank" rel="noopener noreferrer" class="link">open original source</a>
         </p>

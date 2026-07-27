@@ -1,0 +1,426 @@
+---
+import { formatTime } from '../lib/waveform';
+
+interface Props {
+  slug: string;
+  title: string;
+  /** Present when the round has media in R2; absent for embed-only rounds. */
+  hasMedia: boolean;
+  videoEmbed?: { kind: 'youtube' | 'vimeo'; id: string } | null;
+  sourceLink: string;
+}
+
+const { slug, title, hasMedia, videoEmbed = null, sourceLink } = Astro.props;
+const MEDIA = 'https://media.goldenturn.org';
+const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+---
+
+<section
+  class="player"
+  data-slug={slug}
+  data-media={hasMedia ? `${MEDIA}/audio/${slug}.m4a` : ''}
+  data-peaks={hasMedia ? `${MEDIA}/peaks/${slug}.json` : ''}
+>
+  {videoEmbed && (
+    <div class="player-video" id="player-video">
+      <iframe
+        id="player-iframe"
+        src={videoEmbed.kind === 'youtube'
+          ? `https://www.youtube.com/embed/${videoEmbed.id}`
+          : `https://player.vimeo.com/video/${videoEmbed.id}`}
+        title={`Video of ${title}`}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+      ></iframe>
+    </div>
+  )}
+
+  {hasMedia ? (
+    <>
+      <div class="wave-wrap">
+        <canvas id="wave" class="wave" aria-label={`Waveform for ${title}`} role="img"></canvas>
+        <div class="wave-tip" id="wave-tip" hidden></div>
+        <p class="wave-loading label label-muted" id="wave-loading">loading waveform</p>
+      </div>
+
+      <div class="transport">
+        <button id="play" class="transport-play" aria-label="Play">
+          <span id="play-icon">play</span>
+        </button>
+
+        <span class="transport-time" id="time">0:00</span>
+        <span class="transport-sep" aria-hidden="true">/</span>
+        <span class="transport-time transport-total" id="total">0:00</span>
+
+        <div class="transport-right">
+          {videoEmbed && (
+            <button id="toggle-video" class="chip" aria-pressed="true">video on</button>
+          )}
+          <label class="speed">
+            <span class="label label-muted">speed</span>
+            <select id="speed" class="field speed-select" aria-label="Playback speed">
+              {SPEEDS.map(s => <option value={s} selected={s === 1}>{s}x</option>)}
+            </select>
+          </label>
+          <a class="chip" href={`${MEDIA}/audio/${slug}.m4a`} download>download</a>
+        </div>
+      </div>
+
+      <div class="loop" id="loop" hidden>
+        <span class="label label-muted">loop</span>
+        <span class="loop-range" id="loop-range"></span>
+        <button class="chip" id="loop-clear">clear</button>
+      </div>
+
+      <p class="player-hint label label-muted">
+        space play, arrows seek, shift-drag on the waveform to loop a range
+      </p>
+
+      <audio id="audio" preload="metadata" src={`${MEDIA}/audio/${slug}.m4a`}></audio>
+    </>
+  ) : (
+    <p class="page-lede" style="margin-top: 0;">
+      No hosted audio for this round.
+      <a href={sourceLink} target="_blank" rel="noopener noreferrer" class="link">Open the original source</a>.
+    </p>
+  )}
+</section>
+
+<style>
+  .player {
+    margin-bottom: 2rem;
+  }
+
+  .player-video {
+    margin-bottom: 1.25rem;
+  }
+
+  .player-video iframe {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: none;
+    display: block;
+    background: var(--ink);
+  }
+
+  .player-video[hidden] {
+    display: none;
+  }
+
+  .wave-wrap {
+    position: relative;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-raised);
+  }
+
+  .wave {
+    display: block;
+    width: 100%;
+    height: 132px;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .wave-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    pointer-events: none;
+  }
+
+  .wave-loading[hidden] {
+    display: none;
+  }
+
+  .wave-tip {
+    position: absolute;
+    top: 0.4rem;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    padding: 0.1rem 0.35rem;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .wave-tip[hidden] {
+    display: none;
+  }
+
+  .transport {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.9rem;
+    flex-wrap: wrap;
+  }
+
+  .transport-play {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    background: var(--gold);
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    padding: 0.5rem 1.1rem;
+    cursor: pointer;
+    min-width: 6rem;
+    transition: background-color 60ms linear;
+  }
+
+  .transport-play:hover {
+    background: var(--sky);
+  }
+
+  .transport-time {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  .transport-total {
+    color: rgba(23, 21, 15, 0.45);
+  }
+
+  .transport-sep {
+    color: rgba(23, 21, 15, 0.3);
+  }
+
+  .transport-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .speed {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .speed-select {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.8125rem;
+  }
+
+  .loop {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding-top: 0.75rem;
+  }
+
+  .loop[hidden] {
+    display: none;
+  }
+
+  .loop-range {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .player-hint {
+    margin: 0.9rem 0 0;
+  }
+
+  audio {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .wave {
+      height: 96px;
+    }
+
+    .transport-right {
+      margin-left: 0;
+      width: 100%;
+      padding-top: 0.5rem;
+    }
+  }
+</style>
+
+<script>
+  import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
+
+  const root = document.querySelector<HTMLElement>('.player');
+  const audio = document.getElementById('audio') as HTMLAudioElement | null;
+  const canvas = document.getElementById('wave') as HTMLCanvasElement | null;
+
+  if (root && audio && canvas) {
+    const slug = root.dataset.slug!;
+    const peaksUrl = root.dataset.peaks!;
+    const wave = new Waveform(canvas);
+    const playBtn = document.getElementById('play')!;
+    const playIcon = document.getElementById('play-icon')!;
+    const timeEl = document.getElementById('time')!;
+    const totalEl = document.getElementById('total')!;
+    const tip = document.getElementById('wave-tip') as HTMLElement;
+    const loading = document.getElementById('wave-loading') as HTMLElement;
+    const loopBar = document.getElementById('loop') as HTMLElement;
+    const loopRange = document.getElementById('loop-range')!;
+    const speed = document.getElementById('speed') as HTMLSelectElement;
+    const videoWrap = document.getElementById('player-video');
+    const iframe = document.getElementById('player-iframe') as HTMLIFrameElement | null;
+    const toggleVideo = document.getElementById('toggle-video');
+
+    const positionKey = `gt:pos:${slug}`;
+
+    fetch(peaksUrl)
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+      .then((file: PeaksFile) => {
+        wave.setData(file);
+        totalEl.textContent = formatTime(file.duration);
+        loading.hidden = true;
+        applyDeepLink(file.duration);
+      })
+      .catch(() => { loading.textContent = 'waveform unavailable'; });
+
+    function applyDeepLink(duration: number) {
+      const t = Number(new URLSearchParams(location.search).get('t'));
+      const saved = Number(localStorage.getItem(positionKey) ?? '0');
+      const start = Number.isFinite(t) && t > 0 ? t : saved;
+      if (start > 0 && start < duration - 5) {
+        audio!.currentTime = start;
+        wave.position = start;
+        wave.draw();
+        timeEl.textContent = formatTime(start);
+      }
+    }
+
+    function setPlaying(playing: boolean) {
+      playIcon.textContent = playing ? 'pause' : 'play';
+      playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    }
+
+    playBtn.addEventListener('click', () => {
+      if (audio.paused) audio.play(); else audio.pause();
+    });
+    audio.addEventListener('play', () => setPlaying(true));
+    audio.addEventListener('pause', () => setPlaying(false));
+    audio.addEventListener('loadedmetadata', () => {
+      if (isFinite(audio.duration)) totalEl.textContent = formatTime(audio.duration);
+    });
+
+    let lastSaved = 0;
+    audio.addEventListener('timeupdate', () => {
+      const t = audio.currentTime;
+      wave.position = t;
+      timeEl.textContent = formatTime(t);
+      wave.draw();
+
+      if (wave.selection && t >= wave.selection.end) {
+        audio.currentTime = wave.selection.start;
+      }
+      if (t - lastSaved > 5 || lastSaved - t > 5) {
+        lastSaved = t;
+        localStorage.setItem(positionKey, String(Math.floor(t)));
+      }
+    });
+
+    speed?.addEventListener('change', () => { audio.playbackRate = Number(speed.value); });
+
+    // Video is an embed we cannot drive, so audio-only simply hides it and
+    // leaves the audio element as the single source of truth.
+    toggleVideo?.addEventListener('click', () => {
+      const on = toggleVideo.getAttribute('aria-pressed') === 'true';
+      toggleVideo.setAttribute('aria-pressed', String(!on));
+      toggleVideo.textContent = on ? 'video off' : 'video on';
+      if (videoWrap) videoWrap.hidden = on;
+      if (on && iframe) iframe.src = iframe.src; // stop playback when hidden
+    });
+
+    function seekFromEvent(e: PointerEvent) {
+      const rect = canvas!.getBoundingClientRect();
+      return wave.xToTime(e.clientX - rect.left);
+    }
+
+    let dragging = false;
+    let selecting = false;
+    let selectStart = 0;
+
+    canvas.addEventListener('pointerdown', e => {
+      canvas.setPointerCapture(e.pointerId);
+      if (e.shiftKey) {
+        selecting = true;
+        selectStart = seekFromEvent(e);
+        wave.selection = { start: selectStart, end: selectStart };
+      } else {
+        dragging = true;
+        audio.currentTime = seekFromEvent(e);
+      }
+      wave.draw();
+    });
+
+    canvas.addEventListener('pointermove', e => {
+      const t = seekFromEvent(e);
+      wave.hover = t;
+      const rect = canvas.getBoundingClientRect();
+      tip.hidden = false;
+      tip.style.left = `${e.clientX - rect.left}px`;
+      tip.textContent = formatTime(t);
+
+      if (selecting) {
+        wave.selection = { start: Math.min(selectStart, t), end: Math.max(selectStart, t) };
+      } else if (dragging) {
+        audio.currentTime = t;
+      }
+      wave.draw();
+    });
+
+    canvas.addEventListener('pointerup', () => {
+      if (selecting && wave.selection && wave.selection.end - wave.selection.start > 1) {
+        loopBar.hidden = false;
+        loopRange.textContent = `${formatTime(wave.selection.start)} to ${formatTime(wave.selection.end)}`;
+        audio.currentTime = wave.selection.start;
+      } else if (selecting) {
+        wave.selection = null;
+      }
+      dragging = false;
+      selecting = false;
+      wave.draw();
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      wave.hover = null;
+      tip.hidden = true;
+      wave.draw();
+    });
+
+    document.getElementById('loop-clear')?.addEventListener('click', () => {
+      wave.selection = null;
+      loopBar.hidden = true;
+      wave.draw();
+    });
+
+    document.addEventListener('keydown', e => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (audio.paused) audio.play(); else audio.pause();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        audio.currentTime = Math.min(audio.duration || 1e9, audio.currentTime + (e.shiftKey ? 30 : 5));
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        audio.currentTime = Math.max(0, audio.currentTime - (e.shiftKey ? 30 : 5));
+      }
+    });
+
+    const ro = new ResizeObserver(() => wave.resize());
+    ro.observe(canvas);
+  }
+</script>
