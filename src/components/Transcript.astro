@@ -25,6 +25,7 @@ const { slug } = Astro.props;
       <span class="label label-muted" id="tx-hits"></span>
       <button class="chip" id="tx-follow" aria-pressed="true">Follow</button>
       <button class="chip" id="tx-edits-toggle" aria-expanded="false" hidden>Edits</button>
+      <button class="chip" id="tx-expand" aria-pressed="false">Expand</button>
     </div>
   </div>
 
@@ -110,15 +111,25 @@ const { slug } = Astro.props;
   }
 
   .transcript-lines {
-    max-height: 34rem;
+    max-height: 46rem;
     overflow-y: auto;
     padding-right: 0.5rem;
     scrollbar-width: thin;
   }
 
+  /* Expanded drops the cap entirely so the round reads as one document. */
+  .transcript-body[data-expanded='1'] .transcript-lines {
+    max-height: none;
+  }
+
+  .transcript-body[data-expanded='1'] .minimap {
+    position: sticky;
+    top: 1rem;
+  }
+
   .minimap {
     position: relative;
-    height: 34rem;
+    height: 46rem;
     background: var(--paper-raised);
     border: 1px solid var(--rule-soft);
     cursor: pointer;
@@ -413,6 +424,14 @@ const { slug } = Astro.props;
     document.getElementById('tx-follow')?.addEventListener('click', e => {
       follow = !follow;
       (e.currentTarget as HTMLElement).setAttribute('aria-pressed', String(follow));
+    });
+
+    document.getElementById('tx-expand')?.addEventListener('click', e => {
+      const btn = e.currentTarget as HTMLElement;
+      const on = bodyEl.dataset.expanded !== '1';
+      bodyEl.dataset.expanded = on ? '1' : '';
+      btn.setAttribute('aria-pressed', String(on));
+      btn.textContent = on ? 'Collapse' : 'Expand';
     });
 
     document.getElementById('tx-edits-toggle')?.addEventListener('click', e => {

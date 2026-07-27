@@ -72,6 +72,21 @@ const { slug = '' } = Astro.props;
     margin-top: 2rem;
   }
 
+  /* A guest has nothing to manage here, so it collapses to one quiet line. */
+  .account[data-guest='1'] {
+    padding-top: 0.7rem;
+    margin-top: 1.25rem;
+  }
+
+  .account[data-guest='1'] .account-state {
+    font-size: 0.8125rem;
+    margin-top: 0.3rem;
+  }
+
+  .account[data-guest='1'] .account-row .label {
+    font-size: 0.625rem;
+  }
+
   .account-state {
     font-size: 0.9375rem;
     line-height: 1.6;
@@ -226,6 +241,7 @@ const { slug = '' } = Astro.props;
 
     function render() {
       const user = getUser();
+      root!.dataset.guest = user ? '' : '1';
       if (user) {
         state.textContent = `Signed in as ${user.display_name}, ${user.rep} rep.`;
         signoutBtn.hidden = false;

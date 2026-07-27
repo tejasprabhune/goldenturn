@@ -143,8 +143,10 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 </BaseLayout>
 
 <style>
+  /* Round titles are long; sized to sit on one line at the shell width. */
   .rec-title {
-    max-width: 20ch;
+    font-size: clamp(1.5rem, 3.2vw, 2.5rem);
+    line-height: 1.05;
   }
 
   .rec-layout {
