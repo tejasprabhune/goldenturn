@@ -202,7 +202,7 @@ const { slug } = Astro.props;
   import { formatTime } from '../lib/waveform';
   import {
     listProposals, listRevisions, propose, vote, getUser, NotSignedIn,
-    addNote, track, type Proposal,
+    addNote, track, updateProposal, deleteProposal, type Proposal,
   } from '../lib/api';
 
   interface Word { w: string; s: number | null; e: number | null; p: number | null }
@@ -555,7 +555,10 @@ const { slug } = Astro.props;
       const empty = document.getElementById('tx-edits-empty');
       const toggle = document.getElementById('tx-edits-toggle')!;
       if (!list) return;
-      const { proposals } = await listProposals(slug).catch(() => ({ proposals: [] as Proposal[] }));
+      const all = await listProposals(slug).catch(() => ({ proposals: [] as Proposal[] }));
+      // Timing corrections anchor to a speech label, not a paragraph, so they
+      // belong to the player rather than this margin.
+      const proposals = all.proposals.filter(p => p.kind === 'transcript');
 
       // The panel is only offered when there is something in it.
       toggle.hidden = proposals.length === 0;
@@ -563,12 +566,28 @@ const { slug } = Astro.props;
       if (empty) empty.hidden = proposals.length > 0;
 
       list.innerHTML = '';
+      const me = getUser();
       for (const p of proposals) {
         // Mark the affected paragraph so a reader can see it was touched.
         linesEl.querySelector(`#${CSS.escape(p.anchor)}`)?.classList.add('has-proposal');
 
         const li = document.createElement('li');
         li.className = p.status === 'accepted' ? 'proposal is-accepted' : 'proposal';
+
+        // Hovering an edit points at the passage it changes.
+        const target = () => linesEl.querySelector<HTMLElement>(`#${CSS.escape(p.anchor)}`);
+        li.addEventListener('pointerenter', () => {
+          const el = target();
+          if (!el) return;
+          el.classList.add('is-targeted');
+          scrollLinesTo(el);
+        });
+        li.addEventListener('pointerleave', () => target()?.classList.remove('is-targeted'));
+        li.addEventListener('click', e => {
+          if ((e.target as Element).closest('button')) return;
+          const el = target();
+          if (el) scrollLinesTo(el, 'top');
+        });
         const text = document.createElement('span');
         text.className = 'proposal-text';
         const was = document.createElement('span');
@@ -600,6 +619,38 @@ const { slug } = Astro.props;
         down.addEventListener('click', () => cast(-1));
         meta.append(up, score, down, who);
         li.append(text, meta);
+
+        // An author can revise or withdraw their own edit while it is open.
+        if (me && p.author_id === me.id && p.status === 'open') {
+          const own = document.createElement('div');
+          own.className = 'proposal-own';
+
+          const edit = document.createElement('button');
+          edit.className = 'chip';
+          edit.textContent = 'Edit';
+          edit.addEventListener('click', async () => {
+            const next = window.prompt('Update your correction', p.proposed);
+            if (next === null || !next.trim() || next === p.proposed) return;
+            try { await updateProposal(p.id, next.trim()); void loadProposals(); }
+            catch { /* surfaced by the reload */ }
+          });
+
+          const remove = document.createElement('button');
+          remove.className = 'chip';
+          remove.textContent = 'Delete';
+          remove.addEventListener('click', async () => {
+            if (!window.confirm('Withdraw this correction?')) return;
+            try {
+              await deleteProposal(p.id);
+              target()?.classList.remove('has-proposal');
+              void loadProposals();
+            } catch { /* surfaced by the reload */ }
+          });
+
+          own.append(edit, remove);
+          li.appendChild(own);
+        }
+
         list.appendChild(li);
       }
     }

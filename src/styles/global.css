@@ -585,6 +585,22 @@
     text-align: center;
   }
 
+  .proposal {
+    cursor: pointer;
+  }
+
+  .proposal-own {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+  }
+
+  /* The passage an edit points at, while its card is hovered. */
+  .tx-para.is-targeted {
+    outline: 2px solid var(--sky-deep);
+    outline-offset: 2px;
+  }
+
   .proposal.is-accepted {
     opacity: 0.65;
   }
@@ -667,6 +683,32 @@
 
   .admin-table td:first-child {
     font-variant-numeric: normal;
+  }
+
+  /* Fixer rows are rebuilt in the browser on every edit. */
+  .fixer-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+    flex-wrap: wrap;
+  }
+
+  .fixer-label {
+    min-width: 2.8rem;
+    font-weight: 500;
+  }
+
+  .fixer-at {
+    font-variant-numeric: tabular-nums;
+    min-width: 8.5rem;
+    color: var(--ink-muted);
+  }
+
+  .fixer-len {
+    font-variant-numeric: tabular-nums;
+    color: rgba(23, 21, 15, 0.4);
+    min-width: 2.6rem;
   }
 
   .chart-wrap {

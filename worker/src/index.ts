@@ -326,7 +326,8 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     const slug = url.pathname.split('/')[2];
     const { results } = await env.DB.prepare(
       `SELECT p.id, p.kind, p.anchor, p.start_s, p.end_s, p.original, p.proposed,
-              p.note, p.score, p.status, p.created_at, u.display_name AS author
+              p.note, p.score, p.status, p.created_at, u.display_name AS author,
+              p.user_id AS author_id
          FROM proposals p JOIN users u ON u.id = p.user_id
         WHERE p.slug = ?1 ORDER BY p.score DESC, p.created_at ASC`
     ).bind(slug).all();
@@ -389,6 +390,41 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     const settled = await settleProposal(env, pid);
     await logEvent(env, 'proposal.voted', user.id, null, { pid, value });
     return json(settled);
+  },
+
+  /** An author may revise or withdraw their own proposal while it is open. */
+  'POST /proposals/:id/update': async (req, env, url, user) => {
+    if (!user) return json({ error: 'sign in required' }, { status: 401 });
+    const pid = url.pathname.split('/')[2];
+    const { proposed, note } = await req.json<{ proposed?: string; note?: string }>().catch(() => ({}));
+    const row = await env.DB.prepare(`SELECT user_id, status FROM proposals WHERE id = ?1`)
+      .bind(pid).first<{ user_id: string; status: string }>();
+    if (!row) return json({ error: 'no such proposal' }, { status: 404 });
+    if (row.user_id !== user.id) return json({ error: 'not your proposal' }, { status: 403 });
+    if (row.status !== 'open') return json({ error: 'already resolved' }, { status: 409 });
+    if (!proposed?.trim()) return json({ error: 'proposed text required' }, { status: 400 });
+
+    await env.DB.prepare(`UPDATE proposals SET proposed = ?1, note = ?2 WHERE id = ?3`)
+      .bind(proposed.trim().slice(0, 4000), note?.slice(0, 200) ?? null, pid).run();
+    await logEvent(env, 'proposal.updated', user.id, null, { pid });
+    return json({ ok: true });
+  },
+
+  'POST /proposals/:id/delete': async (_req, env, url, user) => {
+    if (!user) return json({ error: 'sign in required' }, { status: 401 });
+    const pid = url.pathname.split('/')[2];
+    const row = await env.DB.prepare(`SELECT user_id, status FROM proposals WHERE id = ?1`)
+      .bind(pid).first<{ user_id: string; status: string }>();
+    if (!row) return json({ error: 'no such proposal' }, { status: 404 });
+    if (row.user_id !== user.id) return json({ error: 'not your proposal' }, { status: 403 });
+    if (row.status !== 'open') return json({ error: 'already resolved' }, { status: 409 });
+
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM votes WHERE proposal_id = ?1`).bind(pid),
+      env.DB.prepare(`DELETE FROM proposals WHERE id = ?1`).bind(pid),
+    ]);
+    await logEvent(env, 'proposal.deleted', user.id, null, { pid });
+    return json({ ok: true });
   },
 
   'GET /me/favorites': async (_req, env, _url, user) => {

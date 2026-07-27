@@ -35,6 +35,7 @@ export interface Proposal {
   status: 'open' | 'accepted' | 'rejected' | 'superseded';
   created_at: number;
   author: string;
+  author_id?: string;
 }
 
 export interface Revision {
@@ -138,6 +139,16 @@ export function vote(proposalId: string, value: -1 | 0 | 1) {
     { method: 'POST', body: JSON.stringify({ value }) },
     true,
   );
+}
+
+export function updateProposal(proposalId: string, proposed: string, note?: string) {
+  return call<{ ok: true }>(`/proposals/${encodeURIComponent(proposalId)}/update`,
+    { method: 'POST', body: JSON.stringify({ proposed, note }) }, true);
+}
+
+export function deleteProposal(proposalId: string) {
+  return call<{ ok: true }>(`/proposals/${encodeURIComponent(proposalId)}/delete`,
+    { method: 'POST' }, true);
 }
 
 export function listFavorites() {

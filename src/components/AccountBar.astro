@@ -14,8 +14,7 @@ const { slug = '' } = Astro.props;
   <div class="account-row">
     <p class="label label-muted">Notes</p>
     <div class="account-actions">
-      <button class="chip" id="account-signout" hidden>Sign out</button>
-      {slug && <button class="chip" id="account-fav" hidden>Save</button>}
+      {slug && <button class="chip" id="account-fav" hidden>Save this round</button>}
     </div>
   </div>
 
@@ -26,19 +25,35 @@ const { slug = '' } = Astro.props;
   {slug && (
     <div class="account-personal" id="account-personal" hidden>
       <div class="account-block">
-        <p class="label label-muted">Your tags</p>
-        <div class="tag-list" id="my-tags"></div>
-        <form class="account-inline" id="tag-form">
-          <input class="field" id="tag-input" placeholder="Add a tag" maxlength="40" aria-label="Add a tag to this round" />
-          <button class="chip" type="submit">Add</button>
+        <p class="label label-muted">General notes</p>
+        <form class="account-stack" id="general-form">
+          <textarea class="field note-area" id="general-input" rows="3" maxlength="4000"
+                    placeholder="Notes about the round as a whole"
+                    aria-label="General notes about this round"></textarea>
+          <button class="chip" type="submit">Add note</button>
         </form>
       </div>
 
       <div class="account-block">
-        <p class="label label-muted">Your notes</p>
+        <p class="label label-muted">Note at <span id="note-at-time">0:00</span></p>
+        <form class="account-stack" id="note-form">
+          <textarea class="field note-area" id="note-input" rows="3" maxlength="4000"
+                    placeholder="What is happening right now"
+                    aria-label="Note at the current playback time"></textarea>
+          <button class="chip" type="submit">Add note</button>
+        </form>
+      </div>
+
+      <div class="account-block account-block--wide">
+        <p class="label label-muted">Your notes on this round</p>
         <ul class="note-list" id="my-notes"></ul>
-        <form class="account-inline" id="note-form">
-          <input class="field" id="note-input" placeholder="Note at the current time" maxlength="4000" aria-label="Note at the current playback time" />
+      </div>
+
+      <div class="account-block account-block--wide">
+        <p class="label label-muted">Your tags</p>
+        <div class="tag-list" id="my-tags"></div>
+        <form class="account-inline" id="tag-form">
+          <input class="field" id="tag-input" placeholder="Add a tag" maxlength="40" aria-label="Add a tag to this round" />
           <button class="chip" type="submit">Add</button>
         </form>
       </div>
@@ -125,6 +140,24 @@ const { slug = '' } = Astro.props;
     margin-top: 0.6rem;
   }
 
+  .account-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .note-area {
+    width: 100%;
+    resize: vertical;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    line-height: 1.5;
+  }
+
+  .account-block--wide {
+    grid-column: 1 / -1;
+  }
+
   .account-inline .field {
     flex: 1;
     min-width: 0;
@@ -155,7 +188,7 @@ const { slug = '' } = Astro.props;
 
 <script>
   import {
-    getUser, signIn, signOut, listFavorites, setFavorite,
+    getUser, listFavorites, setFavorite,
     listTags, setTag, listNotes, addNote, track, NotSignedIn,
   } from '../lib/api';
   import { formatTime } from '../lib/waveform';
@@ -164,7 +197,6 @@ const { slug = '' } = Astro.props;
   if (root) {
     const slug = root.dataset.slug ?? '';
     const state = document.getElementById('account-state')!;
-    const signoutBtn = document.getElementById('account-signout')!;
     const favBtn = document.getElementById('account-fav');
     const personal = document.getElementById('account-personal');
     const openSignIn = () => document.dispatchEvent(new CustomEvent('gt:open-signin'));
@@ -175,16 +207,16 @@ const { slug = '' } = Astro.props;
       const user = getUser();
       root!.dataset.guest = user ? '' : '1';
       if (user) {
-        state.textContent = `Signed in as ${user.display_name}, ${user.rep} rep.`;
-        signoutBtn.hidden = false;
+        // Identity and sign-out belong in the nav, not in a notes panel.
+        state.hidden = true;
         if (favBtn) favBtn.hidden = false;
         if (personal) personal.hidden = false;
         void refreshPersonal();
       } else {
+        state.hidden = false;
         state.innerHTML =
           'Reading as a guest, please <button class="link account-link" id="account-signin">sign up</button> to add your notes.';
         state.querySelector('#account-signin')?.addEventListener('click', openSignIn);
-        signoutBtn.hidden = true;
         if (favBtn) favBtn.hidden = true;
         if (personal) personal.hidden = true;
       }
@@ -219,8 +251,10 @@ const { slug = '' } = Astro.props;
           const li = document.createElement('li');
           const at = document.createElement('span');
           at.className = 'note-at';
-          at.textContent = formatTime(n.at_s);
+          at.textContent = n.at_s < 0 ? 'general' : formatTime(n.at_s);
+          if (n.at_s < 0) at.style.cursor = 'default';
           at.addEventListener('click', () => {
+            if (n.at_s < 0) return;
             const audio = document.getElementById('audio') as HTMLAudioElement | null;
             if (audio) { audio.currentTime = n.at_s; void audio.play(); }
           });
@@ -235,7 +269,6 @@ const { slug = '' } = Astro.props;
     }
 
     document.getElementById('account-signin')?.addEventListener('click', openSignIn);
-    signoutBtn.addEventListener('click', () => { signOut(); render(); });
 
     favBtn?.addEventListener('click', async () => {
       try {
@@ -258,12 +291,29 @@ const { slug = '' } = Astro.props;
 
     document.getElementById('note-form')?.addEventListener('submit', async e => {
       e.preventDefault();
-      const input = document.getElementById('note-input') as HTMLInputElement;
+      const input = document.getElementById('note-input') as HTMLTextAreaElement;
       if (!input.value.trim()) return;
       const audio = document.getElementById('audio') as HTMLAudioElement | null;
-      await addNote(slug, audio?.currentTime ?? 0, input.value.trim());
+      await addNote(slug, Math.round(audio?.currentTime ?? 0), input.value.trim());
       input.value = '';
       void refreshPersonal();
+    });
+
+    // A general note is stored at -1 so it sorts ahead of the timed ones.
+    document.getElementById('general-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const input = document.getElementById('general-input') as HTMLTextAreaElement;
+      if (!input.value.trim()) return;
+      await addNote(slug, -1, input.value.trim());
+      input.value = '';
+      void refreshPersonal();
+    });
+
+    // Keep the timed-note heading honest as playback moves.
+    const player = document.getElementById('audio') as HTMLAudioElement | null;
+    player?.addEventListener('timeupdate', () => {
+      const at = document.getElementById('note-at-time');
+      if (at) at.textContent = formatTime(player.currentTime);
     });
 
     document.addEventListener('gt:notes-changed', () => { void refreshPersonal(); });

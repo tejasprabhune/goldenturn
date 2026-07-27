@@ -88,8 +88,8 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
       <div class="fixer" id="fixer" hidden>
         <p class="label label-muted">
-          Drag a marker, or scrub to a moment and press Set. Corrections are
-          proposed and go live once the community agrees.
+          Drag the edges of a speech on the waveform, or scrub and use the
+          buttons. Corrections are proposed and go live once others agree.
         </p>
         <div class="fixer-rows" id="fixer-rows"></div>
         <div class="fixer-actions">
@@ -152,6 +152,11 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     height: 132px;
     cursor: crosshair;
     touch-action: none;
+  }
+
+  /* Edges are grab targets while fixing. */
+  .player[data-fixing='1'] .wave {
+    cursor: ew-resize;
   }
 
   .wave:focus-visible {
@@ -343,28 +348,24 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     display: none;
   }
 
+  /* Six speeches, two equal rows of three. */
   .fixer-rows {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: 0.5rem;
-    margin: 0.75rem 0;
+    grid-template-columns: 1fr;
+    gap: 0.6rem 1.5rem;
+    margin: 0.9rem 0;
   }
 
-  .fixer-row {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.8125rem;
+  @media (min-width: 760px) {
+    .fixer-rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
-  .fixer-label {
-    min-width: 2.6rem;
-    font-weight: 500;
-  }
-
-  .fixer-at {
-    font-variant-numeric: tabular-nums;
-    min-width: 3.4rem;
+  @media (min-width: 1100px) {
+    .fixer-rows {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
 
   .fixer-actions {
@@ -504,9 +505,16 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     let dragging = false;
     let selecting = false;
     let selectStart = 0;
+    let fixing = false;
+    let grabbed: { label: string; edge: 'start' | 'end' } | null = null;
 
     canvas.addEventListener('pointerdown', e => {
       canvas.setPointerCapture(e.pointerId);
+      if (fixing) {
+        const rect = canvas.getBoundingClientRect();
+        const hit = edgeAt(wave.xToTime(e.clientX - rect.left));
+        if (hit) { grabbed = hit; return; }
+      }
       if (e.shiftKey) {
         selecting = true;
         selectStart = seekFromEvent(e);
@@ -520,6 +528,15 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     canvas.addEventListener('pointermove', e => {
       const t = seekFromEvent(e);
+      if (grabbed) {
+        const d = draft[grabbed.label];
+        // Keep at least ten seconds of speech so an edge cannot cross itself.
+        if (grabbed.edge === 'start') d.start = Math.min(Math.round(t), d.end - 10);
+        else d.end = Math.max(Math.round(t), d.start + 10);
+        renderFixerRows();
+        previewDraft();
+        return;
+      }
       wave.hover = t;
       const rect = canvas.getBoundingClientRect();
       tip.hidden = false;
@@ -556,6 +573,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     canvas.addEventListener('pointerleave', releaseHold);
 
     canvas.addEventListener('pointerup', () => {
+      if (grabbed) { grabbed = null; return; }
       if (selecting && wave.selection && wave.selection.end - wave.selection.start > 1) {
         loopBar.hidden = false;
         loopRange.textContent = `${formatTime(wave.selection.start)} to ${formatTime(wave.selection.end)}`;
@@ -640,15 +658,25 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
       // An accepted timing correction wins over the machine fit.
       if (revRes.status === 'fulfilled') {
-        const moves = new Map<string, number>();
+        const moves = new Map<string, { start: number; end?: number }>();
         for (const r of revRes.value.revisions) {
-          if (r.kind === 'boundary') moves.set(r.anchor, Number(r.value));
+          if (r.kind !== 'boundary') continue;
+          try {
+            const v = JSON.parse(r.value);
+            moves.set(r.anchor, { start: Number(v.start), end: Number(v.end) });
+          } catch {
+            // Older revisions stored a bare start time.
+            moves.set(r.anchor, { start: Number(r.value) });
+          }
         }
         if (moves.size) {
           found = found
-            .map((s: any) => ({ ...s, start: moves.get(s.label) ?? s.start, confidence: moves.has(s.label) ? 1 : s.confidence }))
-            .sort((a: any, b: any) => a.start - b.start)
-            .map((s: any, i: number, arr: any[]) => ({ ...s, end: arr[i + 1] ? arr[i + 1].start : s.end }));
+            .map((s: any) => {
+              const m = moves.get(s.label);
+              if (!m) return s;
+              return { ...s, start: m.start, end: m.end ?? s.end, confidence: 1 };
+            })
+            .sort((a: any, b: any) => a.start - b.start);
         }
       }
 
@@ -678,71 +706,115 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     // Timing corrections. Boundaries are proposed, not written directly, so
     // they go through the same review as transcript edits.
     let fitted: Array<{ label: string; start: number; end: number; confidence: number }> = [];
-    let draft: Record<string, number> = {};
+    let draft: Record<string, { start: number; end: number }> = {};
 
     function openFixer() {
       if (!getUser()) { document.dispatchEvent(new CustomEvent('gt:open-signin')); return; }
-      draft = Object.fromEntries(fitted.map(s => [s.label, s.start]));
+      draft = {};
+      for (const s of fitted) draft[s.label] = { start: s.start, end: s.end };
+      renderFixerRows();
+      document.getElementById('fixer')!.hidden = false;
+      fixing = true;
+      root!.dataset.fixing = '1';
+      previewDraft();
+    }
+
+    function renderFixerRows() {
       const rows = document.getElementById('fixer-rows')!;
       rows.innerHTML = '';
       for (const s of fitted) {
+        const d = draft[s.label];
         const row = document.createElement('div');
         row.className = 'fixer-row';
+
         const label = document.createElement('span');
         label.className = 'fixer-label';
         label.textContent = s.label;
-        const at = document.createElement('span');
-        at.className = 'fixer-at';
-        at.textContent = formatTime(draft[s.label]);
-        const set = document.createElement('button');
-        set.className = 'chip';
-        set.textContent = 'Set';
-        set.title = `Move ${s.label} to the current position`;
-        set.addEventListener('click', () => {
-          draft[s.label] = Math.round(audio.currentTime);
-          at.textContent = formatTime(draft[s.label]);
+
+        const times = document.createElement('span');
+        times.className = 'fixer-at';
+        times.textContent = `${formatTime(d.start)} to ${formatTime(d.end)}`;
+
+        const len = document.createElement('span');
+        len.className = 'fixer-len';
+        len.textContent = `${((d.end - d.start) / 60).toFixed(1)}m`;
+
+        const setStart = document.createElement('button');
+        setStart.className = 'chip';
+        setStart.textContent = 'Start here';
+        setStart.addEventListener('click', () => {
+          draft[s.label].start = Math.round(audio.currentTime);
+          renderFixerRows();
           previewDraft();
         });
-        row.append(label, at, set);
+
+        const setEnd = document.createElement('button');
+        setEnd.className = 'chip';
+        setEnd.textContent = 'End here';
+        setEnd.addEventListener('click', () => {
+          draft[s.label].end = Math.round(audio.currentTime);
+          renderFixerRows();
+          previewDraft();
+        });
+
+        row.append(label, times, len, setStart, setEnd);
         rows.appendChild(row);
       }
-      document.getElementById('fixer')!.hidden = false;
     }
 
     function previewDraft() {
       const AFF = new Set(['PMC', 'MG', 'PMR']);
-      const ordered = fitted
-        .map(s => ({ ...s, start: draft[s.label] ?? s.start }))
-        .sort((a, b) => a.start - b.start);
-      wave.setSegments(ordered.map((s, i) => ({
+      wave.setSegments(fitted.map(s => ({
         label: s.label,
-        start: s.start,
-        end: ordered[i + 1] ? ordered[i + 1].start : s.end,
+        start: draft[s.label]?.start ?? s.start,
+        end: draft[s.label]?.end ?? s.end,
         confidence: s.confidence,
         side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
       })));
     }
 
+    /**
+     * While fixing, the waveform edges become drag handles. Seeking is
+     * suppressed for a grab so a drag never doubles as a scrub.
+     */
+    function edgeAt(t: number): { label: string; edge: 'start' | 'end' } | null {
+      const tolerance = (wave.xToTime(12) - wave.xToTime(0)) || 5;
+      for (const s of fitted) {
+        const d = draft[s.label];
+        if (!d) continue;
+        if (Math.abs(t - d.start) <= tolerance) return { label: s.label, edge: 'start' };
+        if (Math.abs(t - d.end) <= tolerance) return { label: s.label, edge: 'end' };
+      }
+      return null;
+    }
+
     document.getElementById('fix-speeches')?.addEventListener('click', openFixer);
     document.getElementById('fixer-cancel')?.addEventListener('click', () => {
       document.getElementById('fixer')!.hidden = true;
+      fixing = false;
+      root!.dataset.fixing = '';
       applyFitted(fitted);
     });
 
     document.getElementById('fixer-submit')?.addEventListener('click', async e => {
       const btn = e.currentTarget as HTMLButtonElement;
       const status = document.getElementById('fixer-status')!;
-      const changed = fitted.filter(s => Math.abs((draft[s.label] ?? s.start) - s.start) > 2);
+      const changed = fitted.filter(s => {
+        const d = draft[s.label];
+        return d && (Math.abs(d.start - s.start) > 2 || Math.abs(d.end - s.end) > 2);
+      });
       if (!changed.length) { status.textContent = 'No changes to propose'; return; }
       btn.disabled = true;
       try {
         for (const s of changed) {
+          const d = draft[s.label];
           await propose(slug, {
             kind: 'boundary',
             anchor: s.label,
-            original: String(Math.round(s.start)),
-            proposed: String(draft[s.label]),
-            startS: draft[s.label],
+            original: JSON.stringify({ start: Math.round(s.start), end: Math.round(s.end) }),
+            proposed: JSON.stringify({ start: d.start, end: d.end }),
+            startS: d.start,
+            endS: d.end,
           });
         }
         status.textContent = `Proposed ${changed.length} correction${changed.length === 1 ? '' : 's'}`;
