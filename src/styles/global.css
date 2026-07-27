@@ -167,10 +167,10 @@
 
   /* The small uppercase index labels that carry the grid. */
   .label {
-    @apply font-sans uppercase;
+    @apply font-sans;
     font-size: 0.6875rem;
     font-weight: 500;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.04em;
     line-height: 1.2;
   }
 
@@ -304,9 +304,9 @@
   }
 
   .chip {
-    @apply font-sans uppercase;
+    @apply font-sans;
     font-size: 0.6875rem;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.02em;
     border: 1px solid var(--rule);
     padding: 0.35rem 0.7rem;
     color: rgba(23, 21, 15, 0.6);
@@ -399,53 +399,49 @@
   }
 
 
-  /* Transcript rows and proposal cards are built in the browser, so their
-     styles cannot live in a scoped component block. */
-
-  .tx-seg {
-    display: grid;
-    grid-template-columns: 3.2rem 1fr;
-    gap: 0.75rem;
-    padding: 0.35rem 0.4rem;
-    margin-inline: -0.4rem;
-    border-radius: 0;
-    scroll-margin: 6rem;
+  /* Transcript paragraphs, dividers, minimap and proposal cards are built in
+     the browser, so their styles cannot live in a scoped component block. */
+  .tx-para {
+    font-size: 1rem;
+    line-height: 1.65;
+    margin: 0 0 0.5rem;
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+    border-left: 3px solid transparent;
   }
 
-  .tx-seg.is-current {
-    background: var(--sky-wash);
+  /* Aff speeches read gold, neg read sky. */
+  .tx-para[data-side='aff'] {
+    background: rgba(253, 216, 93, 0.10);
+  }
+
+  .tx-para[data-side='neg'] {
+    background: rgba(162, 214, 249, 0.14);
+  }
+
+  .tx-para:hover {
+    border-left-color: var(--rule);
+  }
+
+  .tx-para.is-current {
+    border-left-color: var(--ink);
+  }
+
+  /* A paragraph carrying a community edit is marked in the text itself, so the
+     side panel can stay closed without hiding that something changed. */
+  .tx-para.has-proposal,
+  .tx-para.is-revised {
+    box-shadow: inset 0 -1px 0 var(--sky-deep);
   }
 
   .tx-at {
     font-family: 'Neue Montreal', system-ui, sans-serif;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
     color: rgba(23, 21, 15, 0.4);
-    cursor: pointer;
-    text-align: right;
-    padding-top: 0.15rem;
+    margin-right: 0.5rem;
   }
 
-  .tx-at:hover {
-    color: var(--ink);
-  }
-
-  .tx-speaker {
-    font-family: 'Neue Montreal', system-ui, sans-serif;
-    font-size: 0.625rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: rgba(23, 21, 15, 0.45);
-    margin-right: 0.4rem;
-  }
-
-  .tx-text {
-    font-size: 0.9375rem;
-    line-height: 1.6;
-  }
-
-  /* Low-confidence words are softened rather than hidden: spreading produces a
-     lot of them and the reader should see where to distrust the machine. */
   .tx-word[data-low='1'] {
     color: rgba(23, 21, 15, 0.45);
   }
@@ -454,8 +450,43 @@
     background: var(--gold);
   }
 
-  .tx-seg.is-revised .tx-text {
-    box-shadow: inset 0 -1px 0 var(--sky-deep);
+  .tx-divider {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: rgba(23, 21, 15, 0.5);
+    border-top: 1px solid var(--rule);
+    padding: 0.9rem 0 0.4rem;
+    margin-top: 0.75rem;
+  }
+
+  .tx-divider:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  .tx-divider[data-side='aff'] {
+    border-top-color: var(--gold);
+  }
+
+  .tx-divider[data-side='neg'] {
+    border-top-color: var(--sky-deep);
+  }
+
+  .minimap-seg {
+    position: absolute;
+    left: 0;
+    right: 0;
+  }
+
+  .minimap-seg[data-side='aff'] {
+    background: var(--gold);
+  }
+
+  .minimap-seg[data-side='neg'] {
+    background: var(--sky);
   }
 
   .proposal-list {
@@ -503,11 +534,6 @@
     border-color: var(--ink);
   }
 
-  .vote[data-on='1'] {
-    background: var(--sky);
-    border-color: var(--ink);
-  }
-
   .proposal-score {
     font-variant-numeric: tabular-nums;
     min-width: 1.4rem;
@@ -516,6 +542,53 @@
 
   .proposal.is-accepted {
     opacity: 0.65;
+  }
+
+  /* Speech jump buttons are built in the browser once the fit loads. */
+
+  .speech-jump {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--ink);
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+    transition: background-color 60ms linear, border-color 60ms linear;
+  }
+
+  .speech-jump:hover {
+    background: var(--sky);
+    border-color: var(--ink);
+  }
+
+  /* A dashed border marks a boundary the fitter is unsure about, so it reads
+     as a suggestion rather than fact. */
+  .speech-jump[data-unsure='1'] {
+    border-style: dashed;
+    color: rgba(23, 21, 15, 0.55);
+  }
+
+  .speech-jump-at {
+    color: rgba(23, 21, 15, 0.45);
+    margin-left: 0.45rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tx-tip-btn {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.75rem;
+    background: var(--gold);
+    color: var(--ink);
+    border: none;
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .tx-tip-btn:hover {
+    background: var(--sky);
   }
 
   .crumbs {

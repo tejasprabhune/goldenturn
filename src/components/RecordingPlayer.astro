@@ -72,11 +72,18 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         <button class="chip" id="loop-clear">clear</button>
       </div>
 
-      <div class="speeches" id="speeches" hidden></div>
+      <div class="player-lower">
+        <div class="speeches" id="speeches" hidden></div>
 
-      <p class="player-hint label label-muted">
-        space play, arrows seek, 1-6 jump to a speech, shift-drag to loop
-      </p>
+        <dl class="keys">
+          <div class="key-row"><dt>Play or pause</dt><dd><kbd>Space</kbd></dd></div>
+          <div class="key-row"><dt>Seek 5s</dt><dd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
+          <div class="key-row"><dt>Seek 30s</dt><dd><kbd>Shift</kbd><span>+</span><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
+          <div class="key-row"><dt>Jump to speech</dt><dd><kbd>1</kbd><span>&ndash;</span><kbd>6</kbd></dd></div>
+          <div class="key-row"><dt>Loop a range</dt><dd><kbd>Shift</kbd><span>+</span><kbd>drag</kbd></dd></div>
+          <div class="key-row"><dt>Double speed</dt><dd><kbd>hold</kbd></dd></div>
+        </dl>
+      </div>
 
       <audio id="audio" preload="metadata" src={`${MEDIA}/audio/${slug}.m4a`}></audio>
     </>
@@ -167,8 +174,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.6875rem;
     font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.04em;
     background: var(--gold);
     border: 1px solid var(--ink);
     color: var(--ink);
@@ -233,50 +239,71 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     font-variant-numeric: tabular-nums;
   }
 
-  .player-hint {
-    margin: 0.9rem 0 0;
+  .player-lower {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding-top: 1rem;
+  }
+
+  @media (min-width: 860px) {
+    .player-lower {
+      grid-template-columns: 1fr 16rem;
+      gap: 2.5rem;
+    }
+  }
+
+  .keys {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .key-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .keys dt {
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+  }
+
+  .keys dd {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .keys kbd {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    border: 1px solid var(--rule);
+    padding: 0.1rem 0.35rem;
+    min-width: 1.3rem;
+    text-align: center;
+    color: var(--ink);
+    background: var(--paper-raised);
+  }
+
+  .keys dd span {
+    font-size: 0.6875rem;
+    color: rgba(23, 21, 15, 0.4);
   }
 
   .speeches {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-    padding-top: 0.9rem;
+    align-content: flex-start;
   }
 
   .speeches[hidden] {
     display: none;
-  }
-
-  .speech-jump {
-    font-family: 'Neue Montreal', system-ui, sans-serif;
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border: 1px solid var(--rule);
-    background: transparent;
-    color: var(--ink);
-    padding: 0.3rem 0.6rem;
-    cursor: pointer;
-    transition: background-color 60ms linear, border-color 60ms linear;
-  }
-
-  .speech-jump:hover {
-    background: var(--sky);
-    border-color: var(--ink);
-  }
-
-  /* A dashed border marks a boundary the fitter is unsure about, so it reads
-     as a suggestion rather than fact. */
-  .speech-jump[data-unsure='1'] {
-    border-style: dashed;
-    color: rgba(23, 21, 15, 0.55);
-  }
-
-  .speech-jump-at {
-    color: rgba(23, 21, 15, 0.45);
-    margin-left: 0.35rem;
-    font-variant-numeric: tabular-nums;
   }
 
   audio {
@@ -427,6 +454,27 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       wave.draw();
     });
 
+    // Press and hold scrubs at double speed; releasing restores the chosen rate.
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    let holding = false;
+    canvas.addEventListener('pointerdown', () => {
+      holdTimer = setTimeout(() => {
+        holding = true;
+        audio.playbackRate = 2;
+        if (audio.paused) void audio.play();
+      }, 350);
+    });
+    const releaseHold = () => {
+      clearTimeout(holdTimer);
+      if (holding) {
+        holding = false;
+        audio.playbackRate = Number(speed?.value ?? 1);
+      }
+    };
+    canvas.addEventListener('pointerup', releaseHold);
+    canvas.addEventListener('pointercancel', releaseHold);
+    canvas.addEventListener('pointerleave', releaseHold);
+
     canvas.addEventListener('pointerup', () => {
       if (selecting && wave.selection && wave.selection.end - wave.selection.start > 1) {
         loopBar.hidden = false;
@@ -488,7 +536,11 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
             b.dataset.unsure = '1';
             b.title = 'boundary is uncertain';
           }
-          b.innerHTML = `${s.label}<span class="speech-jump-at">${formatTime(s.start)}</span>`;
+          b.append(s.label);
+          const at = document.createElement('span');
+          at.className = 'speech-jump-at';
+          at.textContent = formatTime(s.start);
+          b.appendChild(at);
           b.addEventListener('click', () => { audio.currentTime = s.start; void audio.play(); });
           box.appendChild(b);
         });
