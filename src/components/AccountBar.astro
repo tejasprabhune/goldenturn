@@ -45,11 +45,6 @@ const { slug = '' } = Astro.props;
       </div>
 
       <div class="account-block account-block--wide">
-        <p class="label label-muted">Your notes on this round</p>
-        <ul class="note-list" id="my-notes"></ul>
-      </div>
-
-      <div class="account-block account-block--wide">
         <p class="label label-muted">Your tags</p>
         <div class="tag-list" id="my-tags"></div>
         <form class="account-inline" id="tag-form">
@@ -245,9 +240,9 @@ const { slug = '' } = Astro.props;
           tagBox.appendChild(el);
         }
 
-        const noteBox = document.getElementById('my-notes')!;
-        noteBox.innerHTML = '';
-        for (const n of notes) {
+        const noteBox = document.getElementById('my-notes');
+        if (noteBox) noteBox.innerHTML = '';
+        for (const n of noteBox ? notes : []) {
           const li = document.createElement('li');
           const at = document.createElement('span');
           at.className = 'note-at';

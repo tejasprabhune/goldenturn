@@ -346,6 +346,8 @@
     color: theme('colors.ink');
   }
 
+  /* A pressed toggle reads as on, matching the active filter chips. */
+  .chip[aria-pressed='true'],
   .chip[data-active='true'],
   .chip.is-active {
     background: theme('colors.sky');

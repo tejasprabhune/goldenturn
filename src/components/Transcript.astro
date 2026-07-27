@@ -229,6 +229,7 @@ const { slug } = Astro.props;
     let speeches: Speech[] = [];
     const revisions = new Map<string, string>();
     let follow = true;
+    let programmatic = false;
     let currentIndex = -1;
     let duration = 0;
 
@@ -390,18 +391,48 @@ const { slug } = Astro.props;
       });
     }
 
-    /** Scrolls the transcript box only, never the page. */
-    function scrollLinesTo(el: HTMLElement, mode: 'nearest' | 'top' = 'nearest') {
-      const top = el.offsetTop - linesEl.offsetTop;
-      if (mode === 'top') {
-        linesEl.scrollTop = top - 8;
-        return;
+    /**
+     * Scrolls the transcript to an element. Expanded, the lines box is not a
+     * scroll container any more, so the page has to move instead.
+     */
+    function scrollLinesTo(el: HTMLElement, mode: 'nearest' | 'top' | 'center' = 'nearest') {
+      const boxScrolls = linesEl.scrollHeight > linesEl.clientHeight + 4;
+      programmatic = true;
+
+      if (!boxScrolls) {
+        const rect = el.getBoundingClientRect();
+        const target = window.scrollY + rect.top
+          - (mode === 'top' ? 90 : window.innerHeight / 2 - rect.height / 2);
+        window.scrollTo({ top: Math.max(0, target), behavior: 'auto' });
+      } else {
+        const top = el.offsetTop - linesEl.offsetTop;
+        if (mode === 'top') {
+          linesEl.scrollTop = top - 8;
+        } else if (mode === 'center') {
+          linesEl.scrollTop = top - linesEl.clientHeight / 2 + el.offsetHeight / 2;
+        } else {
+          const viewTop = linesEl.scrollTop;
+          const viewBottom = viewTop + linesEl.clientHeight;
+          if (top < viewTop || top + el.offsetHeight > viewBottom) {
+            linesEl.scrollTop = top - linesEl.clientHeight / 3;
+          }
+        }
       }
-      const viewTop = linesEl.scrollTop;
-      const viewBottom = viewTop + linesEl.clientHeight;
-      if (top < viewTop || top + el.offsetHeight > viewBottom) {
-        linesEl.scrollTop = top - linesEl.clientHeight / 3;
-      }
+      // Released on the next frame so the scroll this caused is not read back
+      // as the reader taking over.
+      requestAnimationFrame(() => requestAnimationFrame(() => { programmatic = false; }));
+    }
+
+    function setFollow(on: boolean) {
+      follow = on;
+      const btn = document.getElementById('tx-follow');
+      btn?.setAttribute('aria-pressed', String(on));
+    }
+
+    /** Any scroll the page did not initiate means the reader has taken over. */
+    function onManualScroll() {
+      if (programmatic || !follow) return;
+      setFollow(false);
     }
 
     /** Scrolls the transcript to whatever paragraph covers this time. */
@@ -428,7 +459,7 @@ const { slug } = Astro.props;
         const el = linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(found))}`);
         if (el) {
           el.classList.add('is-current');
-          if (follow) scrollLinesTo(el);
+          if (follow) scrollLinesTo(el, 'center');
         }
       }
       if (duration) {
@@ -441,10 +472,17 @@ const { slug } = Astro.props;
     const a = audio();
     a?.addEventListener('timeupdate', () => syncTo(a.currentTime));
 
-    document.getElementById('tx-follow')?.addEventListener('click', e => {
-      follow = !follow;
-      (e.currentTarget as HTMLElement).setAttribute('aria-pressed', String(follow));
+    document.getElementById('tx-follow')?.addEventListener('click', () => {
+      setFollow(!follow);
+      if (follow && currentIndex >= 0) {
+        const el = linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(currentIndex))}`);
+        if (el) scrollLinesTo(el, 'center');
+      }
     });
+
+    linesEl.addEventListener('scroll', onManualScroll, { passive: true });
+    window.addEventListener('scroll', onManualScroll, { passive: true });
+    linesEl.addEventListener('wheel', () => setFollow(false), { passive: true });
 
     document.getElementById('tx-expand')?.addEventListener('click', e => {
       const btn = e.currentTarget as HTMLElement;
@@ -452,6 +490,12 @@ const { slug } = Astro.props;
       bodyEl.dataset.expanded = on ? '1' : '';
       btn.setAttribute('aria-pressed', String(on));
       btn.textContent = on ? 'Collapse' : 'Expand';
+      // The lines box stops being the scroll container when expanded, so any
+      // pending scroll position has to be re-resolved against the page.
+      if (currentIndex >= 0 && follow) {
+        const el = linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(currentIndex))}`);
+        if (el) requestAnimationFrame(() => scrollLinesTo(el, 'center'));
+      }
     });
 
     document.getElementById('tx-edits-toggle')?.addEventListener('click', e => {
@@ -497,6 +541,7 @@ const { slug } = Astro.props;
       tip.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
       tip.style.top = `${rect.top + window.scrollY - 6}px`;
       tip.hidden = false;
+      setFollow(false);
       pendingSel = {
         anchor: segId(Number((para as HTMLElement).dataset.index)),
         original: (para as HTMLElement).innerText.replace(/^\d+:\d+\s*/, '').trim(),
