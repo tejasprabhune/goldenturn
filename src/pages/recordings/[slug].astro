@@ -23,7 +23,6 @@ export async function getStaticPaths() {
       props: {
         entry, slug,
         hasMedia: media.playable.has(slug),
-        hasTranscript: media.transcribed.has(slug) || Boolean(import.meta.env.TX_TEST_SLUG && slug === import.meta.env.TX_TEST_SLUG),
       },
     };
   });
@@ -33,10 +32,9 @@ interface Props {
   entry: Recording;
   slug: string;
   hasMedia: boolean;
-  hasTranscript: boolean;
 }
 
-const { entry, slug, hasMedia, hasTranscript } = Astro.props;
+const { entry, slug, hasMedia } = Astro.props;
 
 const kind = mediaKind(entry.link);
 const ytId = kind === 'youtube' ? youtubeId(entry.link) : null;
@@ -97,7 +95,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
         <AccountBar slug={slug} />
       </section>
 
-      <Transcript slug={slug} hasTranscript={hasTranscript} />
+      <Transcript slug={slug} />
     </div>
 
     <aside class="rec-side">

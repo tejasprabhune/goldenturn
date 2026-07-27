@@ -8,12 +8,16 @@
  */
 interface Props {
   slug: string;
-  hasTranscript: boolean;
 }
-const { slug, hasTranscript } = Astro.props;
+/**
+ * Whether a transcript exists is probed at runtime rather than baked in at
+ * build time, so a round transcribed after the last deploy shows up without
+ * needing the site rebuilt.
+ */
+const { slug } = Astro.props;
 ---
 
-<section class="transcript" data-slug={slug} data-has={hasTranscript ? '1' : ''}>
+<section class="transcript" data-slug={slug}>
   <div class="transcript-head">
     <p class="label label-muted">transcript</p>
     <div class="transcript-tools">
@@ -24,23 +28,16 @@ const { slug, hasTranscript } = Astro.props;
     </div>
   </div>
 
-  {hasTranscript ? (
-    <div class="transcript-body">
-      <div class="transcript-lines" id="tx-lines" aria-busy="true">
-        <p class="page-lede" id="tx-loading">loading transcript</p>
-      </div>
-      <aside class="transcript-margin" id="tx-margin" aria-label="Proposed edits">
-        <p class="label label-muted">public edits</p>
-        <p class="transcript-empty label label-muted" id="tx-margin-empty">none yet</p>
-        <ul class="proposal-list" id="tx-proposals"></ul>
-      </aside>
-    </div>
-  ) : (
-    <p class="page-lede transcript-pending">
-      Not transcribed yet. This round is queued; the transcript and speech
-      markers appear here once it runs.
-    </p>
-  )}
+  <div class="transcript-body" id="tx-body" hidden>
+    <div class="transcript-lines" id="tx-lines" aria-busy="true"></div>
+    <aside class="transcript-margin" id="tx-margin" aria-label="Proposed edits">
+      <p class="label label-muted">public edits</p>
+      <p class="transcript-empty label label-muted" id="tx-margin-empty">none yet</p>
+      <ul class="proposal-list" id="tx-proposals"></ul>
+    </aside>
+  </div>
+
+  <p class="page-lede transcript-pending" id="tx-pending">checking for a transcript</p>
 </section>
 
 <div class="tx-tip" id="tx-tip" hidden>
@@ -180,7 +177,7 @@ const { slug, hasTranscript } = Astro.props;
   }
 
   const root = document.querySelector<HTMLElement>('.transcript');
-  if (root && root.dataset.has) {
+  if (root) {
     const slug = root.dataset.slug!;
     const linesEl = document.getElementById('tx-lines')!;
     const audio = () => document.getElementById('audio') as HTMLAudioElement | null;
@@ -194,14 +191,21 @@ const { slug, hasTranscript } = Astro.props;
 
     async function load() {
       const [txRes, revRes] = await Promise.allSettled([
-        fetch(`https://media.goldenturn.org/${window.__TX_PREFIX__ ?? "transcripts"}/${slug}.json`).then(r => r.json()),
+        fetch(`https://media.goldenturn.org/${(window as any).__TX_PREFIX__ ?? 'transcripts'}/${slug}.json`)
+          .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
         listRevisions(slug),
       ]);
 
-      if (txRes.status !== 'fulfilled') {
-        linesEl.innerHTML = '<p class="page-lede">transcript unavailable</p>';
+      const pending = document.getElementById('tx-pending')!;
+      const body = document.getElementById('tx-body')!;
+      if (txRes.status !== 'fulfilled' || !txRes.value?.segments) {
+        pending.textContent =
+          'Not transcribed yet. This round is queued; the transcript and speech '
+          + 'markers appear here once it runs.';
         return;
       }
+      pending.hidden = true;
+      body.hidden = false;
       segments = txRes.value.segments ?? [];
       if (revRes.status === 'fulfilled') {
         for (const r of revRes.value.revisions) {
@@ -249,7 +253,10 @@ const { slug, hasTranscript } = Astro.props;
             const span = document.createElement('span');
             span.className = 'tx-word';
             span.textContent = (w.w ?? '') + ' ';
-            if (typeof w.p === 'number' && w.p < 0.5) span.dataset.low = '1';
+            // WhisperX scores are forced-alignment fit, not ASR confidence, and
+            // sit low even on correct words (median ~0.40). 0.15 flags roughly
+            // the worst tenth instead of two thirds of the transcript.
+            if (typeof w.p === 'number' && w.p < 0.15) span.dataset.low = '1';
             text.appendChild(span);
           }
         } else {
