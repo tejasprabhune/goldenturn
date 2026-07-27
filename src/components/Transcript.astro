@@ -204,17 +204,15 @@ const { slug } = Astro.props;
     listProposals, listRevisions, propose, vote, getUser, NotSignedIn,
     addNote, track, updateProposal, deleteProposal, type Proposal,
   } from '../lib/api';
+  import { AFF, usable, applyBoundaries, type Speech } from '../lib/speeches';
 
   interface Word { w: string; s: number | null; e: number | null; p: number | null }
   interface Segment {
     start: number; end: number; text: string;
     speaker: string | null; words: Word[];
   }
-  interface Speech { label: string; start: number; end: number; confidence: number }
 
   const MEDIA = 'https://media.goldenturn.org';
-  // Aff speeches read gold, neg read sky, so side is legible at a glance.
-  const AFF = new Set(['PMC', 'MG', 'PMR']);
 
   const root = document.querySelector<HTMLElement>('.transcript');
   if (root) {
@@ -256,17 +254,42 @@ const { slug } = Astro.props;
       segments = txRes.value.segments ?? [];
       duration = txRes.value.duration ?? segments[segments.length - 1]?.end ?? 0;
       if (spRes.status === 'fulfilled' && spRes.value) {
-        speeches = (spRes.value.speeches ?? [])
-          .filter((s: Speech) => s.confidence > 0 && s.end > s.start);
+        speeches = usable(spRes.value.speeches ?? []);
       }
       if (revRes.status === 'fulfilled') {
         for (const r of revRes.value.revisions) {
           if (r.kind === 'transcript') revisions.set(r.anchor, r.value);
         }
+        // Accepted timing corrections move the dividers, the tinting and the
+        // minimap, not just the waveform.
+        speeches = applyBoundaries(speeches, revRes.value.revisions);
       }
       render();
       buildMinimap();
       void loadProposals();
+    }
+
+    /**
+     * The player owns the fit once it has loaded; this keeps the two in step
+     * whichever finishes first, and re-syncs if the player revises its list.
+     */
+    document.addEventListener('gt:speeches', e => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || detail.slug !== slug) return;
+      const next: Speech[] = detail.speeches ?? [];
+      if (sameSpeeches(next, speeches)) return;
+      speeches = next;
+      if (segments.length === 0) return;
+      render();
+      buildMinimap();
+    });
+
+    function sameSpeeches(a: Speech[], b: Speech[]): boolean {
+      if (a.length !== b.length) return false;
+      return a.every((s, i) =>
+        s.label === b[i].label
+        && Math.round(s.start) === Math.round(b[i].start)
+        && Math.round(s.end) === Math.round(b[i].end));
     }
 
     /**

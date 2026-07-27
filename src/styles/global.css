@@ -713,6 +713,24 @@
     min-width: 2.6rem;
   }
 
+  /* The column min-widths line the rows up next to each other. On one narrow
+     column they only open gaps and push "End here" onto its own line. */
+  @media (max-width: 560px) {
+    .fixer-row {
+      gap: 0.35rem 0.4rem;
+    }
+
+    .fixer-label,
+    .fixer-at {
+      min-width: 0;
+    }
+
+    .fixer-len {
+      min-width: 0;
+      margin-right: auto;
+    }
+  }
+
   /* Note rows are built in the browser as notes are added. */
 
   .note-list li {

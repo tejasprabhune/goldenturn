@@ -257,8 +257,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <h2 class="rec-card__title"><a class="rec-card__link" href="${href}">${title}</a><a class="rec-card__open" href="${href}" tabindex="-1" aria-hidden="true">&#8599;</a></h2>
             <p class="rec-card__resolution">${resolution}</p>
             <div class="rec-card__strategies">
-              <p class="rec-card__strategy"><span class="rec-card__label">Aff</span> ${aff}</p>
-              <p class="rec-card__strategy"><span class="rec-card__label">Neg</span> ${neg}</p>
+              <p class="rec-card__strategy"><span class="rec-card__label">Aff</span><span class="rec-card__strategy-text">${aff}</span></p>
+              <p class="rec-card__strategy"><span class="rec-card__label">Neg</span><span class="rec-card__strategy-text">${neg}</span></p>
             </div>
             <div class="rec-card__tags">${tagPills}</div>
           </div>
@@ -694,20 +694,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     margin-bottom: 0.625rem;
   }
 
+  /* The label is its own column so a strategy that wraps hangs under its first
+     word rather than under the label. */
   .rec-card__strategy {
     font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.8125rem;
     color: var(--ink);
     margin: 0;
     line-height: 1.4;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
   }
 
   .rec-card__label {
+    flex: none;
+    width: 1.7rem;
     font-size: 0.6875rem;
     font-weight: 500;
     letter-spacing: 0.04em;
     color: rgba(23, 21, 15, 0.4);
-    margin-right: 0.5rem;
+  }
+
+  .rec-card__strategy-text {
+    min-width: 0;
   }
 
   .rec-card__tags {

@@ -10,7 +10,7 @@ const INDEX_NAME = 'goldenturn_content';
 
 const client = algoliasearch(APP_ID, ADMIN_KEY);
 
-type RecordType = 'curriculum' | 'k' | 'file' | 'playbook';
+type RecordType = 'curriculum' | 'lecture';
 
 interface ContentRecord {
   objectID: string;
@@ -20,8 +20,14 @@ interface ContentRecord {
   description?: string;
   section?: string;
   tags?: string[];
-  playbook?: string;
 }
+
+/**
+ * Only the sections that are live on the site are indexed. The k, files and
+ * playbooks collections still exist on disk but have no routes, so anything
+ * indexed from them would be a search result that 404s.
+ */
+const LIVE_GLOBS = ['src/content/curriculum/**/*.{md,mdx,typ}', 'src/content/lectures/**/*.{md,mdx}'];
 
 function stripMarkdown(raw: string): string {
   return raw
@@ -31,72 +37,77 @@ function stripMarkdown(raw: string): string {
     .slice(0, 200);
 }
 
-function urlFromPath(filePath: string): string {
-  return '/' + filePath
-    .replace(/^src\/content\//, '')
-    .replace(/\/index\.mdx?$/, '')
-    .replace(/\.mdx?$/, '');
+/** Typst frontmatter is a `#metadata((...))<frontmatter>` block, not YAML. */
+function parseTypst(raw: string): { data: Record<string, unknown>; body: string } {
+  const block = raw.match(/#metadata\(\(([\s\S]*?)\)\)\s*<frontmatter>/);
+  const data: Record<string, unknown> = {};
+  if (block) {
+    const str = /(\w+)\s*:\s*"([^"]*)"/g;
+    for (const m of block[1].matchAll(str)) data[m[1]] = m[2];
+    const bool = /(\w+)\s*:\s*(true|false)\b/g;
+    for (const m of block[1].matchAll(bool)) data[m[1]] = m[2] === 'true';
+  }
+
+  const body = raw
+    .slice(block ? block.index! + block[0].length : 0)
+    .replace(/```[\s\S]*?```/g, '')
+    .split('\n')
+    .filter(line => {
+      const t = line.trim();
+      return t && !t.startsWith('#') && !t.startsWith('=') && !t.startsWith(')');
+    })
+    .join(' ')
+    .replace(/[*_`@\[\]]/g, '')
+    .replace(/---/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return { data, body };
 }
 
-function objectIDFromPath(filePath: string): string {
+function cleanPath(filePath: string): string {
   return filePath
     .replace(/^src\/content\//, '')
-    .replace(/\/index\.mdx?$/, '')
-    .replace(/\.mdx?$/, '')
-    .replace(/\//g, '-');
+    .replace(/\/index\.(mdx?|typ)$/, '')
+    .replace(/\.(mdx?|typ)$/, '');
 }
 
 async function buildRecords(): Promise<ContentRecord[]> {
-  const files = await fg('src/content/**/*.{md,mdx}', { cwd: process.cwd() });
+  const files = await fg(LIVE_GLOBS, { cwd: process.cwd() });
   const records: ContentRecord[] = [];
 
   for (const filePath of files) {
-    const raw = readFileSync(filePath, 'utf-8');
-    const { data, content } = matter(raw);
-    const description = stripMarkdown(content);
-    const url = urlFromPath(filePath);
-    const objectID = objectIDFromPath(filePath);
+    // Typst partials such as _setup.typ carry no frontmatter and no route.
+    if (/(^|\/)_/.test(filePath.replace(/^src\/content\//, ''))) continue;
 
-    if (filePath.startsWith('src/content/curriculum/')) {
-      if (data.draft === true) continue;
-      records.push({
-        objectID,
-        type: 'curriculum',
-        title: data.title,
-        url,
-        description,
-        section: data.section,
-        tags: [],
-      });
-    } else if (filePath.startsWith('src/content/k/')) {
-      records.push({
-        objectID,
-        type: 'k',
-        title: data.name,
-        url,
-        description,
-        tags: data.tags ?? [],
-      });
-    } else if (filePath.startsWith('src/content/files/')) {
-      records.push({
-        objectID,
-        type: 'file',
-        title: data.title,
-        url,
-        description,
-        tags: data.tags ?? [],
-        playbook: data.playbook,
-      });
-    } else if (filePath.startsWith('src/content/playbooks/')) {
-      if (!data.title) continue;
-      records.push({
-        objectID,
-        type: 'playbook',
-        title: data.title,
-        url,
-        description,
-      });
+    const raw = readFileSync(filePath, 'utf-8');
+    const isTypst = filePath.endsWith('.typ');
+    const { data, description } = isTypst
+      ? (() => {
+          const parsed = parseTypst(raw);
+          return { data: parsed.data, description: parsed.body.slice(0, 200) };
+        })()
+      : (() => {
+          const parsed = matter(raw);
+          return { data: parsed.data as Record<string, unknown>, description: stripMarkdown(parsed.content) };
+        })();
+
+    if (data.draft === true) continue;
+    if (!data.title) {
+      console.warn(`Skipping ${filePath}: no title in frontmatter`);
+      continue;
     }
+
+    const stem = cleanPath(filePath);
+    records.push({
+      objectID: stem.replace(/\//g, '-'),
+      type: filePath.startsWith('src/content/lectures/') ? 'lecture' : 'curriculum',
+      title: String(data.title),
+      url: '/' + stem,
+      description,
+      section: data.section ? String(data.section) : undefined,
+      tags: [],
+    });
   }
 
   return records;
@@ -104,9 +115,14 @@ async function buildRecords(): Promise<ContentRecord[]> {
 
 async function main() {
   const records = await buildRecords();
-  console.log(`Indexing ${records.length} records to ${INDEX_NAME}...`);
+  if (records.length === 0) throw new Error('Refusing to empty the index: no records were built');
 
-  await client.saveObjects({ indexName: INDEX_NAME, objects: records });
+  console.log(`Indexing ${records.length} records to ${INDEX_NAME}...`);
+  for (const r of records) console.log(`  ${r.type}  ${r.url}`);
+
+  // replaceAllObjects, not saveObjects: pages that were removed from the site
+  // have to disappear from search rather than linger as 404 results.
+  await client.replaceAllObjects({ indexName: INDEX_NAME, objects: records });
 
   await client.setSettings({
     indexName: INDEX_NAME,

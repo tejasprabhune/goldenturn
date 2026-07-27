@@ -58,9 +58,9 @@ function isActive(href: string) {
               {label}
             </a>
           ))}
-          <a href="/admin" class="masthead-link masthead-auth" id="nav-admin" hidden>admin</a>
-          <a href="/me" class="masthead-link masthead-auth" id="nav-account" hidden></a>
-          <button class="masthead-link masthead-auth-btn" id="nav-signin">sign in</button>
+          <a href="/admin" class="masthead-link masthead-auth js-nav-admin" hidden>admin</a>
+          <a href="/me" class="masthead-link masthead-auth js-nav-account" hidden></a>
+          <button class="masthead-link masthead-auth-btn js-nav-signin" type="button">sign in</button>
         </nav>
 
         <button
@@ -71,7 +71,7 @@ function isActive(href: string) {
           aria-controls="mobile-menu"
           class="masthead-toggle"
         >
-          <span class="label">menu</span>
+          <span class="masthead-burger" aria-hidden="true"></span>
         </button>
       </div>
 
@@ -86,6 +86,9 @@ function isActive(href: string) {
               {label}
             </a>
           ))}
+          <a href="/admin" class="masthead-link masthead-auth js-nav-admin" hidden>admin</a>
+          <a href="/me" class="masthead-link masthead-auth js-nav-account" hidden></a>
+          <button class="masthead-link masthead-auth-btn js-nav-signin" type="button">sign in</button>
         </nav>
       </div>
     </header>
@@ -153,9 +156,12 @@ function isActive(href: string) {
           <button type="button" class="link account-link" id="signin-switch">Create an account</button>
         </p>
 
+        <!-- Cancel is deliberately not a submit button: as the first one in the
+             form it would become the default, and Enter in a field would cancel
+             the dialog instead of signing in. -->
         <div class="signin-actions">
-          <button class="chip" value="cancel" formnovalidate>Cancel</button>
-          <button class="btn" id="signin-submit" value="ok">Sign in</button>
+          <button type="button" class="chip" id="signin-cancel">Cancel</button>
+          <button type="submit" class="btn" id="signin-submit" value="ok">Sign in</button>
         </div>
       </form>
     </dialog>
@@ -233,12 +239,6 @@ function isActive(href: string) {
     padding-bottom: 0;
   }
 
-  .masthead--home .masthead-toggle {
-    grid-row: 1;
-    grid-column: 2;
-    justify-self: end;
-  }
-
   .masthead-mark {
     text-decoration: none;
     min-width: 0;
@@ -250,6 +250,40 @@ function isActive(href: string) {
 
   .masthead--home .masthead-mark .wordmark {
     font-size: clamp(2.5rem, 13.5vw, 11rem);
+  }
+
+  /* Below the nav breakpoint the wordmark and the hamburger share one line and
+     the wordmark is sized to fill what is left of the shell. "the golden turn"
+     runs 5.25 times its font-size wide, so the fit is a division rather than a
+     guessed vw coefficient. The glyphs overhang the line box by about 0.11em,
+     so the vertical padding is in em too and scales with the fitted size. */
+  @media (max-width: 899px) {
+    .masthead-inner,
+    .masthead--home .masthead-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
+    .masthead-mark {
+      --mark-size: min(3.1rem, calc((100vw - 2 * var(--gutter) - 3rem) / 5.25));
+      font-size: var(--mark-size);
+      padding-block: 0.2em;
+      margin-top: 0;
+    }
+
+    .masthead--home .masthead-mark {
+      --mark-size: min(11rem, calc((100vw - 2 * var(--gutter) - 3rem) / 5.25));
+      margin-top: 0;
+    }
+
+    .masthead-mark .wordmark,
+    .masthead--home .masthead-mark .wordmark {
+      font-size: 1em;
+    }
   }
 
   .masthead-nav {
@@ -264,7 +298,8 @@ function isActive(href: string) {
       display: flex;
     }
 
-    .masthead-toggle {
+    .masthead-toggle,
+    .masthead-drawer {
       display: none;
     }
   }
@@ -288,11 +323,14 @@ function isActive(href: string) {
     box-shadow: inset 0 -0.55em 0 var(--gold);
   }
 
+  /* Chrome only. `font: inherit` here would out-rank .masthead-link's weight
+     and leave "sign in" lighter than the links beside it. */
   .masthead-auth-btn {
     background: none;
     border: none;
+    padding: 0;
+    text-align: left;
     cursor: pointer;
-    font: inherit;
   }
 
   .masthead-auth[hidden],
@@ -303,13 +341,50 @@ function isActive(href: string) {
   .masthead-toggle {
     background: none;
     border: none;
-    padding: 0.5rem 0;
+    padding: 0.6rem 0 0.6rem 0.5rem;
+    flex: none;
     color: rgba(23, 21, 15, 0.62);
     cursor: pointer;
   }
 
   .masthead-toggle:hover {
     color: var(--ink);
+  }
+
+  .masthead-burger,
+  .masthead-burger::before,
+  .masthead-burger::after {
+    display: block;
+    width: 1.5rem;
+    height: 1.5px;
+    background: currentColor;
+    transition: transform 60ms linear, background-color 60ms linear;
+  }
+
+  .masthead-burger::before,
+  .masthead-burger::after {
+    content: '';
+    position: relative;
+  }
+
+  .masthead-burger::before {
+    top: -0.4rem;
+  }
+
+  .masthead-burger::after {
+    top: 0.4rem;
+  }
+
+  .masthead-toggle[aria-expanded='true'] .masthead-burger {
+    background: transparent;
+  }
+
+  .masthead-toggle[aria-expanded='true'] .masthead-burger::before {
+    transform: translateY(0.4rem) rotate(45deg);
+  }
+
+  .masthead-toggle[aria-expanded='true'] .masthead-burger::after {
+    transform: translateY(-0.4rem) rotate(-45deg);
   }
 
   .masthead-drawer {
@@ -445,19 +520,21 @@ function isActive(href: string) {
   import { getUser, signIn, signUp, isAdmin, track } from '../lib/api';
 
   // Auth state is rendered on the client so pages stay static and cacheable.
-  const navAccount = document.getElementById('nav-account') as HTMLAnchorElement | null;
-  const navSignin = document.getElementById('nav-signin');
+  // The bar and the mobile drawer each carry a copy of these controls.
+  const navAccounts = Array.from(document.querySelectorAll<HTMLAnchorElement>('.js-nav-account'));
+  const navSignins = Array.from(document.querySelectorAll<HTMLElement>('.js-nav-signin'));
+  const navAdmins = Array.from(document.querySelectorAll<HTMLElement>('.js-nav-admin'));
   const signinDialog = document.getElementById('signin-dialog') as HTMLDialogElement | null;
 
   function renderAuth() {
     const user = getUser();
-    if (navAccount) {
-      navAccount.hidden = !user;
-      navAccount.textContent = user ? user.display_name : '';
-    }
-    if (navSignin) navSignin.hidden = Boolean(user);
-    const navAdmin = document.getElementById('nav-admin');
-    if (navAdmin) navAdmin.hidden = !(user && isAdmin());
+    const admin = Boolean(user && isAdmin());
+    navAccounts.forEach(el => {
+      el.hidden = !user;
+      el.textContent = user ? user.display_name : '';
+    });
+    navSignins.forEach(el => { el.hidden = Boolean(user); });
+    navAdmins.forEach(el => { el.hidden = !admin; });
   }
 
   let signupMode = false;
@@ -485,12 +562,19 @@ function isActive(href: string) {
     signinDialog?.showModal();
   }
 
-  navSignin?.addEventListener('click', () => openSignIn(false));
+  navSignins.forEach(el => el.addEventListener('click', () => {
+    closeDrawer();
+    openSignIn(false);
+  }));
   document.addEventListener('gt:open-signin', e => openSignIn(Boolean((e as CustomEvent).detail?.signup)));
 
+  document.getElementById('signin-cancel')?.addEventListener('click', () => signinDialog?.close());
+
   document.getElementById('signin-form')?.addEventListener('submit', async e => {
+    // Enter in a field submits with no submitter in some engines; the only
+    // submit button left is the real one, so treat that as a sign in.
     const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
-    if (submitter?.value !== 'ok') return;
+    if (submitter && submitter.value !== 'ok') return;
     e.preventDefault();
     const email = (document.getElementById('signin-email') as HTMLInputElement).value.trim();
     const password = (document.getElementById('signin-password') as HTMLInputElement).value;
@@ -513,13 +597,21 @@ function isActive(href: string) {
 
   const mobileToggle = document.getElementById('mobile-menu-toggle');
   const mobileMenu = document.getElementById('mobile-menu');
-  if (mobileToggle && mobileMenu) {
-    mobileToggle.addEventListener('click', () => {
-      const open = mobileMenu.hasAttribute('hidden');
-      mobileMenu.toggleAttribute('hidden', !open);
-      mobileToggle.setAttribute('aria-expanded', String(open));
-    });
+
+  function setDrawer(open: boolean) {
+    if (!mobileToggle || !mobileMenu) return;
+    mobileMenu.toggleAttribute('hidden', !open);
+    mobileToggle.setAttribute('aria-expanded', String(open));
+    mobileToggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
   }
+
+  function closeDrawer() {
+    setDrawer(false);
+  }
+
+  mobileToggle?.addEventListener('click', () => {
+    setDrawer(mobileMenu?.hasAttribute('hidden') ?? false);
+  });
 
   const overlay = document.getElementById('search-overlay') as HTMLDivElement | null;
   const overlayInput = document.getElementById('overlay-input') as HTMLInputElement | null;

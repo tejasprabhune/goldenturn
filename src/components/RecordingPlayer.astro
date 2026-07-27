@@ -146,6 +146,15 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     background: var(--paper-raised);
   }
 
+  /* A long press on touch is the 2x gesture, so the browser must not read it as
+     a text selection or callout. */
+  .wave-wrap,
+  .wave {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
   .wave {
     display: block;
     width: 100%;
@@ -399,6 +408,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 <script>
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
   import { track, propose, listRevisions, getUser, NotSignedIn } from '../lib/api';
+  import { sideOf, usable, applyBoundaries, type Speech } from '../lib/speeches';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
   const MEDIA = 'https://media.goldenturn.org';
@@ -510,6 +520,9 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     canvas.addEventListener('pointerdown', e => {
       canvas.setPointerCapture(e.pointerId);
+      // pointerdown is default-prevented for the hold gesture, so focus the
+      // seek control by hand.
+      canvas.focus({ preventScroll: true });
       if (fixing) {
         const rect = canvas.getBoundingClientRect();
         const hit = edgeAt(wave.xToTime(e.clientX - rect.left));
@@ -545,24 +558,43 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
       if (selecting) {
         wave.selection = { start: Math.min(selectStart, t), end: Math.max(selectStart, t) };
-      } else if (dragging) {
+      } else if (dragging && !holding) {
         audio.currentTime = t;
       }
       wave.draw();
     });
 
-    // Press and hold scrubs at double speed; releasing restores the chosen rate.
+    // Press and hold plays at double speed; releasing restores the chosen rate.
+    // On touch the press must not double as a scrub, so a finger that drifts
+    // more than a few pixels cancels the hold and goes back to seeking.
     let holdTimer: ReturnType<typeof setTimeout> | undefined;
     let holding = false;
-    canvas.addEventListener('pointerdown', () => {
+    let holdOrigin: { x: number; y: number } | null = null;
+    const HOLD_SLOP = 10;
+
+    canvas.addEventListener('pointerdown', e => {
+      // Suppress the native long-press selection and magnifier.
+      e.preventDefault();
+      holdOrigin = { x: e.clientX, y: e.clientY };
       holdTimer = setTimeout(() => {
         holding = true;
         audio.playbackRate = 2;
-        if (audio.paused) void audio.play();
+        if (audio.paused) void audio.play().catch(() => {});
       }, 350);
     });
+
+    canvas.addEventListener('pointermove', e => {
+      if (holding || !holdOrigin) return;
+      if (Math.abs(e.clientX - holdOrigin.x) > HOLD_SLOP ||
+          Math.abs(e.clientY - holdOrigin.y) > HOLD_SLOP) {
+        clearTimeout(holdTimer);
+        holdOrigin = null;
+      }
+    });
+
     const releaseHold = () => {
       clearTimeout(holdTimer);
+      holdOrigin = null;
       if (holding) {
         holding = false;
         audio.playbackRate = Number(speed?.value ?? 1);
@@ -571,6 +603,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     canvas.addEventListener('pointerup', releaseHold);
     canvas.addEventListener('pointercancel', releaseHold);
     canvas.addEventListener('pointerleave', releaseHold);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
 
     canvas.addEventListener('pointerup', () => {
       if (grabbed) { grabbed = null; return; }
@@ -615,12 +648,17 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // Speech regions shade the waveform and give keyboard jumps 1-6.
     let speechStarts: number[] = [];
-    function applyFitted(found: typeof fitted) {
-      const AFF = new Set(['PMC', 'MG', 'PMR']);
+    function applyFitted(found: Speech[]) {
       wave.setSegments(found.map(s => ({
         label: s.label, start: s.start, end: s.end, confidence: s.confidence,
-        side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
+        side: sideOf(s.label),
       })));
+
+      // The transcript tints its paragraphs and draws its minimap from the same
+      // fit, so it has to hear about corrections the player has applied.
+      document.dispatchEvent(new CustomEvent('gt:speeches', {
+        detail: { slug, speeches: found },
+      }));
 
       const box = document.getElementById('speeches')!;
       box.innerHTML = '';
@@ -653,31 +691,11 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     ]).then(([fitRes, revRes]) => {
       const fit = fitRes.status === 'fulfilled' ? fitRes.value : null;
       if (!fit) return;
-      let found = (fit.speeches ?? []).filter((s: any) => s.confidence > 0 && s.end > s.start);
+      let found = usable(fit.speeches ?? []);
       if (!found.length) return;
 
-      // An accepted timing correction wins over the machine fit.
       if (revRes.status === 'fulfilled') {
-        const moves = new Map<string, { start: number; end?: number }>();
-        for (const r of revRes.value.revisions) {
-          if (r.kind !== 'boundary') continue;
-          try {
-            const v = JSON.parse(r.value);
-            moves.set(r.anchor, { start: Number(v.start), end: Number(v.end) });
-          } catch {
-            // Older revisions stored a bare start time.
-            moves.set(r.anchor, { start: Number(r.value) });
-          }
-        }
-        if (moves.size) {
-          found = found
-            .map((s: any) => {
-              const m = moves.get(s.label);
-              if (!m) return s;
-              return { ...s, start: m.start, end: m.end ?? s.end, confidence: 1 };
-            })
-            .sort((a: any, b: any) => a.start - b.start);
-        }
+        found = applyBoundaries(found, revRes.value.revisions);
       }
 
       fitted = found;
@@ -705,7 +723,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // Timing corrections. Boundaries are proposed, not written directly, so
     // they go through the same review as transcript edits.
-    let fitted: Array<{ label: string; start: number; end: number; confidence: number }> = [];
+    let fitted: Speech[] = [];
     let draft: Record<string, { start: number; end: number }> = {};
 
     function openFixer() {
@@ -762,14 +780,16 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       }
     }
 
+    // Dragging repaints the waveform only. The transcript follows accepted
+    // timings, not an in-progress draft, so it is left alone until cancel or
+    // the next load.
     function previewDraft() {
-      const AFF = new Set(['PMC', 'MG', 'PMR']);
       wave.setSegments(fitted.map(s => ({
         label: s.label,
         start: draft[s.label]?.start ?? s.start,
         end: draft[s.label]?.end ?? s.end,
         confidence: s.confidence,
-        side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
+        side: sideOf(s.label),
       })));
     }
 
