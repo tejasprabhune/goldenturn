@@ -22,6 +22,13 @@ export interface Segment {
   side?: 'aff' | 'neg';
 }
 
+/** A proposed move for one speech, drawn over the current timings. */
+export interface Preview {
+  label: string;
+  from: { start: number; end: number };
+  to: { start: number; end: number };
+}
+
 interface Theme {
   fill: string;
   fillMuted: string;
@@ -30,6 +37,9 @@ interface Theme {
   segmentNeg: string;
   segmentRule: string;
   text: string;
+  previewFill: string;
+  previewLine: string;
+  previewFrom: string;
 }
 
 const THEME: Theme = {
@@ -40,6 +50,9 @@ const THEME: Theme = {
   segmentNeg: 'rgba(162, 214, 249, 0.34)',
   segmentRule: 'rgba(23, 21, 15, 0.25)',
   text: 'rgba(23, 21, 15, 0.75)',
+  previewFill: 'rgba(23, 21, 15, 0.07)',
+  previewLine: '#17150f',
+  previewFrom: 'rgba(23, 21, 15, 0.4)',
 };
 
 /**
@@ -92,6 +105,7 @@ export class Waveform {
   position = 0;
   hover: number | null = null;
   selection: { start: number; end: number } | null = null;
+  preview: Preview | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -109,6 +123,11 @@ export class Waveform {
 
   setSegments(segments: Segment[]) {
     this.segments = segments;
+    this.draw();
+  }
+
+  setPreview(preview: Preview | null) {
+    this.preview = preview;
     this.draw();
   }
 
@@ -178,6 +197,81 @@ export class Waveform {
     ctx.fill();
   }
 
+  /**
+   * A proposed move, drawn as where the speech is now against where it would
+   * go. The current span keeps a thin outline, the proposed one is filled and
+   * bracketed, and an arrow runs between each pair of edges that moved, so the
+   * direction and size of the change read at a glance.
+   */
+  private drawPreview(h: number) {
+    const p = this.preview;
+    if (!p) return;
+    const ctx = this.ctx;
+    const mid = h / 2;
+
+    const fx0 = this.timeToX(p.from.start);
+    const fx1 = this.timeToX(p.from.end);
+    const tx0 = this.timeToX(p.to.start);
+    const tx1 = this.timeToX(p.to.end);
+
+    // Everything outside the union of the two spans dims, so the change is the
+    // only lit part of the plot.
+    const lo = Math.min(fx0, tx0);
+    const hi = Math.max(fx1, tx1);
+    ctx.fillStyle = 'rgba(242, 239, 230, 0.66)';
+    ctx.fillRect(0, 0, lo, h);
+    ctx.fillRect(hi, 0, this.cssWidth - hi, h);
+
+    ctx.save();
+    ctx.strokeStyle = THEME.previewFrom;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(Math.round(fx0) + 0.5, 0.5, Math.max(1, fx1 - fx0), h - 1);
+    ctx.restore();
+
+    ctx.fillStyle = THEME.previewFill;
+    ctx.fillRect(tx0, 0, tx1 - tx0, h);
+    ctx.strokeStyle = THEME.previewLine;
+    ctx.lineWidth = 2;
+    for (const x of [tx0, tx1]) {
+      ctx.beginPath();
+      ctx.moveTo(Math.round(x) + 0.5, 0);
+      ctx.lineTo(Math.round(x) + 0.5, h);
+      ctx.stroke();
+    }
+
+    const arrow = (from: number, to: number, y: number) => {
+      if (Math.abs(to - from) < 2) return;
+      const dir = to > from ? 1 : -1;
+      ctx.strokeStyle = THEME.previewLine;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(from, y);
+      ctx.lineTo(to, y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(to, y);
+      ctx.lineTo(to - dir * 5, y - 3.5);
+      ctx.lineTo(to - dir * 5, y + 3.5);
+      ctx.closePath();
+      ctx.fillStyle = THEME.previewLine;
+      ctx.fill();
+    };
+    arrow(fx0, tx0, mid - 18);
+    arrow(fx1, tx1, mid + 18);
+
+    ctx.font = '500 10px "Neue Montreal", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const cx = (tx0 + tx1) / 2;
+    const label = p.label.toUpperCase();
+    const metrics = ctx.measureText(label);
+    ctx.fillStyle = THEME.previewLine;
+    ctx.fillRect(cx - metrics.width / 2 - 5, mid - 8, metrics.width + 10, 16);
+    ctx.fillStyle = '#f2efe6';
+    ctx.fillText(label, cx, mid);
+  }
+
   draw() {
     const ctx = this.ctx;
     const w = this.cssWidth;
@@ -228,6 +322,9 @@ export class Waveform {
       const x0 = this.timeToX(seg.start);
       const x1 = this.timeToX(seg.end);
       if (x1 - x0 < 34) continue;
+      // The preview draws its own label for the speech it moves, and two of
+      // them at overlapping positions read as one garbled word.
+      if (this.preview?.label === seg.label) continue;
       ctx.fillStyle = THEME.text;
       ctx.font = '500 10px "Neue Montreal", system-ui, sans-serif';
       ctx.textAlign = 'center';
@@ -243,6 +340,8 @@ export class Waveform {
       ctx.fillStyle = THEME.text;
       ctx.fillText(label, cx, mid);
     }
+
+    this.drawPreview(h);
 
     if (this.hover !== null) {
       const hx = this.timeToX(this.hover);

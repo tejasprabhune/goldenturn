@@ -59,86 +59,108 @@ if (entry.neg) facts.push(['neg', entry.neg]);
   title={`${entry.title} | Recordings | the golden turn`}
   description={entry.resolution ?? 'A recorded parliamentary debate round.'}
 >
-  <div class="shell page-head">
-    <nav class="crumbs" aria-label="Breadcrumb">
-      <a href="/recordings">recordings</a>
-      <span aria-hidden="true">/</span>
-      <span aria-current="page">{entry.title}</span>
-    </nav>
+  <!-- The saved layout is stamped on the root before paint, so a compact
+       reader never sees the wide layout flash first. The root attribute is the
+       single source of truth; the module script below only toggles it. -->
+  <script is:inline>
+    (() => {
+      try {
+        const saved = localStorage.getItem('gt:rec-layout');
+        if (saved === 'compact') document.documentElement.dataset.recLayout = 'compact';
+      } catch {}
+    })();
+  </script>
 
-    <h1 class="page-title rec-title">{entry.title}</h1>
-    {meta && <p class="page-lede">{meta}</p>}
-  </div>
+  <div class="rec-page" id="rec-page">
+    <div class="shell page-head rec-page-head">
+      <div>
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <a href="/recordings">recordings</a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{entry.title}</span>
+        </nav>
 
-  <div class="shell page-body rec-layout">
-    <div class="rec-main">
-      {entry.resolution && (
-        <section class="rec-block">
-          <p class="label label-muted">resolution</p>
-          <p class="rec-resolution">{entry.resolution}</p>
-        </section>
-      )}
+        <h1 class="page-title rec-title">{entry.title}</h1>
+        {meta && <p class="page-lede">{meta}</p>}
+      </div>
 
-      <section class="rec-block">
-        <p class="label label-muted">player</p>
-        <RecordingPlayer
-          slug={slug}
-          title={entry.title}
-          hasMedia={hasMedia}
-          videoEmbed={videoEmbed}
-          sourceLink={entry.link}
-        />
-        <p class="rec-original">
-          <a href={entry.link} target="_blank" rel="noopener noreferrer" class="link">open original source</a>
-        </p>
-
-        <AccountBar slug={slug} />
-      </section>
-
-
+      <button class="chip rec-layout-toggle" id="rec-layout-toggle" aria-pressed="false">
+        Compact layout
+      </button>
     </div>
 
-    <aside class="rec-side">
-      {facts.length > 0 && (
-        <section class="rec-block">
-          <p class="label label-muted">strategy</p>
-          <dl class="rec-facts">
-            {facts.map(([term, value]) => (
-              <>
-                <dt class="label label-muted">{term}</dt>
-                <dd>{value}</dd>
-              </>
-            ))}
-          </dl>
-        </section>
-      )}
+    <div class="shell page-body rec-grid">
+      <!-- The resolution and the player travel together in both layouts, so
+           they share one area rather than two that have to be kept adjacent. -->
+      <div class="rec-area-play">
+        {entry.resolution && (
+          <section class="rec-block">
+            <p class="label label-muted">resolution</p>
+            <p class="rec-resolution">{entry.resolution}</p>
+          </section>
+        )}
 
-      {entry.decision && (
         <section class="rec-block">
-          <p class="label label-muted">decision</p>
-          <p>
-            <button id="decision" class="rec-decision" data-revealed="false" aria-label="Reveal decision">
-              {entry.decision}
-            </button>
+          <p class="label label-muted">player</p>
+          <RecordingPlayer
+            slug={slug}
+            title={entry.title}
+            hasMedia={hasMedia}
+            videoEmbed={videoEmbed}
+            sourceLink={entry.link}
+          />
+          <p class="rec-original">
+            <a href={entry.link} target="_blank" rel="noopener noreferrer" class="link">open original source</a>
           </p>
         </section>
-      )}
+      </div>
 
-      {tags.length > 0 && (
-        <section class="rec-block">
-          <p class="label label-muted">tags</p>
-          <div class="tag-list">
-            {tags.map(tag => (
-              <a class="tag" href={`/recordings?tag=${encodeURIComponent(tag)}`}>{tagLabel(tag)}</a>
-            ))}
-          </div>
-        </section>
-      )}
-    </aside>
-  </div>
+      <div class="rec-area-notes">
+        <AccountBar slug={slug} />
+      </div>
 
-  <div class="shell page-body">
-    <Transcript slug={slug} />
+      <div class="rec-area-tx">
+        <Transcript slug={slug} />
+      </div>
+
+      <aside class="rec-area-meta rec-side">
+        {facts.length > 0 && (
+          <section class="rec-block">
+            <p class="label label-muted">strategy</p>
+            <dl class="rec-facts">
+              {facts.map(([term, value]) => (
+                <>
+                  <dt class="label label-muted">{term}</dt>
+                  <dd>{value}</dd>
+                </>
+              ))}
+            </dl>
+          </section>
+        )}
+
+        {entry.decision && (
+          <section class="rec-block">
+            <p class="label label-muted">decision</p>
+            <p>
+              <button id="decision" class="rec-decision" data-revealed="false" aria-label="Reveal decision">
+                {entry.decision}
+              </button>
+            </p>
+          </section>
+        )}
+
+        {tags.length > 0 && (
+          <section class="rec-block">
+            <p class="label label-muted">tags</p>
+            <div class="tag-list">
+              {tags.map(tag => (
+                <a class="tag" href={`/recordings?tag=${encodeURIComponent(tag)}`}>{tagLabel(tag)}</a>
+              ))}
+            </div>
+          </section>
+        )}
+      </aside>
+    </div>
   </div>
 </BaseLayout>
 
@@ -155,16 +177,100 @@ if (entry.neg) facts.push(['neg', entry.neg]);
     text-transform: none;
   }
 
-  .rec-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 2.5rem;
+  .rec-page-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
   }
 
+  .rec-layout-toggle {
+    flex: none;
+    margin-top: 0.35rem;
+  }
+
+  /* One grid for the whole round, so the two layouts are the same content in
+     different places rather than two markups kept in step by hand. */
+  .rec-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 3rem;
+    grid-template-areas:
+      'play'
+      'notes'
+      'tx'
+      'meta';
+  }
+
+  .rec-area-play { grid-area: play; }
+  .rec-area-notes { grid-area: notes; }
+  .rec-area-tx { grid-area: tx; }
+  .rec-area-meta { grid-area: meta; }
+
+  /* Reading layout: the round down the page, its facts in a side column. */
   @media (min-width: 900px) {
-    .rec-layout {
+    :root:not([data-rec-layout='compact']) .rec-grid {
       grid-template-columns: minmax(0, 1fr) 16rem;
-      gap: 3rem;
+      grid-template-areas:
+        'play  meta'
+        'notes meta'
+        'tx    tx';
+    }
+  }
+
+  /*
+   * Compact: the player on the left, the transcript beside it rather than a
+   * screen below, notes under the transcript, and the round's facts along the
+   * bottom. Everything that was on the page is still on it, and the reading
+   * measure is traded for width, since the point is to see the player and the
+   * transcript at once.
+   */
+  @media (min-width: 1000px) {
+    :root[data-rec-layout='compact'] .shell {
+      max-width: none;
+    }
+
+    :root[data-rec-layout='compact'] .rec-grid {
+      grid-template-columns: minmax(28rem, 5fr) minmax(0, 6fr);
+      grid-template-areas:
+        'play  tx'
+        'play  notes'
+        'meta  meta';
+      align-content: start;
+    }
+
+    /* The transcript is the tall element and the player column spans both its
+       rows, so the player has to be told to sit at the top rather than take
+       half the transcript's height. */
+    :root[data-rec-layout='compact'] .rec-area-play {
+      align-self: start;
+      position: sticky;
+      top: 1rem;
+    }
+
+    /* The transcript is the tall element, so it sets the fold: it takes what
+       the viewport has left rather than a fixed 46rem. Crosses into the
+       component, hence :global. */
+    :root[data-rec-layout='compact'] :global(.transcript) {
+      --tx-height: calc(100vh - 12rem);
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+
+    :root[data-rec-layout='compact'] .rec-block {
+      margin-bottom: 1.25rem;
+    }
+
+    :root[data-rec-layout='compact'] .rec-area-notes :global(.account) {
+      margin-top: 1.25rem;
+    }
+
+    :root[data-rec-layout='compact'] .rec-area-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      gap: 0 2.5rem;
+      align-items: start;
     }
   }
 
@@ -259,4 +365,36 @@ if (entry.neg) facts.push(['neg', entry.neg]);
     decision.setAttribute('aria-label', shown ? 'Reveal decision' : 'Hide decision');
     decision.setAttribute('aria-pressed', String(!shown));
   });
+
+  /**
+   * The layout is a reading preference, not a property of one round, so it is
+   * remembered and applied to every round page. The inline script in the head
+   * sets it before paint; this only handles the toggle.
+   */
+  const LAYOUT_KEY = 'gt:rec-layout';
+  const root = document.documentElement;
+  const layoutBtn = document.getElementById('rec-layout-toggle');
+
+  function isCompact() {
+    return root.dataset.recLayout === 'compact';
+  }
+
+  function setLayout(compact: boolean, remember = true) {
+    if (compact) root.dataset.recLayout = 'compact';
+    else delete root.dataset.recLayout;
+
+    layoutBtn?.setAttribute('aria-pressed', String(compact));
+    if (layoutBtn) layoutBtn.textContent = compact ? 'Reading layout' : 'Compact layout';
+    if (remember) {
+      try { localStorage.setItem(LAYOUT_KEY, compact ? 'compact' : 'default'); } catch {}
+    }
+    // The waveform and the transcript both measure themselves, and the columns
+    // just changed width underneath them.
+    window.dispatchEvent(new Event('resize'));
+  }
+
+  // The inline script already set the root; this only syncs the button.
+  setLayout(isCompact(), false);
+
+  layoutBtn?.addEventListener('click', () => setLayout(!isCompact()));
 </script>

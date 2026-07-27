@@ -83,14 +83,17 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
       <div class="speeches-row">
         <div class="speeches" id="speeches" hidden></div>
-        <button class="chip" id="fix-speeches" hidden>Fix timings</button>
+        <button class="chip" id="fix-speeches" aria-pressed="false" hidden>Fix timings</button>
+        <button class="chip" id="toggle-proposed" aria-expanded="false" hidden></button>
       </div>
 
-      <p class="label label-muted speech-note" id="speech-note" hidden></p>
-
       <div class="timing-votes" id="timing-votes" hidden>
-        <p class="label label-muted">Proposed timings</p>
+        <p class="label label-muted">
+          Tick a timing to try it here. Vote to make it the round's timing for
+          everyone.
+        </p>
         <ul class="timing-list" id="timing-list"></ul>
+        <p class="label label-muted timing-conflict" id="timing-conflict" hidden></p>
       </div>
 
       <div class="fixer" id="fixer" hidden>
@@ -391,16 +394,8 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     flex-wrap: wrap;
   }
 
-  .speech-note {
-    margin: 0.6rem 0 0;
-  }
-
-  .speech-note[hidden] {
-    display: none;
-  }
-
-  /* Pending timing corrections. Rows are built in the browser, so their styles
-     live in global.css. */
+  /* Pending timing corrections, hidden until asked for. Rows are built in the
+     browser, so their styles live in global.css. */
   .timing-votes {
     border-top: 1px solid var(--rule);
     margin-top: 1rem;
@@ -408,6 +403,15 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
   }
 
   .timing-votes[hidden] {
+    display: none;
+  }
+
+  .timing-conflict {
+    margin: 0.6rem 0 0;
+    color: var(--gold-deep);
+  }
+
+  .timing-conflict[hidden] {
     display: none;
   }
 
@@ -438,8 +442,10 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     track, propose, listRevisions, listProposals, vote, getUser, NotSignedIn,
     type Proposal,
   } from '../lib/api';
-  import { sideOf, usable, applyBoundaries, type Speech } from '../lib/speeches';
-
+  import {
+    sideOf, usable, applyBoundaries, parseSpan, withSpans, conflicts,
+    type Speech, type Span,
+  } from '../lib/speeches';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
   const MEDIA = 'https://media.goldenturn.org';
@@ -679,11 +685,12 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // Speech regions shade the waveform and give keyboard jumps 1-6.
     let speechStarts: number[] = [];
-    function applyFitted(found: Speech[]) {
+    function applyFitted(found: Speech[], trying = false) {
       wave.setSegments(found.map(s => ({
         label: s.label, start: s.start, end: s.end, confidence: s.confidence,
         side: sideOf(s.label),
       })));
+      root!.dataset.trying = trying ? '1' : '';
 
       // The transcript tints its paragraphs and draws its minimap from the same
       // fit, so it has to hear about corrections the player has applied.
@@ -760,10 +767,14 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     function openFixer() {
       if (!getUser()) { document.dispatchEvent(new CustomEvent('gt:open-signin')); return; }
+      // Fixing works against the round's accepted timings, so a set of
+      // proposals being tried out is put away first.
+      setProposedPanel(false);
       draft = {};
       for (const s of fitted) draft[s.label] = { start: s.start, end: s.end };
       renderFixerRows();
       document.getElementById('fixer')!.hidden = false;
+      document.getElementById('fix-speeches')?.setAttribute('aria-pressed', 'true');
       fixing = true;
       root!.dataset.fixing = '1';
       previewDraft();
@@ -840,7 +851,17 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       return null;
     }
 
-    document.getElementById('fix-speeches')?.addEventListener('click', openFixer);
+    // A second press puts the fixer away rather than leaving it open with no
+    // way back except Cancel.
+    document.getElementById('fix-speeches')?.addEventListener('click', () => {
+      if (fixing) {
+        closeFixer();
+        applyFitted(fitted);
+      } else {
+        openFixer();
+      }
+    });
+
     document.getElementById('fixer-cancel')?.addEventListener('click', () => {
       closeFixer();
       applyFitted(fitted);
@@ -848,14 +869,9 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     function closeFixer() {
       document.getElementById('fixer')!.hidden = true;
+      document.getElementById('fix-speeches')?.setAttribute('aria-pressed', 'false');
       fixing = false;
       root!.dataset.fixing = '';
-    }
-
-    function say(message: string) {
-      const note = document.getElementById('speech-note')!;
-      note.textContent = message;
-      note.hidden = !message;
     }
 
     document.getElementById('fixer-submit')?.addEventListener('click', async e => {
@@ -883,25 +899,21 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         }
         track('boundary.propose', slug, { count: changed.length });
 
-        const n = changed.length;
-        const plural = n === 1 ? '' : 's';
         // An accepted correction is the live timing, so the waveform, the jump
         // buttons and the transcript all move to it now rather than on reload.
+        // A pending one shows up in the proposals panel instead.
         if (allAccepted) {
           fitted = fitted
             .map(s => (draft[s.label]
               ? { ...s, start: draft[s.label].start, end: draft[s.label].end, confidence: 1 }
               : s))
             .sort((a, b) => a.start - b.start);
-          applyFitted(fitted);
-          say(`${n} timing${plural} updated`);
-        } else {
-          say(`Proposed ${n} correction${plural}. It goes live once others agree.`);
-          applyFitted(fitted);
         }
+        applyFitted(fitted);
         status.textContent = '';
         closeFixer();
-        void loadTimingProposals();
+        await loadTimingProposals();
+        if (!allAccepted) openProposedPanel();
       } catch (ex) {
         status.textContent = ex instanceof NotSignedIn ? 'Sign in first' : 'Could not submit';
         if (ex instanceof NotSignedIn) document.dispatchEvent(new CustomEvent('gt:open-signin'));
@@ -915,28 +927,107 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
      * margin gives text corrections. Timings are the part of a round people
      * most often need to fix, so they need a way to settle them between
      * themselves rather than waiting on an admin.
+     *
+     * Ticking one applies it here and now, which is the only honest way to
+     * judge a timing: you have to hear it. That is a local try, not a vote, so
+     * it changes nothing for anyone else.
      */
+    let openProposals: Proposal[] = [];
+    const tried = new Set<string>();
+
     async function loadTimingProposals() {
       const box = document.getElementById('timing-votes');
       const list = document.getElementById('timing-list');
-      if (!box || !list) return;
+      const toggle = document.getElementById('toggle-proposed');
+      if (!box || !list || !toggle) return;
 
       const all = await listProposals(slug).catch(() => ({ proposals: [] as Proposal[] }));
-      const open = all.proposals.filter(p => p.kind === 'boundary' && p.status === 'open');
-      box.hidden = open.length === 0;
+      openProposals = all.proposals.filter(p => p.kind === 'boundary' && p.status === 'open');
+
+      const n = openProposals.length;
+      toggle.hidden = n === 0;
+      toggle.textContent = `Proposed timings (${n})`;
+      if (n === 0) {
+        box.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+        tried.clear();
+      }
+
+      // A proposal that was accepted or withdrawn while being tried stops
+      // counting towards what is drawn.
+      for (const id of [...tried]) {
+        if (!openProposals.some(p => p.id === id)) tried.delete(id);
+      }
+
+      renderTimingRows();
+      applyTried();
+    }
+
+    function spanOf(p: Proposal): { from: Span; to: Span } | null {
+      const current = fitted.find(s => s.label === p.anchor);
+      const from = parseSpan(p.original, current) ?? (current ? { start: current.start, end: current.end } : null);
+      const to = parseSpan(p.proposed, current);
+      return from && to ? { from, to } : null;
+    }
+
+    /**
+     * The ticked spans that can actually be applied, plus the ones that cannot.
+     * Resolution follows tick order and keeps what already fits, so ticking a
+     * timing that clashes refuses that one rather than throwing out the
+     * selection someone has already built up. A Set iterates in insertion
+     * order, which is what makes that possible.
+     */
+    function triedMoves(): { applied: Map<string, Span>; refused: string[] } {
+      const applied = new Map<string, Span>();
+      const refused: string[] = [];
+
+      for (const id of tried) {
+        const p = openProposals.find(x => x.id === id);
+        const span = p ? spanOf(p) : null;
+        if (!p || !span) continue;
+
+        const candidate = new Map(applied);
+        candidate.set(p.anchor, span.to);
+        if (conflicts(fitted, candidate).size > 0) refused.push(p.anchor);
+        else applied.set(p.anchor, span.to);
+      }
+      return { applied, refused };
+    }
+
+    function renderTimingRows() {
+      const list = document.getElementById('timing-list');
+      if (!list) return;
+      const refused = new Set(triedMoves().refused);
       list.innerHTML = '';
 
-      for (const p of open) {
+      for (const p of openProposals) {
+        const span = spanOf(p);
         const li = document.createElement('li');
         li.className = 'timing-row';
+        if (refused.has(p.anchor)) li.dataset.clashes = '1';
 
-        const label = document.createElement('span');
+        const tick = document.createElement('input');
+        tick.type = 'checkbox';
+        tick.className = 'timing-tick';
+        tick.checked = tried.has(p.id);
+        tick.disabled = !span;
+        tick.id = `try-${p.id}`;
+        tick.addEventListener('change', () => {
+          if (tick.checked) tried.add(p.id); else tried.delete(p.id);
+          renderTimingRows();
+          applyTried();
+        });
+
+        const label = document.createElement('label');
         label.className = 'timing-label';
+        label.htmlFor = tick.id;
         label.textContent = p.anchor;
 
         const move = document.createElement('span');
         move.className = 'timing-move';
-        move.textContent = `${describe(p.original)} to ${describe(p.proposed)}`;
+        move.textContent = span
+          ? `${describe(span.from)} to ${describe(span.to)}`
+          : 'unreadable timing';
 
         const up = document.createElement('button');
         up.className = 'vote'; up.textContent = '+';
@@ -962,9 +1053,35 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         up.addEventListener('click', () => cast(1));
         down.addEventListener('click', () => cast(-1));
 
-        li.append(label, move, up, score, down, who);
+        // Hovering shows where the speech would move, against where it is now.
+        if (span) {
+          li.addEventListener('pointerenter', () => wave.setPreview({
+            label: p.anchor, from: span.from, to: span.to,
+          }));
+          li.addEventListener('pointerleave', () => wave.setPreview(null));
+        }
+
+        li.append(tick, label, move, up, score, down, who);
         list.appendChild(li);
       }
+    }
+
+    /**
+     * Draws the ticked timings over the accepted ones, here and in the
+     * transcript. A set that would overlap or invert a speech is refused: it
+     * would produce a round that could not have happened.
+     */
+    function applyTried() {
+      const note = document.getElementById('timing-conflict')!;
+      const { applied, refused } = triedMoves();
+
+      note.hidden = refused.length === 0;
+      if (refused.length) {
+        note.textContent = `${refused.join(', ')} would overlap another speech, `
+          + `so ${refused.length === 1 ? 'it is' : 'they are'} not applied.`;
+      }
+
+      applyFitted(withSpans(fitted, applied), applied.size > 0);
     }
 
     /** Re-reads accepted timings and repaints everything that shows them. */
@@ -972,18 +1089,34 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       const res = await listRevisions(slug).catch(() => null);
       if (!res) return;
       fitted = applyBoundaries(fitted, res.revisions);
-      applyFitted(fitted);
-      void loadTimingProposals();
+      await loadTimingProposals();
     }
 
-    function describe(value: string): string {
-      try {
-        const v = JSON.parse(value);
-        return `${formatTime(Number(v.start))}–${formatTime(Number(v.end))}`;
-      } catch {
-        return formatTime(Number(value));
+    function describe(span: Span): string {
+      return `${formatTime(span.start)}–${formatTime(span.end)}`;
+    }
+
+    function setProposedPanel(open: boolean) {
+      const btn = document.getElementById('toggle-proposed');
+      const box = document.getElementById('timing-votes')!;
+      box.hidden = !open;
+      btn?.setAttribute('aria-expanded', String(open));
+      if (!open) {
+        // Closing puts the round back on its accepted timings.
+        tried.clear();
+        wave.setPreview(null);
+        renderTimingRows();
+        applyTried();
       }
     }
+
+    function openProposedPanel() {
+      if (!document.getElementById('toggle-proposed')?.hidden) setProposedPanel(true);
+    }
+
+    document.getElementById('toggle-proposed')?.addEventListener('click', () => {
+      setProposedPanel(document.getElementById('timing-votes')!.hidden);
+    });
 
     const ro = new ResizeObserver(() => wave.resize());
     ro.observe(canvas);

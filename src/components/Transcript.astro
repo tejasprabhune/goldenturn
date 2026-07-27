@@ -116,8 +116,14 @@ const { slug } = Astro.props;
     display: none;
   }
 
+  /* The lines box and the minimap are the same height by construction, so the
+     rail always maps onto what is scrollable. Layouts override the one value. */
+  .transcript {
+    --tx-height: 46rem;
+  }
+
   .transcript-lines {
-    max-height: 46rem;
+    max-height: var(--tx-height);
     overflow-y: auto;
     padding-right: 0.5rem;
     scrollbar-width: thin;
@@ -135,7 +141,7 @@ const { slug } = Astro.props;
 
   .minimap {
     position: relative;
-    height: 46rem;
+    height: var(--tx-height);
     background: var(--paper-raised);
     border: 1px solid var(--rule-soft);
     cursor: pointer;

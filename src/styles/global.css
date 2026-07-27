@@ -778,11 +778,36 @@
     padding: 0.35rem 0;
     font-size: 0.8125rem;
     border-bottom: 1px solid var(--rule-soft);
+    cursor: default;
+  }
+
+  .timing-row:hover {
+    background: var(--paper-raised);
+  }
+
+  /* A ticked timing that cannot be applied stays visible and says why. */
+  .timing-row[data-clashes='1'] .timing-move {
+    text-decoration: line-through;
+    text-decoration-color: rgba(23, 21, 15, 0.35);
+  }
+
+  .timing-tick {
+    accent-color: var(--ink);
+    cursor: pointer;
+    margin: 0 0.1rem 0 0;
   }
 
   .timing-label {
     min-width: 2.8rem;
     font-weight: 500;
+    cursor: pointer;
+  }
+
+  /* While proposed timings are being tried, the speech row is marked so the
+     shading is not mistaken for the round's settled timings. */
+  .player[data-trying='1'] .speeches {
+    box-shadow: inset 0 -2px 0 var(--gold);
+    padding-bottom: 0.35rem;
   }
 
   .timing-move {
