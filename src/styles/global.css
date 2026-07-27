@@ -609,6 +609,39 @@
     background: var(--sky);
   }
 
+  /* Admin stat tiles and table rows are built in the browser. */
+
+  .admin-stat {
+    background: var(--paper);
+    padding: 0.85rem 1rem;
+  }
+
+  .admin-stat-value {
+    font-family: 'PP Editorial New', Georgia, serif;
+    font-weight: 300;
+    font-size: 1.75rem;
+    line-height: 1;
+    display: block;
+  }
+
+  .admin-stat-label {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    color: rgba(23, 21, 15, 0.45);
+    margin-top: 0.3rem;
+    display: block;
+  }
+
+  .admin-table td {
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .admin-table td:first-child {
+    font-variant-numeric: normal;
+  }
+
   .signin {
     /* A dialog does not inherit the document font, so it must be set here. */
     font-family: 'Neue Montreal', system-ui, sans-serif;
@@ -624,18 +657,49 @@
     background: rgba(23, 21, 15, 0.4);
   }
 
+  /* A dialog needs a real title; an 11px label read as lighter than everything
+     around it. */
+  .signin-title {
+    @apply font-display lowercase;
+    font-weight: 300;
+    font-size: 2rem;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.75rem;
+  }
+
+  /* The name field is wrapped so it can be toggled, so it needs the column
+     layout its siblings get from the form. */
+  #signin-name-row {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #signin-name-row[hidden] {
+    display: none;
+  }
+
+  .signin-switch {
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+    margin: 0.9rem 0 0;
+  }
+
   .signin-form {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
 
+  /* Matches the muted small labels used everywhere else; full ink read as a
+     heavier, different face. */
   .signin-label {
     @apply font-sans;
     font-size: 0.6875rem;
     font-weight: 500;
     letter-spacing: 0.04em;
-    margin-top: 0.5rem;
+    color: rgba(23, 21, 15, 0.45);
+    margin-top: 0.75rem;
   }
 
   .signin-error {

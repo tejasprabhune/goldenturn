@@ -82,14 +82,22 @@ async function call<T>(path: string, init: RequestInit = {}, auth = false): Prom
   return body as T;
 }
 
-export async function signIn(email: string, password: string, displayName?: string): Promise<User> {
+async function authenticate(payload: Record<string, unknown>): Promise<User> {
   const { token, user } = await call<{ token: string; user: User }>('/auth/session', {
     method: 'POST',
-    body: JSON.stringify({ email, password, displayName }),
+    body: JSON.stringify(payload),
   });
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
+}
+
+export function signIn(email: string, password: string): Promise<User> {
+  return authenticate({ mode: 'signin', email, password });
+}
+
+export function signUp(email: string, password: string, displayName: string): Promise<User> {
+  return authenticate({ mode: 'signup', email, password, displayName });
 }
 
 export function listProposals(slug: string) {
@@ -158,4 +166,40 @@ export function setTag(slug: string, tag: string, remove = false) {
     method: 'POST',
     body: JSON.stringify({ slug, tag, remove }),
   }, true);
+}
+
+export interface AdminStats {
+  days: number;
+  searches: Array<{ term: string; n: number }>;
+  tags: Array<{ tag: string; n: number }>;
+  rounds: Array<{ slug: string; n: number }>;
+  daily: Array<{ day: number; n: number }>;
+  kinds: Array<{ kind: string; n: number }>;
+  totals: Record<string, number>;
+  contributors: Array<{ name: string; rep: number; proposals: number }>;
+}
+
+export function adminStats(days = 30) {
+  return call<AdminStats>(`/admin/stats?days=${days}`, {}, true);
+}
+
+/**
+ * Fire-and-forget telemetry. Never awaited and never throws, so a blocked
+ * request or an offline browser cannot interfere with the page.
+ */
+export function track(kind: string, slug?: string, payload?: Record<string, unknown>) {
+  try {
+    const token = getToken();
+    void fetch(`${API}/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ kind, slug, payload }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* telemetry is best effort */
+  }
 }

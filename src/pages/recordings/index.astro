@@ -42,6 +42,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <script>
   import { algoliasearch } from 'algoliasearch';
   import { recordingHref, recordingSlug } from '../../lib/recordings';
+  import { track } from '../../lib/api';
   import { Waveform, formatTime, type PeaksFile } from '../../lib/waveform';
 
   const MEDIA = 'https://media.goldenturn.org';
@@ -569,6 +570,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   function runSearch() {
     clearTimeout(debounceTimer);
     currentQuery = searchInput.value.trim();
+    if (currentQuery.length > 2) track('search', undefined, { q: currentQuery, source: 'recordings' });
     yearDropdownPopulated = false;
     updateURL();
     search(0, false);

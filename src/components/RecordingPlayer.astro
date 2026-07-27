@@ -319,6 +319,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
 <script>
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
+  import { track } from '../lib/api';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
   const MEDIA = 'https://media.goldenturn.org';
@@ -345,6 +346,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     const toggleVideo = document.getElementById('toggle-video');
 
     const positionKey = `gt:pos:${slug}`;
+    track('round.view', slug);
 
     fetch(peaksUrl)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
@@ -537,7 +539,11 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
           at.className = 'speech-jump-at';
           at.textContent = formatTime(s.start);
           b.appendChild(at);
-          b.addEventListener('click', () => { audio.currentTime = s.start; void audio.play(); });
+          b.addEventListener('click', () => {
+            audio.currentTime = s.start;
+            void audio.play();
+            track('speech.jump', slug, { label: s.label });
+          });
           box.appendChild(b);
         });
       })

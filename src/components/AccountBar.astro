@@ -156,7 +156,7 @@ const { slug = '' } = Astro.props;
 <script>
   import {
     getUser, signIn, signOut, listFavorites, setFavorite,
-    listTags, setTag, listNotes, addNote, NotSignedIn,
+    listTags, setTag, listNotes, addNote, track, NotSignedIn,
   } from '../lib/api';
   import { formatTime } from '../lib/waveform';
 
@@ -251,6 +251,7 @@ const { slug = '' } = Astro.props;
       const input = document.getElementById('tag-input') as HTMLInputElement;
       if (!input.value.trim()) return;
       await setTag(slug, input.value.trim());
+      track('tag.add', slug, { tag: input.value.trim().toLowerCase() });
       input.value = '';
       void refreshPersonal();
     });

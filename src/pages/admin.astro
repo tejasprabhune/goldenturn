@@ -1,0 +1,235 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const PANELS = [
+  { id: 'searches', title: 'What people search for', accent: 'gold' },
+  { id: 'rounds', title: 'Most opened rounds', accent: 'sky' },
+  { id: 'tags', title: 'Tags in use', accent: 'sky' },
+  { id: 'kinds', title: 'Events by kind', accent: 'gold' },
+];
+---
+
+<BaseLayout title="Admin | the golden turn" description="Usage and contribution statistics.">
+  <div class="shell page-head">
+    <h1 class="page-title">admin</h1>
+    <p class="page-lede" id="admin-lede">Checking access.</p>
+  </div>
+
+  <div class="shell page-body" id="admin-denied" hidden>
+    <p class="page-lede">This page is limited to the site administrator.</p>
+  </div>
+
+  <div class="shell page-body" id="admin-body" hidden>
+    <section class="admin-totals" id="admin-totals"></section>
+
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <p class="section-head">Activity</p>
+        <select class="field admin-range" id="admin-days" aria-label="Time range">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last year</option>
+        </select>
+      </div>
+      <canvas class="admin-canvas admin-canvas--tall" id="chart-daily"></canvas>
+    </section>
+
+    <div class="admin-grid">
+      {PANELS.map(p => (
+        <section class="admin-panel">
+          <p class="section-head">{p.title}</p>
+          <canvas class="admin-canvas" id={`chart-${p.id}`} data-accent={p.accent}></canvas>
+          <p class="page-lede admin-empty" id={`empty-${p.id}`} hidden>Nothing recorded yet.</p>
+        </section>
+      ))}
+    </div>
+
+    <section class="admin-panel">
+      <p class="section-head">Contributors</p>
+      <table class="admin-table">
+        <thead>
+          <tr><th>Name</th><th>Rep</th><th>Proposals</th></tr>
+        </thead>
+        <tbody id="admin-contributors"></tbody>
+      </table>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .admin-totals {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin-bottom: 2.5rem;
+  }
+
+  .admin-panel {
+    margin-bottom: 2.5rem;
+  }
+
+  .admin-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .admin-panel-head .section-head {
+    flex: 1;
+  }
+
+  .admin-range {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.8125rem;
+  }
+
+  .admin-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 900px) {
+    .admin-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5rem 3rem;
+    }
+  }
+
+  .admin-canvas {
+    display: block;
+    width: 100%;
+    height: 15rem;
+    margin-top: 0.75rem;
+  }
+
+  .admin-canvas--tall {
+    height: 11rem;
+  }
+
+  .admin-empty {
+    margin-top: 0.5rem;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.75rem;
+    font-size: 0.9375rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: rgba(23, 21, 15, 0.45);
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--rule);
+  }
+</style>
+
+<script>
+  import { adminStats, getUser, type AdminStats } from '../lib/api';
+  import { areaChart, barChart } from '../lib/chart';
+
+  const lede = document.getElementById('admin-lede')!;
+  const body = document.getElementById('admin-body')!;
+  const denied = document.getElementById('admin-denied')!;
+
+  const TOTAL_LABELS: Record<string, string> = {
+    users: 'accounts', events: 'events', proposals: 'edits proposed',
+    accepted: 'edits accepted', votes: 'votes', notes: 'notes', favorites: 'saved rounds',
+  };
+
+  let latest: AdminStats | null = null;
+
+  function drawAll(stats: AdminStats) {
+    const totals = document.getElementById('admin-totals')!;
+    totals.innerHTML = '';
+    for (const [key, label] of Object.entries(TOTAL_LABELS)) {
+      const box = document.createElement('div');
+      box.className = 'admin-stat';
+      const v = document.createElement('span');
+      v.className = 'admin-stat-value';
+      v.textContent = String(stats.totals[key] ?? 0);
+      const l = document.createElement('span');
+      l.className = 'admin-stat-label';
+      l.textContent = label;
+      box.append(v, l);
+      totals.appendChild(box);
+    }
+
+    // Days with no events still need a slot, or the curve misrepresents gaps.
+    const byDay = new Map(stats.daily.map(d => [d.day, d.n]));
+    const today = Math.floor(Date.now() / 86_400_000);
+    const series: number[] = [];
+    for (let d = today - stats.days + 1; d <= today; d++) series.push(byDay.get(d) ?? 0);
+    areaChart(
+      document.getElementById('chart-daily') as HTMLCanvasElement,
+      series,
+      [`${stats.days} days ago`, 'today'],
+    );
+
+    const panels: Array<[string, Array<{ label: string; value: number }>]> = [
+      ['searches', stats.searches.map(s => ({ label: s.term, value: s.n }))],
+      ['rounds', stats.rounds.map(r => ({ label: r.slug.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' '), value: r.n }))],
+      ['tags', stats.tags.map(t => ({ label: t.tag, value: t.n }))],
+      ['kinds', stats.kinds.map(k => ({ label: k.kind, value: k.n }))],
+    ];
+    for (const [id, rows] of panels) {
+      const canvas = document.getElementById(`chart-${id}`) as HTMLCanvasElement;
+      const empty = document.getElementById(`empty-${id}`)!;
+      empty.hidden = rows.length > 0;
+      canvas.hidden = rows.length === 0;
+      if (rows.length) {
+        barChart(canvas, rows.slice(0, 10), canvas.dataset.accent === 'gold' ? 'gold' : 'sky');
+      }
+    }
+
+    const tbody = document.getElementById('admin-contributors')!;
+    tbody.innerHTML = '';
+    for (const c of stats.contributors) {
+      const tr = document.createElement('tr');
+      for (const cell of [c.name, String(c.rep), String(c.proposals)]) {
+        const td = document.createElement('td');
+        td.textContent = cell;
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function load(days = 30) {
+    const user = getUser();
+    if (!user) {
+      lede.textContent = 'Sign in as the administrator to view this page.';
+      denied.hidden = false;
+      return;
+    }
+    try {
+      const stats = await adminStats(days);
+      latest = stats;
+      lede.textContent = `Signed in as ${user.display_name}. Last ${stats.days} days.`;
+      denied.hidden = true;
+      body.hidden = false;
+      drawAll(stats);
+    } catch (e: any) {
+      lede.textContent = 'Access denied.';
+      denied.hidden = false;
+      body.hidden = true;
+    }
+  }
+
+  document.getElementById('admin-days')?.addEventListener('change', e => {
+    void load(Number((e.currentTarget as HTMLSelectElement).value));
+  });
+  window.addEventListener('resize', () => { if (latest) drawAll(latest); });
+  document.addEventListener('gt:signed-in', () => void load());
+
+  void load();
+</script>

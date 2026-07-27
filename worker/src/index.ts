@@ -10,6 +10,7 @@ export interface Env {
   DB: D1Database;
   SESSION_TTL_DAYS: string;
   ALLOWED_ORIGINS: string;
+  ADMIN_EMAIL: string;
 }
 
 const ACCEPT_THRESHOLD = 5;
@@ -137,17 +138,31 @@ async function settleProposal(env: Env, proposalId: string) {
   return { score, accepted: false };
 }
 
+function isAdmin(user: User | null, env: Env): boolean {
+  return Boolean(user && user.email === (env.ADMIN_EMAIL ?? '').toLowerCase());
+}
+
+/** Kinds accepted from the browser, so the events table cannot be filled with junk. */
+const PUBLIC_EVENTS = new Set(['search', 'round.view', 'tag.add', 'transcript.search', 'speech.jump']);
+
 const routes: Record<string, (req: Request, env: Env, url: URL, user: User | null) => Promise<Response>> = {
   'GET /health': async (_req, env) => {
     const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
     return json({ ok: true, users: r?.n ?? 0 });
   },
 
+  /**
+   * Sign in and sign up are separate modes on purpose: a single endpoint that
+   * creates an account on any unknown email turns a mistyped address into a
+   * silent new account rather than an error.
+   */
   'POST /auth/session': async (req, env) => {
-    const body = await req.json<{ email?: string; password?: string; displayName?: string }>()
-      .catch(() => ({}));
+    const body = await req.json<{
+      email?: string; password?: string; displayName?: string; mode?: string;
+    }>().catch(() => ({}));
     const email = (body.email ?? '').trim().toLowerCase();
     const password = body.password ?? '';
+    const mode = body.mode === 'signup' ? 'signup' : 'signin';
     if (!email || !email.includes('@')) return json({ error: 'valid email required' }, { status: 400 });
     if (password.length < 8) return json({ error: 'password must be at least 8 characters' }, { status: 400 });
 
@@ -156,7 +171,23 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     ).bind(email).first<User & { password_hash: string | null }>();
 
     let user: User;
-    if (existing) {
+    if (mode === 'signup') {
+      if (existing) {
+        return json({ error: 'an account with that email already exists' }, { status: 409 });
+      }
+      const name = (body.displayName ?? '').trim();
+      if (!name) return json({ error: 'display name required' }, { status: 400 });
+      const uid = id();
+      await env.DB.prepare(
+        `INSERT INTO users (id, email, display_name, created_at, rep, password_hash)
+         VALUES (?1, ?2, ?3, ?4, 0, ?5)`
+      ).bind(uid, email, name.slice(0, 60), now(), await hashPassword(password)).run();
+      user = { id: uid, email, display_name: name.slice(0, 60), rep: 0 };
+      await logEvent(env, 'user.created', uid, null, {});
+    } else {
+      if (!existing) {
+        return json({ error: 'no account with that email' }, { status: 404 });
+      }
       if (!existing.password_hash) {
         // Account predates passwords; the first sign-in sets one.
         await env.DB.prepare(`UPDATE users SET password_hash = ?1 WHERE id = ?2`)
@@ -169,15 +200,6 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
         id: existing.id, email: existing.email,
         display_name: existing.display_name, rep: existing.rep,
       };
-    } else {
-      const uid = id();
-      const name = (body.displayName ?? email.split('@')[0]).slice(0, 60);
-      await env.DB.prepare(
-        `INSERT INTO users (id, email, display_name, created_at, rep, password_hash)
-         VALUES (?1, ?2, ?3, ?4, 0, ?5)`
-      ).bind(uid, email, name, now(), await hashPassword(password)).run();
-      user = { id: uid, email, display_name: name, rep: 0 };
-      await logEvent(env, 'user.created', uid, null, {});
     }
 
     const token = id() + id().replace(/-/g, '');
@@ -187,6 +209,55 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     ).bind(token, user.id, now(), now() + ttl).run();
 
     return json({ token, user });
+  },
+
+  // Anonymous telemetry: what people search for and which rounds they open.
+  'POST /events': async (req, env, _url, user) => {
+    const body = await req.json<{ kind?: string; slug?: string; payload?: unknown }>().catch(() => ({}));
+    const kind = String(body.kind ?? '');
+    if (!PUBLIC_EVENTS.has(kind)) return json({ error: 'unknown event' }, { status: 400 });
+    const payload = JSON.stringify(body.payload ?? {}).slice(0, 500);
+    await env.DB.prepare(
+      `INSERT INTO events (kind, user_id, slug, payload, created_at) VALUES (?1, ?2, ?3, ?4, ?5)`
+    ).bind(kind, user?.id ?? null, body.slug ?? null, payload, now()).run();
+    return json({ ok: true });
+  },
+
+  'GET /admin/stats': async (_req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const days = Math.min(Number(url.searchParams.get('days') ?? '30'), 365);
+    const since = now() - days * 86400;
+
+    const q = (sql: string, ...binds: unknown[]) =>
+      env.DB.prepare(sql).bind(...binds).all().then(r => r.results);
+
+    const [searches, tags, rounds, daily, kinds, totals, contributors] = await Promise.all([
+      q(`SELECT json_extract(payload,'$.q') AS term, COUNT(*) AS n
+           FROM events WHERE kind IN ('search','transcript.search') AND created_at > ?1
+            AND json_extract(payload,'$.q') IS NOT NULL AND json_extract(payload,'$.q') != ''
+          GROUP BY term ORDER BY n DESC LIMIT 25`, since),
+      q(`SELECT tag, COUNT(*) AS n FROM user_tags GROUP BY tag ORDER BY n DESC LIMIT 25`),
+      q(`SELECT slug, COUNT(*) AS n FROM events
+          WHERE kind='round.view' AND created_at > ?1 AND slug IS NOT NULL
+          GROUP BY slug ORDER BY n DESC LIMIT 25`, since),
+      q(`SELECT CAST(created_at/86400 AS INTEGER) AS day, COUNT(*) AS n
+           FROM events WHERE created_at > ?1 GROUP BY day ORDER BY day`, since),
+      q(`SELECT kind, COUNT(*) AS n FROM events WHERE created_at > ?1
+          GROUP BY kind ORDER BY n DESC`, since),
+      q(`SELECT
+           (SELECT COUNT(*) FROM users) AS users,
+           (SELECT COUNT(*) FROM proposals) AS proposals,
+           (SELECT COUNT(*) FROM proposals WHERE status='accepted') AS accepted,
+           (SELECT COUNT(*) FROM votes) AS votes,
+           (SELECT COUNT(*) FROM notes) AS notes,
+           (SELECT COUNT(*) FROM favorites) AS favorites,
+           (SELECT COUNT(*) FROM events) AS events`),
+      q(`SELECT u.display_name AS name, u.rep,
+                (SELECT COUNT(*) FROM proposals p WHERE p.user_id=u.id) AS proposals
+           FROM users u ORDER BY u.rep DESC, proposals DESC LIMIT 15`),
+    ]);
+
+    return json({ days, searches, tags, rounds, daily, kinds, totals: totals[0] ?? {}, contributors });
   },
 
   'GET /me': async (_req, _env, _url, user) =>

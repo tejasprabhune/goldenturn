@@ -4,6 +4,7 @@ compatibility_date = "2026-07-01"
 
 [vars]
 SESSION_TTL_DAYS = "30"
+ADMIN_EMAIL = "prabhune@berkeley.edu"
 ALLOWED_ORIGINS = "https://goldenturn.org,http://localhost:4321,http://localhost:4400"
 
 [[d1_databases]]

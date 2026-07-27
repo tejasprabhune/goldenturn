@@ -198,7 +198,7 @@ const { slug } = Astro.props;
   import { formatTime } from '../lib/waveform';
   import {
     listProposals, listRevisions, propose, vote, getUser, NotSignedIn,
-    addNote, type Proposal,
+    addNote, track, type Proposal,
   } from '../lib/api';
 
   interface Word { w: string; s: number | null; e: number | null; p: number | null }
@@ -458,6 +458,7 @@ const { slug } = Astro.props;
       (e.currentTarget as HTMLElement).setAttribute('aria-expanded', String(open));
     });
 
+    let searchTrack: ReturnType<typeof setTimeout> | undefined;
     const search = document.getElementById('tx-search') as HTMLInputElement;
     const hits = document.getElementById('tx-hits')!;
     search?.addEventListener('input', () => {
@@ -469,6 +470,10 @@ const { slug } = Astro.props;
         if (on) n++;
       });
       hits.textContent = q.length > 1 ? `${n} hit${n === 1 ? '' : 's'}` : '';
+      if (q.length > 2) {
+        clearTimeout(searchTrack);
+        searchTrack = setTimeout(() => track('transcript.search', slug, { q, hits: n }), 600);
+      }
       const hit = linesEl.querySelector<HTMLElement>('.is-hit');
       if (hit) scrollLinesTo(hit);
     });

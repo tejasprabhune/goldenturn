@@ -131,18 +131,30 @@ function isActive(href: string) {
 
     <dialog class="signin" id="signin-dialog">
       <form method="dialog" class="signin-form" id="signin-form">
-        <p class="label label-muted">Sign in</p>
+        <h2 class="signin-title" id="signin-title">Sign in</h2>
+
+        <div id="signin-name-row" hidden>
+          <label class="signin-label" for="signin-name">Display name</label>
+          <input class="field" type="text" id="signin-name" maxlength="60" autocomplete="nickname" />
+        </div>
+
         <label class="signin-label" for="signin-email">Email</label>
         <input class="field" type="email" id="signin-email" required autocomplete="email" />
+
         <label class="signin-label" for="signin-password">Password</label>
         <input class="field" type="password" id="signin-password" required minlength="8"
                autocomplete="current-password" />
-        <label class="signin-label" for="signin-name">Display name</label>
-        <input class="field" type="text" id="signin-name" maxlength="60" autocomplete="nickname" />
+
         <p class="signin-error" id="signin-error" hidden></p>
+
+        <p class="signin-switch">
+          <span id="signin-switch-copy">New here?</span>
+          <button type="button" class="link account-link" id="signin-switch">Create an account</button>
+        </p>
+
         <div class="signin-actions">
           <button class="chip" value="cancel" formnovalidate>Cancel</button>
-          <button class="btn" id="signin-submit" value="ok">Continue</button>
+          <button class="btn" id="signin-submit" value="ok">Sign in</button>
         </div>
       </form>
     </dialog>
@@ -429,7 +441,7 @@ function isActive(href: string) {
 <script>
   import { algoliasearch } from 'algoliasearch';
   import { recordingHref } from '../lib/recordings';
-  import { getUser, signIn } from '../lib/api';
+  import { getUser, signIn, signUp, track } from '../lib/api';
 
   // Auth state is rendered on the client so pages stay static and cacheable.
   const navAccount = document.getElementById('nav-account') as HTMLAnchorElement | null;
@@ -445,8 +457,33 @@ function isActive(href: string) {
     if (navSignin) navSignin.hidden = Boolean(user);
   }
 
-  navSignin?.addEventListener('click', () => signinDialog?.showModal());
-  document.addEventListener('gt:open-signin', () => signinDialog?.showModal());
+  let signupMode = false;
+
+  function setAuthMode(signup: boolean) {
+    signupMode = signup;
+    const nameRow = document.getElementById('signin-name-row')!;
+    const nameInput = document.getElementById('signin-name') as HTMLInputElement;
+    nameRow.hidden = !signup;
+    nameInput.required = signup;
+    document.getElementById('signin-title')!.textContent = signup ? 'Create an account' : 'Sign in';
+    document.getElementById('signin-submit')!.textContent = signup ? 'Create account' : 'Sign in';
+    document.getElementById('signin-switch-copy')!.textContent =
+      signup ? 'Already have an account?' : 'New here?';
+    document.getElementById('signin-switch')!.textContent = signup ? 'Sign in' : 'Create an account';
+    (document.getElementById('signin-password') as HTMLInputElement).autocomplete =
+      signup ? 'new-password' : 'current-password';
+    document.getElementById('signin-error')!.hidden = true;
+  }
+
+  document.getElementById('signin-switch')?.addEventListener('click', () => setAuthMode(!signupMode));
+
+  function openSignIn(signup = false) {
+    setAuthMode(signup);
+    signinDialog?.showModal();
+  }
+
+  navSignin?.addEventListener('click', () => openSignIn(false));
+  document.addEventListener('gt:open-signin', e => openSignIn(Boolean((e as CustomEvent).detail?.signup)));
 
   document.getElementById('signin-form')?.addEventListener('submit', async e => {
     const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -457,7 +494,8 @@ function isActive(href: string) {
     const name = (document.getElementById('signin-name') as HTMLInputElement).value.trim();
     const err = document.getElementById('signin-error')!;
     try {
-      await signIn(email, password, name || undefined);
+      if (signupMode) await signUp(email, password, name);
+      else await signIn(email, password);
       err.hidden = true;
       signinDialog?.close();
       renderAuth();
@@ -590,7 +628,11 @@ function isActive(href: string) {
 
   overlayInput?.addEventListener('input', () => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => runOverlaySearch(overlayInput.value.trim()), 120);
+    debounce = setTimeout(() => {
+      const q = overlayInput.value.trim();
+      void runOverlaySearch(q);
+      if (q.length > 2) track('search', undefined, { q, source: 'overlay' });
+    }, 400);
   });
 
   overlayInput?.addEventListener('keydown', (e) => {
