@@ -18,13 +18,16 @@ export interface Segment {
   start: number;
   end: number;
   confidence?: number;
+  /** Aff and neg tint differently, matching the transcript. */
+  side?: 'aff' | 'neg';
 }
 
 interface Theme {
   fill: string;
   fillMuted: string;
   playhead: string;
-  segmentTint: string;
+  segmentAff: string;
+  segmentNeg: string;
   segmentRule: string;
   text: string;
 }
@@ -33,7 +36,8 @@ const THEME: Theme = {
   fill: 'rgba(23, 21, 15, 0.55)',
   fillMuted: 'rgba(23, 21, 15, 0.18)',
   playhead: '#17150f',
-  segmentTint: 'rgba(162, 214, 249, 0.30)',
+  segmentAff: 'rgba(253, 216, 93, 0.34)',
+  segmentNeg: 'rgba(162, 214, 249, 0.34)',
   segmentRule: 'rgba(23, 21, 15, 0.25)',
   text: 'rgba(23, 21, 15, 0.75)',
 };
@@ -188,7 +192,7 @@ export class Waveform {
     for (const seg of this.segments) {
       const x0 = this.timeToX(seg.start);
       const x1 = this.timeToX(seg.end);
-      ctx.fillStyle = THEME.segmentTint;
+      ctx.fillStyle = seg.side === 'neg' ? THEME.segmentNeg : THEME.segmentAff;
       ctx.fillRect(x0, 0, x1 - x0, h);
       ctx.strokeStyle = THEME.segmentRule;
       ctx.setLineDash(seg.confidence !== undefined && seg.confidence < 0.6 ? [3, 3] : []);

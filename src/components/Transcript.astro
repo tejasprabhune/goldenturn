@@ -356,14 +356,32 @@ const { slug } = Astro.props;
       map.addEventListener('click', e => {
         const rect = map.getBoundingClientRect();
         const frac = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+        const t = frac * duration;
+        // Land at the start of the speech that was clicked, not mid-sentence.
+        const speech = speeches.find(sp => t >= sp.start && t < sp.end);
+        const at = speech ? speech.start : t;
         const a = audio();
-        if (a) { a.currentTime = frac * duration; void a.play(); }
-        const target = paras.findIndex(s => s.start >= frac * duration);
+        if (a) { a.currentTime = at; void a.play(); }
+        const target = paras.findIndex(s => s.start >= at);
         if (target >= 0) {
-          linesEl.querySelector(`#${CSS.escape(segId(target))}`)
-            ?.scrollIntoView({ block: 'center' });
+          const el = linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(target))}`);
+          if (el) scrollLinesTo(el, 'top');
         }
       });
+    }
+
+    /** Scrolls the transcript box only, never the page. */
+    function scrollLinesTo(el: HTMLElement, mode: 'nearest' | 'top' = 'nearest') {
+      const top = el.offsetTop - linesEl.offsetTop;
+      if (mode === 'top') {
+        linesEl.scrollTop = top - 8;
+        return;
+      }
+      const viewTop = linesEl.scrollTop;
+      const viewBottom = viewTop + linesEl.clientHeight;
+      if (top < viewTop || top + el.offsetHeight > viewBottom) {
+        linesEl.scrollTop = top - linesEl.clientHeight / 3;
+      }
     }
 
     function syncTo(t: number) {
@@ -379,7 +397,7 @@ const { slug } = Astro.props;
         const el = linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(found))}`);
         if (el) {
           el.classList.add('is-current');
-          if (follow) el.scrollIntoView({ block: 'nearest' });
+          if (follow) scrollLinesTo(el);
         }
       }
       if (duration) {
@@ -416,7 +434,8 @@ const { slug } = Astro.props;
         if (on) n++;
       });
       hits.textContent = q.length > 1 ? `${n} hit${n === 1 ? '' : 's'}` : '';
-      if (n) linesEl.querySelector('.is-hit')?.scrollIntoView({ block: 'center' });
+      const hit = linesEl.querySelector<HTMLElement>('.is-hit');
+      if (hit) scrollLinesTo(hit);
     });
 
     const tip = document.getElementById('tx-tip')!;

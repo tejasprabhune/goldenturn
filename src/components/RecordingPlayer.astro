@@ -37,10 +37,21 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
   {hasMedia ? (
     <>
-      <div class="wave-wrap">
-        <canvas id="wave" class="wave" aria-label={`Waveform for ${title}`} role="img"></canvas>
-        <div class="wave-tip" id="wave-tip" hidden></div>
-        <p class="wave-loading label label-muted" id="wave-loading">loading waveform</p>
+      <div class="player-main">
+        <dl class="keys">
+          <div class="key-row"><dt>Play or pause</dt><dd><kbd>Space</kbd></dd></div>
+          <div class="key-row"><dt>Seek 5s</dt><dd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
+          <div class="key-row"><dt>Seek 30s</dt><dd><kbd>Shift</kbd><kbd>&larr;</kbd></dd></div>
+          <div class="key-row"><dt>Jump to speech</dt><dd><kbd>1</kbd><span>&ndash;</span><kbd>6</kbd></dd></div>
+          <div class="key-row"><dt>Loop a range</dt><dd><kbd>Shift</kbd><kbd>drag</kbd></dd></div>
+          <div class="key-row"><dt>Double speed</dt><dd><kbd>hold</kbd></dd></div>
+        </dl>
+
+        <div class="wave-wrap">
+          <canvas id="wave" class="wave" aria-label={`Waveform for ${title}`} role="img"></canvas>
+          <div class="wave-tip" id="wave-tip" hidden></div>
+          <p class="wave-loading label label-muted" id="wave-loading">loading waveform</p>
+        </div>
       </div>
 
       <div class="transport">
@@ -72,18 +83,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         <button class="chip" id="loop-clear">clear</button>
       </div>
 
-      <div class="player-lower">
-        <div class="speeches" id="speeches" hidden></div>
-
-        <dl class="keys">
-          <div class="key-row"><dt>Play or pause</dt><dd><kbd>Space</kbd></dd></div>
-          <div class="key-row"><dt>Seek 5s</dt><dd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
-          <div class="key-row"><dt>Seek 30s</dt><dd><kbd>Shift</kbd><span>+</span><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
-          <div class="key-row"><dt>Jump to speech</dt><dd><kbd>1</kbd><span>&ndash;</span><kbd>6</kbd></dd></div>
-          <div class="key-row"><dt>Loop a range</dt><dd><kbd>Shift</kbd><span>+</span><kbd>drag</kbd></dd></div>
-          <div class="key-row"><dt>Double speed</dt><dd><kbd>hold</kbd></dd></div>
-        </dl>
-      </div>
+      <div class="speeches" id="speeches" hidden></div>
 
       <audio id="audio" preload="metadata" src={`${MEDIA}/audio/${slug}.m4a`}></audio>
     </>
@@ -239,17 +239,19 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     font-variant-numeric: tabular-nums;
   }
 
-  .player-lower {
+  .player-main {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 1.5rem;
-    padding-top: 1rem;
+    gap: 1rem;
   }
 
-  @media (min-width: 860px) {
-    .player-lower {
-      grid-template-columns: 1fr 16rem;
-      gap: 2.5rem;
+  /* The legend sits in the margin beside the waveform rather than under it,
+     where it read as an instruction sentence in the way of the content. */
+  @media (min-width: 900px) {
+    .player-main {
+      grid-template-columns: 11.5rem minmax(0, 1fr);
+      gap: 1.75rem;
+      align-items: start;
     }
   }
 
@@ -257,19 +259,27 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.35rem;
+    padding-top: 0.15rem;
+  }
+
+  @media (max-width: 899px) {
+    .keys {
+      display: none;
+    }
   }
 
   .key-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .keys dt {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     color: var(--ink-muted);
+    white-space: nowrap;
   }
 
   .keys dd {
@@ -299,7 +309,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-    align-content: flex-start;
+    padding-top: 0.9rem;
   }
 
   .speeches[hidden] {
@@ -522,8 +532,10 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       .then((fit: { speeches: Array<{ label: string; start: number; end: number; confidence: number }> }) => {
         const found = fit.speeches.filter(s => s.confidence > 0 && s.end > s.start);
         if (!found.length) return;
+        const AFF = new Set(['PMC', 'MG', 'PMR']);
         wave.setSegments(found.map(s => ({
           label: s.label, start: s.start, end: s.end, confidence: s.confidence,
+          side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
         })));
 
         const box = document.getElementById('speeches')!;
