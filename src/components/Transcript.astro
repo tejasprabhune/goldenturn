@@ -1,0 +1,410 @@
+---
+/**
+ * Time-synced transcript with inline corrections.
+ *
+ * The machine transcript is immutable in R2; accepted community revisions are
+ * fetched separately and applied over it at read time, so nothing is ever
+ * destructively overwritten and an edit can be traced back to its proposal.
+ */
+interface Props {
+  slug: string;
+  hasTranscript: boolean;
+}
+const { slug, hasTranscript } = Astro.props;
+---
+
+<section class="transcript" data-slug={slug} data-has={hasTranscript ? '1' : ''}>
+  <div class="transcript-head">
+    <p class="label label-muted">transcript</p>
+    <div class="transcript-tools">
+      <input class="field transcript-search" id="tx-search" type="search"
+             placeholder="search this round" aria-label="Search transcript" />
+      <span class="label label-muted" id="tx-hits"></span>
+      <button class="chip" id="tx-follow" aria-pressed="true">follow</button>
+    </div>
+  </div>
+
+  {hasTranscript ? (
+    <div class="transcript-body">
+      <div class="transcript-lines" id="tx-lines" aria-busy="true">
+        <p class="page-lede" id="tx-loading">loading transcript</p>
+      </div>
+      <aside class="transcript-margin" id="tx-margin" aria-label="Proposed edits">
+        <p class="label label-muted">public edits</p>
+        <p class="transcript-empty label label-muted" id="tx-margin-empty">none yet</p>
+        <ul class="proposal-list" id="tx-proposals"></ul>
+      </aside>
+    </div>
+  ) : (
+    <p class="page-lede transcript-pending">
+      Not transcribed yet. This round is queued; the transcript and speech
+      markers appear here once it runs.
+    </p>
+  )}
+</section>
+
+<div class="tx-tip" id="tx-tip" hidden>
+  <button class="chip" id="tx-propose">suggest an edit</button>
+</div>
+
+<dialog class="tx-dialog" id="tx-dialog">
+  <form class="tx-form" id="tx-form" method="dialog">
+    <p class="label label-muted">suggest a correction</p>
+    <p class="tx-original" id="tx-original"></p>
+    <label class="signin-label" for="tx-proposed">corrected text</label>
+    <textarea class="field" id="tx-proposed" rows="3" maxlength="4000"></textarea>
+    <label class="signin-label" for="tx-note">note (optional)</label>
+    <input class="field" id="tx-note" maxlength="200" placeholder="why this is right" />
+    <p class="signin-error" id="tx-error" hidden></p>
+    <div class="signin-actions">
+      <button class="chip" value="cancel" formnovalidate>cancel</button>
+      <button class="btn" value="ok" id="tx-submit">submit</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  .transcript {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.25rem;
+    margin-top: 2.5rem;
+  }
+
+  .transcript-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .transcript-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .transcript-search {
+    width: 14rem;
+    max-width: 45vw;
+  }
+
+  .transcript-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 1000px) {
+    .transcript-body {
+      grid-template-columns: minmax(0, 1fr) 15rem;
+      gap: 2rem;
+    }
+  }
+
+  .transcript-lines {
+    max-height: 32rem;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+  }
+
+  .transcript-margin {
+    border-left: 1px solid var(--rule-soft);
+    padding-left: 1rem;
+  }
+
+  @media (max-width: 999px) {
+    .transcript-margin {
+      border-left: none;
+      border-top: 1px solid var(--rule-soft);
+      padding-left: 0;
+      padding-top: 1rem;
+    }
+  }
+
+  .tx-tip {
+    position: absolute;
+    z-index: 40;
+    transform: translate(-50%, -100%);
+  }
+
+  .tx-tip[hidden] {
+    display: none;
+  }
+
+  .tx-dialog {
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    padding: 1.5rem;
+    max-width: 32rem;
+    width: calc(100vw - 2rem);
+    color: var(--ink);
+  }
+
+  .tx-dialog::backdrop {
+    background: rgba(23, 21, 15, 0.4);
+  }
+
+  .tx-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .tx-original {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    padding: 0.6rem;
+    margin: 0.5rem 0;
+  }
+
+  .transcript-pending {
+    margin-top: 0;
+  }
+</style>
+
+<script>
+  import { formatTime } from '../lib/waveform';
+  import {
+    listProposals, listRevisions, propose, vote, getUser, NotSignedIn,
+    type Proposal,
+  } from '../lib/api';
+
+  interface Word { w: string; s: number | null; e: number | null; p: number | null }
+  interface Segment {
+    start: number; end: number; text: string;
+    speaker: string | null; words: Word[];
+  }
+
+  const root = document.querySelector<HTMLElement>('.transcript');
+  if (root && root.dataset.has) {
+    const slug = root.dataset.slug!;
+    const linesEl = document.getElementById('tx-lines')!;
+    const audio = () => document.getElementById('audio') as HTMLAudioElement | null;
+
+    let segments: Segment[] = [];
+    let revisions = new Map<string, string>();
+    let follow = true;
+    let currentIndex = -1;
+
+    const segId = (i: number) => `seg-${i}`;
+
+    async function load() {
+      const [txRes, revRes] = await Promise.allSettled([
+        fetch(`https://media.goldenturn.org/${window.__TX_PREFIX__ ?? "transcripts"}/${slug}.json`).then(r => r.json()),
+        listRevisions(slug),
+      ]);
+
+      if (txRes.status !== 'fulfilled') {
+        linesEl.innerHTML = '<p class="page-lede">transcript unavailable</p>';
+        return;
+      }
+      segments = txRes.value.segments ?? [];
+      if (revRes.status === 'fulfilled') {
+        for (const r of revRes.value.revisions) {
+          if (r.kind === 'transcript') revisions.set(r.anchor, r.value);
+        }
+      }
+      render();
+      void loadProposals();
+    }
+
+    function render() {
+      linesEl.innerHTML = '';
+      linesEl.removeAttribute('aria-busy');
+      segments.forEach((seg, i) => {
+        const id = segId(i);
+        const row = document.createElement('div');
+        row.className = 'tx-seg';
+        row.id = id;
+        row.dataset.index = String(i);
+
+        const at = document.createElement('button');
+        at.className = 'tx-at';
+        at.textContent = formatTime(seg.start);
+        at.addEventListener('click', () => {
+          const a = audio();
+          if (a) { a.currentTime = seg.start; void a.play(); }
+        });
+
+        const text = document.createElement('div');
+        text.className = 'tx-text';
+
+        if (seg.speaker) {
+          const sp = document.createElement('span');
+          sp.className = 'tx-speaker';
+          sp.textContent = seg.speaker.replace('SPEAKER_', 'S');
+          text.appendChild(sp);
+        }
+
+        const revised = revisions.get(id);
+        if (revised !== undefined) {
+          row.classList.add('is-revised');
+          text.appendChild(document.createTextNode(revised));
+        } else if (seg.words?.length) {
+          for (const w of seg.words) {
+            const span = document.createElement('span');
+            span.className = 'tx-word';
+            span.textContent = (w.w ?? '') + ' ';
+            if (typeof w.p === 'number' && w.p < 0.5) span.dataset.low = '1';
+            text.appendChild(span);
+          }
+        } else {
+          text.appendChild(document.createTextNode(seg.text));
+        }
+
+        row.append(at, text);
+        linesEl.appendChild(row);
+      });
+    }
+
+    function syncTo(t: number) {
+      if (!segments.length) return;
+      let lo = 0, hi = segments.length - 1, found = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (segments[mid].start <= t) { found = mid; lo = mid + 1; } else { hi = mid - 1; }
+      }
+      if (found === currentIndex) return;
+      if (currentIndex >= 0) linesEl.children[currentIndex]?.classList.remove('is-current');
+      currentIndex = found;
+      const el = linesEl.children[found] as HTMLElement | undefined;
+      if (!el) return;
+      el.classList.add('is-current');
+      if (follow) el.scrollIntoView({ block: 'nearest' });
+    }
+
+    document.addEventListener('timeupdate', () => {}, true);
+    const a = audio();
+    a?.addEventListener('timeupdate', () => syncTo(a.currentTime));
+
+    document.getElementById('tx-follow')?.addEventListener('click', e => {
+      follow = !follow;
+      (e.currentTarget as HTMLElement).setAttribute('aria-pressed', String(follow));
+    });
+
+    const search = document.getElementById('tx-search') as HTMLInputElement;
+    const hits = document.getElementById('tx-hits')!;
+    search?.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      let n = 0;
+      linesEl.querySelectorAll<HTMLElement>('.tx-word').forEach(w => {
+        const on = q.length > 1 && w.textContent!.toLowerCase().includes(q);
+        w.classList.toggle('is-hit', on);
+        if (on) n++;
+      });
+      hits.textContent = q.length > 1 ? `${n} hit${n === 1 ? '' : 's'}` : '';
+      if (n) linesEl.querySelector('.is-hit')?.scrollIntoView({ block: 'center' });
+    });
+
+    // Selecting transcript text offers a correction on the segment it sits in.
+    const tip = document.getElementById('tx-tip')!;
+    let pending: { anchor: string; original: string } | null = null;
+
+    document.addEventListener('selectionchange', () => {
+      const sel = document.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) { tip.hidden = true; return; }
+      const node = sel.anchorNode;
+      const seg = (node instanceof Element ? node : node?.parentElement)?.closest('.tx-seg');
+      if (!seg || !linesEl.contains(seg)) { tip.hidden = true; return; }
+
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      if (!rect.width) { tip.hidden = true; return; }
+      tip.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
+      tip.style.top = `${rect.top + window.scrollY - 6}px`;
+      tip.hidden = false;
+      const idx = Number((seg as HTMLElement).dataset.index);
+      pending = {
+        anchor: segId(idx),
+        original: (seg.querySelector('.tx-text') as HTMLElement).innerText.trim(),
+      };
+    });
+
+    const dialog = document.getElementById('tx-dialog') as HTMLDialogElement;
+    document.getElementById('tx-propose')?.addEventListener('click', () => {
+      if (!pending) return;
+      if (!getUser()) { document.getElementById('account-signin')?.click(); return; }
+      (document.getElementById('tx-original') as HTMLElement).textContent = pending.original;
+      (document.getElementById('tx-proposed') as HTMLTextAreaElement).value = pending.original;
+      tip.hidden = true;
+      dialog.showModal();
+    });
+
+    document.getElementById('tx-form')?.addEventListener('submit', async e => {
+      const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
+      if (submitter?.value !== 'ok' || !pending) return;
+      e.preventDefault();
+      const proposed = (document.getElementById('tx-proposed') as HTMLTextAreaElement).value.trim();
+      const note = (document.getElementById('tx-note') as HTMLInputElement).value.trim();
+      const err = document.getElementById('tx-error')!;
+      try {
+        await propose(slug, {
+          kind: 'transcript', anchor: pending.anchor,
+          original: pending.original, proposed, note: note || undefined,
+        });
+        err.hidden = true;
+        dialog.close();
+        void loadProposals();
+      } catch (ex: any) {
+        err.textContent = ex instanceof NotSignedIn ? 'sign in first' : (ex.message ?? 'failed');
+        err.hidden = false;
+      }
+    });
+
+    async function loadProposals() {
+      const list = document.getElementById('tx-proposals');
+      const empty = document.getElementById('tx-margin-empty');
+      if (!list) return;
+      const { proposals } = await listProposals(slug).catch(() => ({ proposals: [] as Proposal[] }));
+      list.innerHTML = '';
+      if (empty) empty.hidden = proposals.length > 0;
+
+      for (const p of proposals) {
+        const li = document.createElement('li');
+        li.className = p.status === 'accepted' ? 'proposal is-accepted' : 'proposal';
+
+        const text = document.createElement('span');
+        text.className = 'proposal-text';
+        const was = document.createElement('span');
+        was.className = 'proposal-was';
+        was.textContent = p.original.slice(0, 80);
+        text.append(was, document.createElement('br'), document.createTextNode(p.proposed.slice(0, 120)));
+
+        const meta = document.createElement('div');
+        meta.className = 'proposal-meta';
+        const up = document.createElement('button');
+        up.className = 'vote';
+        up.textContent = '+';
+        const score = document.createElement('span');
+        score.className = 'proposal-score';
+        score.textContent = String(p.score);
+        const down = document.createElement('button');
+        down.className = 'vote';
+        down.textContent = '−';
+        const who = document.createElement('span');
+        who.textContent = p.status === 'accepted' ? 'accepted' : p.author;
+
+        const cast = async (value: 1 | -1) => {
+          try {
+            const r = await vote(p.id, value);
+            score.textContent = String(r.score);
+            if (r.accepted) void location.reload();
+          } catch (ex) {
+            if (ex instanceof NotSignedIn) document.getElementById('account-signin')?.click();
+          }
+        };
+        up.addEventListener('click', () => cast(1));
+        down.addEventListener('click', () => cast(-1));
+
+        meta.append(up, score, down, who);
+        li.append(text, meta);
+        list.appendChild(li);
+      }
+    }
+
+    void load();
+  }
+</script>

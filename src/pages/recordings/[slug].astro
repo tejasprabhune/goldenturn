@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import RecordingPlayer from '../../components/RecordingPlayer.astro';
+import AccountBar from '../../components/AccountBar.astro';
+import Transcript from '../../components/Transcript.astro';
 import {
   fetchAllRecordings,
   fetchMediaIndex,
@@ -18,7 +20,11 @@ export async function getStaticPaths() {
     const slug = recordingSlug(entry);
     return {
       params: { slug },
-      props: { entry, slug, hasMedia: media.playable.has(slug) },
+      props: {
+        entry, slug,
+        hasMedia: media.playable.has(slug),
+        hasTranscript: media.transcribed.has(slug) || Boolean(import.meta.env.TX_TEST_SLUG && slug === import.meta.env.TX_TEST_SLUG),
+      },
     };
   });
 }
@@ -27,9 +33,10 @@ interface Props {
   entry: Recording;
   slug: string;
   hasMedia: boolean;
+  hasTranscript: boolean;
 }
 
-const { entry, slug, hasMedia } = Astro.props;
+const { entry, slug, hasMedia, hasTranscript } = Astro.props;
 
 const kind = mediaKind(entry.link);
 const ytId = kind === 'youtube' ? youtubeId(entry.link) : null;
@@ -86,7 +93,11 @@ if (entry.neg) facts.push(['neg', entry.neg]);
         <p class="rec-original">
           <a href={entry.link} target="_blank" rel="noopener noreferrer" class="link">open original source</a>
         </p>
+
+        <AccountBar slug={slug} />
       </section>
+
+      <Transcript slug={slug} hasTranscript={hasTranscript} />
     </div>
 
     <aside class="rec-side">

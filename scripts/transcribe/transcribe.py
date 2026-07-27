@@ -25,6 +25,9 @@ SHARD = int(os.environ.get("SHARD", "0"))
 SHARD_COUNT = int(os.environ.get("SHARD_COUNT", "1"))
 LIMIT = int(os.environ.get("LIMIT", "100000"))
 HF_TOKEN = os.environ.get("HF_TOKEN")
+# Cloudflare blocks urllib's default user agent with a 403, so every fetch
+# against media.goldenturn.org must identify itself as something else.
+USER_AGENT = "goldenturn-transcribe/1.0"
 
 
 def s3():
@@ -86,7 +89,13 @@ def main():
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 path = os.path.join(tmp, "a.m4a")
-                urllib.request.urlretrieve(f"{MEDIA}/audio/{slug}.m4a", path)
+                req = urllib.request.Request(
+                    f"{MEDIA}/audio/{slug}.m4a",
+                    headers={"User-Agent": USER_AGENT},
+                )
+                with urllib.request.urlopen(req, timeout=300) as r, open(path, "wb") as f:
+                    while chunk := r.read(1 << 20):
+                        f.write(chunk)
                 audio = whisperx.load_audio(path)
                 duration = len(audio) / 16000
 

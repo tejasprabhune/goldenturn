@@ -1,0 +1,323 @@
+---
+/**
+ * Sign-in affordance plus the per-round personal controls: favourite, tags and
+ * timestamped notes. Renders signed out by default and fills in on the client,
+ * so the page stays static and cacheable.
+ */
+interface Props {
+  slug?: string;
+}
+const { slug = '' } = Astro.props;
+---
+
+<div class="account" data-slug={slug}>
+  <div class="account-row">
+    <span class="label label-muted" id="account-state">reading as guest</span>
+    <div class="account-actions">
+      <button class="chip" id="account-signin">sign in</button>
+      <button class="chip" id="account-signout" hidden>sign out</button>
+      {slug && <button class="chip" id="account-fav" hidden>save</button>}
+    </div>
+  </div>
+
+  {slug && (
+    <div class="account-personal" id="account-personal" hidden>
+      <div class="account-block">
+        <p class="label label-muted">your tags</p>
+        <div class="tag-list" id="my-tags"></div>
+        <form class="account-inline" id="tag-form">
+          <input class="field" id="tag-input" placeholder="add a tag" maxlength="40" />
+          <button class="chip" type="submit">add</button>
+        </form>
+      </div>
+
+      <div class="account-block">
+        <p class="label label-muted">your notes</p>
+        <ul class="note-list" id="my-notes"></ul>
+        <form class="account-inline" id="note-form">
+          <input class="field" id="note-input" placeholder="note at current time" maxlength="4000" />
+          <button class="chip" type="submit">add</button>
+        </form>
+      </div>
+    </div>
+  )}
+</div>
+
+<dialog class="signin" id="signin-dialog">
+  <form method="dialog" class="signin-form" id="signin-form">
+    <p class="label label-muted">sign in</p>
+    <p class="signin-copy">
+      Reading is open to everyone. An account is only needed to propose edits,
+      vote, and keep notes.
+    </p>
+    <label class="signin-label" for="signin-email">email</label>
+    <input class="field" type="email" id="signin-email" required autocomplete="email" />
+    <label class="signin-label" for="signin-name">display name</label>
+    <input class="field" type="text" id="signin-name" maxlength="60" autocomplete="nickname" />
+    <p class="signin-error" id="signin-error" hidden></p>
+    <div class="signin-actions">
+      <button class="chip" value="cancel" formnovalidate>cancel</button>
+      <button class="btn" id="signin-submit" value="ok">continue</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  .account {
+    border-top: 1px solid var(--rule);
+    padding-top: 1rem;
+    margin-top: 2rem;
+  }
+
+  .account-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .account-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .account-personal {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding-top: 1.25rem;
+  }
+
+  @media (min-width: 800px) {
+    .account-personal {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .account-personal[hidden] {
+    display: none;
+  }
+
+  .account-block > .label {
+    margin-bottom: 0.6rem;
+  }
+
+  .account-inline {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+  }
+
+  .account-inline .field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .note-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .note-list li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    font-size: 0.875rem;
+  }
+
+  .note-at {
+    font-variant-numeric: tabular-nums;
+    color: var(--sky-deep);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .signin::backdrop {
+    background: rgba(23, 21, 15, 0.4);
+  }
+
+  .signin {
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    padding: 1.5rem;
+    max-width: 26rem;
+    width: calc(100vw - 2rem);
+    color: var(--ink);
+  }
+
+  .signin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .signin-copy {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    color: var(--ink-muted);
+    margin: 0.25rem 0 0.75rem;
+  }
+
+  .signin-label {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-top: 0.5rem;
+  }
+
+  .signin-error {
+    font-size: 0.8125rem;
+    color: #a33;
+    margin: 0.5rem 0 0;
+  }
+
+  .signin-error[hidden] {
+    display: none;
+  }
+
+  .signin-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+</style>
+
+<script>
+  import {
+    getUser, signIn, signOut, listFavorites, setFavorite,
+    listTags, setTag, listNotes, addNote, NotSignedIn,
+  } from '../lib/api';
+  import { formatTime } from '../lib/waveform';
+
+  const root = document.querySelector<HTMLElement>('.account');
+  if (root) {
+    const slug = root.dataset.slug ?? '';
+    const state = document.getElementById('account-state')!;
+    const signinBtn = document.getElementById('account-signin')!;
+    const signoutBtn = document.getElementById('account-signout')!;
+    const favBtn = document.getElementById('account-fav');
+    const personal = document.getElementById('account-personal');
+    const dialog = document.getElementById('signin-dialog') as HTMLDialogElement;
+
+    let favourited = false;
+
+    function render() {
+      const user = getUser();
+      if (user) {
+        state.textContent = `${user.display_name} · ${user.rep} rep`.replace(' · ', ' — ');
+        signinBtn.hidden = true;
+        signoutBtn.hidden = false;
+        if (favBtn) favBtn.hidden = false;
+        if (personal) personal.hidden = false;
+        void refreshPersonal();
+      } else {
+        state.textContent = 'reading as guest';
+        signinBtn.hidden = false;
+        signoutBtn.hidden = true;
+        if (favBtn) favBtn.hidden = true;
+        if (personal) personal.hidden = true;
+      }
+    }
+
+    async function refreshPersonal() {
+      if (!slug) return;
+      try {
+        const [{ favorites }, { tags }, { notes }] = await Promise.all([
+          listFavorites(), listTags(), listNotes(slug),
+        ]);
+        favourited = favorites.some(f => f.kind === 'recording' && f.ref === slug);
+        if (favBtn) favBtn.textContent = favourited ? 'saved' : 'save';
+
+        const tagBox = document.getElementById('my-tags')!;
+        tagBox.innerHTML = '';
+        for (const t of tags.filter(t => t.slug === slug)) {
+          const el = document.createElement('button');
+          el.className = 'tag';
+          el.textContent = t.tag;
+          el.title = 'remove tag';
+          el.addEventListener('click', async () => {
+            await setTag(slug, t.tag, true);
+            void refreshPersonal();
+          });
+          tagBox.appendChild(el);
+        }
+
+        const noteBox = document.getElementById('my-notes')!;
+        noteBox.innerHTML = '';
+        for (const n of notes) {
+          const li = document.createElement('li');
+          const at = document.createElement('span');
+          at.className = 'note-at';
+          at.textContent = formatTime(n.at_s);
+          at.addEventListener('click', () => {
+            const audio = document.getElementById('audio') as HTMLAudioElement | null;
+            if (audio) { audio.currentTime = n.at_s; void audio.play(); }
+          });
+          const body = document.createElement('span');
+          body.textContent = n.body;
+          li.append(at, body);
+          noteBox.appendChild(li);
+        }
+      } catch (e) {
+        if (e instanceof NotSignedIn) render();
+      }
+    }
+
+    signinBtn.addEventListener('click', () => dialog.showModal());
+    signoutBtn.addEventListener('click', () => { signOut(); render(); });
+
+    document.getElementById('signin-form')?.addEventListener('submit', async e => {
+      const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
+      if (submitter?.value !== 'ok') return;
+      e.preventDefault();
+      const email = (document.getElementById('signin-email') as HTMLInputElement).value.trim();
+      const name = (document.getElementById('signin-name') as HTMLInputElement).value.trim();
+      const err = document.getElementById('signin-error')!;
+      try {
+        await signIn(email, name || undefined);
+        err.hidden = true;
+        dialog.close();
+        render();
+      } catch (ex: any) {
+        err.textContent = ex.message ?? 'could not sign in';
+        err.hidden = false;
+      }
+    });
+
+    favBtn?.addEventListener('click', async () => {
+      try {
+        await setFavorite('recording', slug, favourited);
+        void refreshPersonal();
+      } catch (e) {
+        if (e instanceof NotSignedIn) dialog.showModal();
+      }
+    });
+
+    document.getElementById('tag-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const input = document.getElementById('tag-input') as HTMLInputElement;
+      if (!input.value.trim()) return;
+      await setTag(slug, input.value.trim());
+      input.value = '';
+      void refreshPersonal();
+    });
+
+    document.getElementById('note-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const input = document.getElementById('note-input') as HTMLInputElement;
+      if (!input.value.trim()) return;
+      const audio = document.getElementById('audio') as HTMLAudioElement | null;
+      await addNote(slug, audio?.currentTime ?? 0, input.value.trim());
+      input.value = '';
+      void refreshPersonal();
+    });
+
+    render();
+  }
+</script>

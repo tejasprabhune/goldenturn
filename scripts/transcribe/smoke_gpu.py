@@ -49,6 +49,16 @@ if blocked:
         print(f"  HTTP {code}  https://huggingface.co/{repo}", file=sys.stderr)
     sys.exit(1)
 
+# Cloudflare 403s urllib's default user agent, which only showed up as a
+# failed GPU job. Prove a real media fetch works with the UA we send.
+probe = urllib.request.Request(
+    "https://media.goldenturn.org/index.json",
+    headers={"User-Agent": "goldenturn-transcribe/1.0"},
+)
+with urllib.request.urlopen(probe, timeout=30) as r:
+    assert r.status == 200, f"media index fetch returned {r.status}"
+print("SMOKE media fetch OK")
+
 from whisperx.diarize import DiarizationPipeline
 
 pipe = DiarizationPipeline(use_auth_token=token, device="cpu")
