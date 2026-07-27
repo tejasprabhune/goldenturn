@@ -1,0 +1,194 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Your account | the golden turn" description="Your saved rounds, notes and tags.">
+  <div class="shell page-head">
+    <h1 class="page-title" id="me-title">Your account</h1>
+    <p class="page-lede" id="me-lede">Loading.</p>
+  </div>
+
+  <div class="shell page-body" id="me-body" hidden>
+    <div class="me-grid">
+      <section class="me-block">
+        <p class="section-head">Saved rounds</p>
+        <ul class="row-list" id="me-favorites"></ul>
+        <p class="page-lede me-empty" id="me-favorites-empty" hidden>Nothing saved yet.</p>
+      </section>
+
+      <section class="me-block">
+        <p class="section-head">Your tags</p>
+        <div class="tag-list" id="me-tags"></div>
+        <p class="page-lede me-empty" id="me-tags-empty" hidden>No tags yet.</p>
+      </section>
+
+      <section class="me-block">
+        <p class="section-head">Your notes</p>
+        <ul class="me-notes" id="me-notes"></ul>
+        <p class="page-lede me-empty" id="me-notes-empty" hidden>No notes yet.</p>
+      </section>
+    </div>
+
+    <p class="me-actions">
+      <button class="chip" id="me-signout">Sign out</button>
+    </p>
+  </div>
+
+  <div class="shell page-body" id="me-guest" hidden>
+    <p class="page-lede">
+      You are not signed in.
+      <button class="link account-link" id="me-signin">Sign up or sign in</button>
+      to save rounds, tag them, and keep notes.
+    </p>
+  </div>
+</BaseLayout>
+
+<style>
+  /* Page titles are lowercased by house style, but a person's name is not ours
+     to restyle. */
+  #me-title {
+    text-transform: none;
+  }
+
+  .me-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 900px) {
+    .me-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+    }
+
+    .me-block:first-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .me-empty {
+    margin-top: 0.75rem;
+  }
+
+  .me-notes {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+  }
+
+  .me-notes li {
+    border-bottom: 1px solid var(--rule-soft);
+    padding: 0.6rem 0;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .me-note-meta {
+    display: block;
+    font-size: 0.75rem;
+    color: rgba(23, 21, 15, 0.45);
+    margin-top: 0.2rem;
+  }
+
+  .me-actions {
+    margin-top: 3rem;
+  }
+</style>
+
+<script>
+  import { getUser, signOut, listFavorites, listNotes, listTags, NotSignedIn } from '../lib/api';
+  import { formatTime } from '../lib/waveform';
+
+  const title = document.getElementById('me-title')!;
+  const lede = document.getElementById('me-lede')!;
+  const body = document.getElementById('me-body')!;
+  const guest = document.getElementById('me-guest')!;
+
+  function titleCase(slug: string) {
+    return slug.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ');
+  }
+
+  async function render() {
+    const user = getUser();
+    if (!user) {
+      title.textContent = 'Your account';
+      lede.textContent = 'Reading is open to everyone; an account keeps your notes.';
+      body.hidden = true;
+      guest.hidden = false;
+      return;
+    }
+
+    title.textContent = user.display_name;
+    lede.textContent = `${user.rep} circuit rep`;
+    guest.hidden = true;
+    body.hidden = false;
+
+    try {
+      const [{ favorites }, { notes }, { tags }] = await Promise.all([
+        listFavorites(), listNotes(), listTags(),
+      ]);
+
+      const favList = document.getElementById('me-favorites')!;
+      favList.innerHTML = '';
+      document.getElementById('me-favorites-empty')!.hidden = favorites.length > 0;
+      favorites.forEach((f, i) => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.className = 'row';
+        a.href = f.kind === 'recording' ? `/recordings/${f.ref}` : `/${f.ref}`;
+        const idx = document.createElement('span');
+        idx.className = 'row-index';
+        idx.textContent = String(i + 1).padStart(2, '0');
+        const t = document.createElement('span');
+        t.className = 'row-title';
+        t.textContent = titleCase(f.ref);
+        const meta = document.createElement('span');
+        meta.className = 'row-meta';
+        meta.textContent = f.kind;
+        a.append(idx, t, meta);
+        li.appendChild(a);
+        favList.appendChild(li);
+      });
+
+      const tagBox = document.getElementById('me-tags')!;
+      tagBox.innerHTML = '';
+      const byTag = new Map<string, number>();
+      for (const t of tags) byTag.set(t.tag, (byTag.get(t.tag) ?? 0) + 1);
+      document.getElementById('me-tags-empty')!.hidden = byTag.size > 0;
+      for (const [tag, n] of [...byTag].sort((a, b) => b[1] - a[1])) {
+        const a = document.createElement('a');
+        a.className = 'tag';
+        a.href = `/recordings?tag=${encodeURIComponent('#' + tag)}`;
+        a.textContent = n > 1 ? `${tag} (${n})` : tag;
+        tagBox.appendChild(a);
+      }
+
+      const noteList = document.getElementById('me-notes')!;
+      noteList.innerHTML = '';
+      document.getElementById('me-notes-empty')!.hidden = notes.length > 0;
+      for (const n of notes) {
+        const li = document.createElement('li');
+        li.textContent = n.body;
+        const meta = document.createElement('a');
+        meta.className = 'me-note-meta';
+        meta.href = `/recordings/${n.slug}?t=${Math.floor(n.at_s)}`;
+        meta.textContent = `${titleCase(n.slug)} at ${formatTime(n.at_s)}`;
+        li.appendChild(meta);
+        noteList.appendChild(li);
+      }
+    } catch (e) {
+      if (e instanceof NotSignedIn) { body.hidden = true; guest.hidden = false; }
+    }
+  }
+
+  document.getElementById('me-signin')?.addEventListener('click', () =>
+    document.dispatchEvent(new CustomEvent('gt:open-signin')));
+  document.getElementById('me-signout')?.addEventListener('click', () => {
+    signOut();
+    location.reload();
+  });
+  document.addEventListener('gt:signed-in', render);
+
+  void render();
+</script>

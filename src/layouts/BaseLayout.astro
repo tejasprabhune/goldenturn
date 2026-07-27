@@ -58,6 +58,8 @@ function isActive(href: string) {
               {label}
             </a>
           ))}
+          <a href="/me" class="masthead-link masthead-auth" id="nav-account" hidden></a>
+          <button class="masthead-link masthead-auth-btn" id="nav-signin">sign in</button>
         </nav>
 
         <button
@@ -126,6 +128,25 @@ function isActive(href: string) {
         </div>
       </footer>
     )}
+
+    <dialog class="signin" id="signin-dialog">
+      <form method="dialog" class="signin-form" id="signin-form">
+        <p class="label label-muted">Sign in</p>
+        <p class="signin-copy">
+          Reading is open to everyone. An account is only needed to propose
+          edits, vote, and keep notes.
+        </p>
+        <label class="signin-label" for="signin-email">Email</label>
+        <input class="field" type="email" id="signin-email" required autocomplete="email" />
+        <label class="signin-label" for="signin-name">Display name</label>
+        <input class="field" type="text" id="signin-name" maxlength="60" autocomplete="nickname" />
+        <p class="signin-error" id="signin-error" hidden></p>
+        <div class="signin-actions">
+          <button class="chip" value="cancel" formnovalidate>Cancel</button>
+          <button class="btn" id="signin-submit" value="ok">Continue</button>
+        </div>
+      </form>
+    </dialog>
 
     <div id="search-overlay" class="search-overlay" hidden>
       <div class="search-overlay-backdrop" data-close></div>
@@ -253,6 +274,18 @@ function isActive(href: string) {
   .masthead-link.is-current {
     color: var(--ink);
     box-shadow: inset 0 -0.55em 0 var(--gold);
+  }
+
+  .masthead-auth-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .masthead-auth[hidden],
+  .masthead-auth-btn[hidden] {
+    display: none;
   }
 
   .masthead-toggle {
@@ -397,6 +430,45 @@ function isActive(href: string) {
 <script>
   import { algoliasearch } from 'algoliasearch';
   import { recordingHref } from '../lib/recordings';
+  import { getUser, signIn } from '../lib/api';
+
+  // Auth state is rendered on the client so pages stay static and cacheable.
+  const navAccount = document.getElementById('nav-account') as HTMLAnchorElement | null;
+  const navSignin = document.getElementById('nav-signin');
+  const signinDialog = document.getElementById('signin-dialog') as HTMLDialogElement | null;
+
+  function renderAuth() {
+    const user = getUser();
+    if (navAccount) {
+      navAccount.hidden = !user;
+      navAccount.textContent = user ? user.display_name : '';
+    }
+    if (navSignin) navSignin.hidden = Boolean(user);
+  }
+
+  navSignin?.addEventListener('click', () => signinDialog?.showModal());
+  document.addEventListener('gt:open-signin', () => signinDialog?.showModal());
+
+  document.getElementById('signin-form')?.addEventListener('submit', async e => {
+    const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (submitter?.value !== 'ok') return;
+    e.preventDefault();
+    const email = (document.getElementById('signin-email') as HTMLInputElement).value.trim();
+    const name = (document.getElementById('signin-name') as HTMLInputElement).value.trim();
+    const err = document.getElementById('signin-error')!;
+    try {
+      await signIn(email, name || undefined);
+      err.hidden = true;
+      signinDialog?.close();
+      renderAuth();
+      document.dispatchEvent(new CustomEvent('gt:signed-in'));
+    } catch (ex: any) {
+      err.textContent = ex.message ?? 'Could not sign in';
+      err.hidden = false;
+    }
+  });
+
+  renderAuth();
 
   const mobileToggle = document.getElementById('mobile-menu-toggle');
   const mobileMenu = document.getElementById('mobile-menu');

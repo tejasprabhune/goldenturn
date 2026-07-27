@@ -362,22 +362,27 @@ const { slug } = Astro.props;
         el.style.top = `${(sp.start / duration) * 100}%`;
         el.style.height = `${((sp.end - sp.start) / duration) * 100}%`;
         el.title = sp.label;
+
+        // A grab line at the top of each speech jumps to its beginning; the
+        // rest of the band scrolls to whatever line sits at that point.
+        const handle = document.createElement('button');
+        handle.className = 'minimap-handle';
+        handle.title = `Go to the start of ${sp.label}`;
+        handle.setAttribute('aria-label', `Go to the start of ${sp.label}`);
+        handle.addEventListener('click', ev => {
+          ev.stopPropagation();
+          scrollTranscriptTo(sp.start, 'top');
+        });
+        el.appendChild(handle);
         map.appendChild(el);
       }
+
+      // The minimap navigates the transcript only. Moving the recording is the
+      // transcript's job, so scrubbing here never disturbs playback.
       map.addEventListener('click', e => {
         const rect = map.getBoundingClientRect();
         const frac = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        const t = frac * duration;
-        // Land at the start of the speech that was clicked, not mid-sentence.
-        const speech = speeches.find(sp => t >= sp.start && t < sp.end);
-        const at = speech ? speech.start : t;
-        const a = audio();
-        if (a) { a.currentTime = at; void a.play(); }
-        const target = paras.findIndex(s => s.start >= at);
-        if (target >= 0) {
-          const el = linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(target))}`);
-          if (el) scrollLinesTo(el, 'top');
-        }
+        scrollTranscriptTo(frac * duration, 'nearest');
       });
     }
 
@@ -393,6 +398,17 @@ const { slug } = Astro.props;
       if (top < viewTop || top + el.offsetHeight > viewBottom) {
         linesEl.scrollTop = top - linesEl.clientHeight / 3;
       }
+    }
+
+    /** Scrolls the transcript to whatever paragraph covers this time. */
+    function scrollTranscriptTo(t: number, mode: 'nearest' | 'top') {
+      if (!paras.length) return;
+      let idx = 0;
+      for (let i = 0; i < paras.length; i++) {
+        if (paras[i].start <= t) idx = i; else break;
+      }
+      const el = linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(idx))}`);
+      if (el) scrollLinesTo(el, mode);
     }
 
     function syncTo(t: number) {

@@ -46,24 +46,6 @@ const { slug = '' } = Astro.props;
   )}
 </div>
 
-<dialog class="signin" id="signin-dialog">
-  <form method="dialog" class="signin-form" id="signin-form">
-    <p class="label label-muted">Sign in</p>
-    <p class="signin-copy">
-      Reading is open to everyone. An account is only needed to propose edits,
-      vote, and keep notes.
-    </p>
-    <label class="signin-label" for="signin-email">Email</label>
-    <input class="field" type="email" id="signin-email" required autocomplete="email" />
-    <label class="signin-label" for="signin-name">Display name</label>
-    <input class="field" type="text" id="signin-name" maxlength="60" autocomplete="nickname" />
-    <p class="signin-error" id="signin-error" hidden></p>
-    <div class="signin-actions">
-      <button class="chip" value="cancel" formnovalidate>Cancel</button>
-      <button class="btn" id="signin-submit" value="ok">Continue</button>
-    </div>
-  </form>
-</dialog>
 
 <style>
   .account {
@@ -169,56 +151,6 @@ const { slug = '' } = Astro.props;
     cursor: pointer;
     text-decoration: underline;
   }
-
-  .signin::backdrop {
-    background: rgba(23, 21, 15, 0.4);
-  }
-
-  .signin {
-    border: 1px solid var(--ink);
-    background: var(--paper);
-    padding: 1.5rem;
-    max-width: 26rem;
-    width: calc(100vw - 2rem);
-    color: var(--ink);
-  }
-
-  .signin-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .signin-copy {
-    font-size: 0.9375rem;
-    line-height: 1.55;
-    color: var(--ink-muted);
-    margin: 0.25rem 0 0.75rem;
-  }
-
-  .signin-label {
-    font-family: 'Neue Montreal', system-ui, sans-serif;
-    font-size: 0.6875rem;
-    letter-spacing: 0.04em;
-    margin-top: 0.5rem;
-  }
-
-  .signin-error {
-    font-size: 0.8125rem;
-    color: #a33;
-    margin: 0.5rem 0 0;
-  }
-
-  .signin-error[hidden] {
-    display: none;
-  }
-
-  .signin-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 1rem;
-  }
 </style>
 
 <script>
@@ -235,7 +167,7 @@ const { slug = '' } = Astro.props;
     const signoutBtn = document.getElementById('account-signout')!;
     const favBtn = document.getElementById('account-fav');
     const personal = document.getElementById('account-personal');
-    const dialog = document.getElementById('signin-dialog') as HTMLDialogElement;
+    const openSignIn = () => document.dispatchEvent(new CustomEvent('gt:open-signin'));
 
     let favourited = false;
 
@@ -251,7 +183,7 @@ const { slug = '' } = Astro.props;
       } else {
         state.innerHTML =
           'Reading as a guest, please <button class="link account-link" id="account-signin">sign up</button> to add your notes.';
-        state.querySelector('#account-signin')?.addEventListener('click', () => dialog.showModal());
+        state.querySelector('#account-signin')?.addEventListener('click', openSignIn);
         signoutBtn.hidden = true;
         if (favBtn) favBtn.hidden = true;
         if (personal) personal.hidden = true;
@@ -302,33 +234,15 @@ const { slug = '' } = Astro.props;
       }
     }
 
-    document.getElementById('account-signin')?.addEventListener('click', () => dialog.showModal());
+    document.getElementById('account-signin')?.addEventListener('click', openSignIn);
     signoutBtn.addEventListener('click', () => { signOut(); render(); });
-
-    document.getElementById('signin-form')?.addEventListener('submit', async e => {
-      const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
-      if (submitter?.value !== 'ok') return;
-      e.preventDefault();
-      const email = (document.getElementById('signin-email') as HTMLInputElement).value.trim();
-      const name = (document.getElementById('signin-name') as HTMLInputElement).value.trim();
-      const err = document.getElementById('signin-error')!;
-      try {
-        await signIn(email, name || undefined);
-        err.hidden = true;
-        dialog.close();
-        render();
-      } catch (ex: any) {
-        err.textContent = ex.message ?? 'could not sign in';
-        err.hidden = false;
-      }
-    });
 
     favBtn?.addEventListener('click', async () => {
       try {
         await setFavorite('recording', slug, favourited);
         void refreshPersonal();
       } catch (e) {
-        if (e instanceof NotSignedIn) dialog.showModal();
+        if (e instanceof NotSignedIn) openSignIn();
       }
     });
 
@@ -352,6 +266,7 @@ const { slug = '' } = Astro.props;
     });
 
     document.addEventListener('gt:notes-changed', () => { void refreshPersonal(); });
+    document.addEventListener('gt:signed-in', render);
     render();
   }
 </script>

@@ -481,6 +481,24 @@
     right: 0;
   }
 
+  .minimap-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    padding: 0;
+    border: none;
+    background: rgba(23, 21, 15, 0.35);
+    cursor: pointer;
+  }
+
+  .minimap-handle:hover,
+  .minimap-handle:focus-visible {
+    background: var(--ink);
+    height: 5px;
+  }
+
   .minimap-seg[data-side='aff'] {
     background: var(--gold);
   }
@@ -589,6 +607,57 @@
 
   .tx-tip-btn:hover {
     background: var(--sky);
+  }
+
+  .signin {
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    padding: 1.5rem;
+    max-width: 26rem;
+    width: calc(100vw - 2rem);
+    color: var(--ink);
+  }
+
+  .signin::backdrop {
+    background: rgba(23, 21, 15, 0.4);
+  }
+
+  .signin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .signin-copy {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    color: var(--ink-muted);
+    margin: 0.25rem 0 0.75rem;
+  }
+
+  .signin-label {
+    @apply font-sans;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    margin-top: 0.5rem;
+  }
+
+  .signin-error {
+    font-size: 0.8125rem;
+    color: #a33;
+    margin: 0.5rem 0 0;
+  }
+
+  .signin-error[hidden] {
+    display: none;
+  }
+
+  .signin-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
   }
 
   .crumbs {
