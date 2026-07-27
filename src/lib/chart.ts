@@ -21,6 +21,37 @@ function prepare(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w:
   return { ctx, w: rect.width, h: rect.height };
 }
 
+export interface Hit { index: number; label: string; value: number; x: number; y: number }
+
+/**
+ * Attaches hover readout to a chart. The hit map is rebuilt on every draw, so
+ * it always matches what is currently on screen.
+ */
+function attachHover(
+  canvas: HTMLCanvasElement,
+  hitAt: (x: number, y: number) => Hit | null,
+) {
+  let tip = canvas.parentElement?.querySelector<HTMLElement>('.chart-tip') ?? null;
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'chart-tip';
+    tip.hidden = true;
+    canvas.parentElement?.appendChild(tip);
+  }
+  const el = tip;
+
+  canvas.onpointermove = e => {
+    const rect = canvas.getBoundingClientRect();
+    const hit = hitAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (!hit) { el.hidden = true; return; }
+    el.hidden = false;
+    el.textContent = `${hit.label}  ${hit.value}`;
+    el.style.left = `${hit.x}px`;
+    el.style.top = `${hit.y}px`;
+  };
+  canvas.onpointerleave = () => { el.hidden = true; };
+}
+
 /**
  * Activity over time, drawn as a smoothed area so it reads like the waveform
  * rather than a business chart.
@@ -68,6 +99,18 @@ export function areaChart(canvas: HTMLCanvasElement, values: number[], labels: s
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = INK;
   ctx.fillText(String(max), 1, 11);
+
+  attachHover(canvas, (mx) => {
+    const i = Math.round((mx - 1) / (stepX || 1));
+    if (i < 0 || i >= values.length) return null;
+    const daysAgo = values.length - 1 - i;
+    const when = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`;
+    return {
+      index: i, label: when, value: values[i],
+      x: Math.min(Math.max(1 + i * stepX, 40), w - 8),
+      y: Math.max(y(values[i]) - 8, 18),
+    };
+  });
 }
 
 /** Ranked counts as horizontal bars, label inside, value at the end. */
@@ -100,5 +143,16 @@ export function barChart(
     ctx.fillStyle = MUTED;
     ctx.textAlign = 'right';
     ctx.fillText(String(row.value), w - 1, y + (rowH - gap) / 2);
+  });
+
+  attachHover(canvas, (mx, my) => {
+    const i = Math.floor(my / rowH);
+    if (i < 0 || i >= rows.length) return null;
+    // Keep the readout inside the canvas; row 0 would otherwise sit above it.
+    return {
+      index: i, label: rows[i].label, value: rows[i].value,
+      x: Math.min(Math.max(mx, 40), w - 8),
+      y: Math.max(i * rowH - 4, 18),
+    };
   });
 }

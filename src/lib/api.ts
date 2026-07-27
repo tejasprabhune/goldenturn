@@ -16,6 +16,12 @@ export interface User {
   rep: number;
 }
 
+const ADMIN_KEY = 'gt:admin';
+
+export function isAdmin(): boolean {
+  return localStorage.getItem(ADMIN_KEY) === '1';
+}
+
 export interface Proposal {
   id: string;
   kind: 'transcript' | 'boundary';
@@ -57,6 +63,7 @@ export function getUser(): User | null {
 export function signOut() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(ADMIN_KEY);
 }
 
 async function call<T>(path: string, init: RequestInit = {}, auth = false): Promise<T> {
@@ -83,13 +90,14 @@ async function call<T>(path: string, init: RequestInit = {}, auth = false): Prom
 }
 
 async function authenticate(payload: Record<string, unknown>): Promise<User> {
-  const { token, user } = await call<{ token: string; user: User }>('/auth/session', {
+  const res = await call<{ token: string; user: User; admin?: boolean }>('/auth/session', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-  return user;
+  localStorage.setItem(TOKEN_KEY, res.token);
+  localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+  localStorage.setItem(ADMIN_KEY, res.admin ? '1' : '0');
+  return res.user;
 }
 
 export function signIn(email: string, password: string): Promise<User> {
@@ -202,4 +210,25 @@ export function track(kind: string, slug?: string, payload?: Record<string, unkn
   } catch {
     /* telemetry is best effort */
   }
+}
+
+export interface AdminEvent {
+  id: number; kind: string; slug: string | null;
+  payload: string; created_at: number; who: string;
+}
+
+export function adminEvents(since = 0, limit = 60) {
+  return call<{ events: AdminEvent[] }>(`/admin/events?since=${since}&limit=${limit}`, {}, true);
+}
+
+export function adminProposals() {
+  return call<{ proposals: Proposal[] & Array<{ slug: string }> }>('/admin/proposals', {}, true);
+}
+
+export function adminResolve(proposalId: string, action: 'accept' | 'reject') {
+  return call<{ ok: true; status: string }>(
+    `/admin/proposals/${encodeURIComponent(proposalId)}/resolve`,
+    { method: 'POST', body: JSON.stringify({ action }) },
+    true,
+  );
 }

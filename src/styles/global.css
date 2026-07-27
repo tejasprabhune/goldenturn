@@ -669,6 +669,96 @@
     font-variant-numeric: normal;
   }
 
+  .chart-wrap {
+    position: relative;
+  }
+
+  .chart-tip {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    padding: 0.15rem 0.4rem;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 5;
+  }
+
+  .chart-tip[hidden] {
+    display: none;
+  }
+
+  .stream {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    max-height: 26rem;
+    overflow-y: auto;
+  }
+
+  .stream li {
+    display: grid;
+    grid-template-columns: 4.5rem 7rem 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    font-size: 0.8125rem;
+  }
+
+  .stream li.is-new {
+    background: rgba(253, 216, 93, 0.25);
+  }
+
+  .stream-at {
+    font-variant-numeric: tabular-nums;
+    color: rgba(23, 21, 15, 0.4);
+    font-size: 0.75rem;
+  }
+
+  .stream-who {
+    font-weight: 500;
+  }
+
+  .stream-what {
+    color: var(--ink-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .queue {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+  }
+
+  .queue li {
+    border-bottom: 1px solid var(--rule-soft);
+    padding: 0.7rem 0;
+  }
+
+  .queue-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: rgba(23, 21, 15, 0.5);
+    margin-bottom: 0.3rem;
+  }
+
+  .queue-diff {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .queue-actions {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+
   .signin {
     /* A dialog does not inherit the document font, so it must be set here. */
     font-family: 'Neue Montreal', system-ui, sans-serif;

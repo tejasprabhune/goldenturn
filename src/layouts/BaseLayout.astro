@@ -58,6 +58,7 @@ function isActive(href: string) {
               {label}
             </a>
           ))}
+          <a href="/admin" class="masthead-link masthead-auth" id="nav-admin" hidden>admin</a>
           <a href="/me" class="masthead-link masthead-auth" id="nav-account" hidden></a>
           <button class="masthead-link masthead-auth-btn" id="nav-signin">sign in</button>
         </nav>
@@ -441,7 +442,7 @@ function isActive(href: string) {
 <script>
   import { algoliasearch } from 'algoliasearch';
   import { recordingHref } from '../lib/recordings';
-  import { getUser, signIn, signUp, track } from '../lib/api';
+  import { getUser, signIn, signUp, isAdmin, track } from '../lib/api';
 
   // Auth state is rendered on the client so pages stay static and cacheable.
   const navAccount = document.getElementById('nav-account') as HTMLAnchorElement | null;
@@ -455,6 +456,8 @@ function isActive(href: string) {
       navAccount.textContent = user ? user.display_name : '';
     }
     if (navSignin) navSignin.hidden = Boolean(user);
+    const navAdmin = document.getElementById('nav-admin');
+    if (navAdmin) navAdmin.hidden = !(user && isAdmin());
   }
 
   let signupMode = false;

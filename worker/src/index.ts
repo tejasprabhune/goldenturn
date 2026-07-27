@@ -208,7 +208,7 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
       `INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?1, ?2, ?3, ?4)`
     ).bind(token, user.id, now(), now() + ttl).run();
 
-    return json({ token, user });
+    return json({ token, user, admin: isAdmin(user, env) });
   },
 
   // Anonymous telemetry: what people search for and which rounds they open.
@@ -260,8 +260,67 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     return json({ days, searches, tags, rounds, daily, kinds, totals: totals[0] ?? {}, contributors });
   },
 
-  'GET /me': async (_req, _env, _url, user) =>
-    user ? json({ user }) : json({ error: 'not signed in' }, { status: 401 }),
+  // A live tail of what is happening, attributed where an account was signed in.
+  'GET /admin/events': async (_req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const limit = Math.min(Number(url.searchParams.get('limit') ?? '60'), 200);
+    const since = Number(url.searchParams.get('since') ?? '0');
+    const { results } = await env.DB.prepare(
+      `SELECT e.id, e.kind, e.slug, e.payload, e.created_at,
+              COALESCE(u.display_name, 'guest') AS who
+         FROM events e LEFT JOIN users u ON u.id = e.user_id
+        WHERE e.id > ?1
+        ORDER BY e.id DESC LIMIT ?2`
+    ).bind(since, limit).all();
+    return json({ events: results });
+  },
+
+  'GET /admin/proposals': async (_req, env, _url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const { results } = await env.DB.prepare(
+      `SELECT p.id, p.slug, p.kind, p.anchor, p.original, p.proposed, p.note,
+              p.score, p.status, p.created_at, u.display_name AS author
+         FROM proposals p JOIN users u ON u.id = p.user_id
+        WHERE p.status = 'open'
+        ORDER BY p.score DESC, p.created_at ASC LIMIT 100`
+    ).all();
+    return json({ proposals: results });
+  },
+
+  /** Admin override: accept or reject without waiting for the vote threshold. */
+  'POST /admin/proposals/:id/resolve': async (req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const pid = url.pathname.split('/')[3];
+    const { action } = await req.json<{ action?: string }>().catch(() => ({}));
+    if (action !== 'accept' && action !== 'reject') {
+      return json({ error: 'action must be accept or reject' }, { status: 400 });
+    }
+
+    const proposal = await env.DB.prepare(`SELECT * FROM proposals WHERE id = ?1`)
+      .bind(pid).first<any>();
+    if (!proposal) return json({ error: 'no such proposal' }, { status: 404 });
+    if (proposal.status !== 'open') return json({ error: 'already resolved' }, { status: 409 });
+
+    if (action === 'reject') {
+      await env.DB.prepare(`UPDATE proposals SET status = 'rejected' WHERE id = ?1`).bind(pid).run();
+      await logEvent(env, 'proposal.rejected', user!.id, proposal.slug, { pid });
+      return json({ ok: true, status: 'rejected' });
+    }
+
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE proposals SET status = 'accepted' WHERE id = ?1`).bind(pid),
+      env.DB.prepare(
+        `INSERT INTO revisions (id, slug, kind, anchor, value, proposal_id, applied_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+      ).bind(id(), proposal.slug, proposal.kind, proposal.anchor, proposal.proposed, pid, now()),
+      env.DB.prepare(`UPDATE users SET rep = rep + 10 WHERE id = ?1`).bind(proposal.user_id),
+    ]);
+    await logEvent(env, 'proposal.accepted', user!.id, proposal.slug, { pid, by: 'admin' });
+    return json({ ok: true, status: 'accepted' });
+  },
+
+  'GET /me': async (_req, env, _url, user) =>
+    user ? json({ user, admin: isAdmin(user, env) }) : json({ error: 'not signed in' }, { status: 401 }),
 
   'GET /rounds/:slug/proposals': async (_req, env, url) => {
     const slug = url.pathname.split('/')[2];

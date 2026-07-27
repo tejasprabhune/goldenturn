@@ -81,7 +81,23 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         <button class="chip" id="loop-clear">clear</button>
       </div>
 
-      <div class="speeches" id="speeches" hidden></div>
+      <div class="speeches-row">
+        <div class="speeches" id="speeches" hidden></div>
+        <button class="chip" id="fix-speeches" hidden>Fix timings</button>
+      </div>
+
+      <div class="fixer" id="fixer" hidden>
+        <p class="label label-muted">
+          Drag a marker, or scrub to a moment and press Set. Corrections are
+          proposed and go live once the community agrees.
+        </p>
+        <div class="fixer-rows" id="fixer-rows"></div>
+        <div class="fixer-actions">
+          <button class="btn" id="fixer-submit">Propose these timings</button>
+          <button class="chip" id="fixer-cancel">Cancel</button>
+          <span class="label label-muted" id="fixer-status"></span>
+        </div>
+      </div>
 
       <dl class="keys">
         <div class="key-row"><dt>Play</dt><dd><kbd>Space</kbd></dd></div>
@@ -303,11 +319,59 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     color: rgba(23, 21, 15, 0.4);
   }
 
+  .speeches-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-top: 0.9rem;
+  }
+
   .speeches {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
+  }
+
+  .fixer {
+    border-top: 1px solid var(--rule);
+    margin-top: 1rem;
     padding-top: 0.9rem;
+  }
+
+  .fixer[hidden] {
+    display: none;
+  }
+
+  .fixer-rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+  }
+
+  .fixer-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+  }
+
+  .fixer-label {
+    min-width: 2.6rem;
+    font-weight: 500;
+  }
+
+  .fixer-at {
+    font-variant-numeric: tabular-nums;
+    min-width: 3.4rem;
+  }
+
+  .fixer-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .speeches[hidden] {
@@ -333,7 +397,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
 <script>
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
-  import { track } from '../lib/api';
+  import { track, propose, listRevisions, getUser, NotSignedIn } from '../lib/api';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
   const MEDIA = 'https://media.goldenturn.org';
@@ -533,41 +597,66 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // Speech regions shade the waveform and give keyboard jumps 1-6.
     let speechStarts: number[] = [];
-    fetch(`${MEDIA}/speeches/${slug}.json`)
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error('none'))))
-      .then((fit: { speeches: Array<{ label: string; start: number; end: number; confidence: number }> }) => {
-        const found = fit.speeches.filter(s => s.confidence > 0 && s.end > s.start);
-        if (!found.length) return;
-        const AFF = new Set(['PMC', 'MG', 'PMR']);
-        wave.setSegments(found.map(s => ({
-          label: s.label, start: s.start, end: s.end, confidence: s.confidence,
-          side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
-        })));
+    function applyFitted(found: typeof fitted) {
+      const AFF = new Set(['PMC', 'MG', 'PMR']);
+      wave.setSegments(found.map(s => ({
+        label: s.label, start: s.start, end: s.end, confidence: s.confidence,
+        side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
+      })));
 
-        const box = document.getElementById('speeches')!;
-        box.hidden = false;
-        speechStarts = found.map(s => s.start);
-        found.forEach((s, i) => {
-          const b = document.createElement('button');
-          b.className = 'speech-jump';
-          if (s.confidence < 0.6) {
-            b.dataset.unsure = '1';
-            b.title = 'boundary is uncertain';
-          }
-          b.append(s.label);
-          const at = document.createElement('span');
-          at.className = 'speech-jump-at';
-          at.textContent = formatTime(s.start);
-          b.appendChild(at);
-          b.addEventListener('click', () => {
-            audio.currentTime = s.start;
-            void audio.play();
-            track('speech.jump', slug, { label: s.label });
-          });
-          box.appendChild(b);
+      const box = document.getElementById('speeches')!;
+      box.innerHTML = '';
+      box.hidden = found.length === 0;
+      speechStarts = found.map(s => s.start);
+      found.forEach(s => {
+        const b = document.createElement('button');
+        b.className = 'speech-jump';
+        if (s.confidence < 0.6) {
+          b.dataset.unsure = '1';
+          b.title = 'Timing is uncertain; corrections welcome';
+        }
+        b.append(s.label);
+        const at = document.createElement('span');
+        at.className = 'speech-jump-at';
+        at.textContent = formatTime(s.start);
+        b.appendChild(at);
+        b.addEventListener('click', () => {
+          audio.currentTime = s.start;
+          void audio.play();
+          track('speech.jump', slug, { label: s.label });
         });
-      })
-      .catch(() => {});
+        box.appendChild(b);
+      });
+    }
+
+    Promise.allSettled([
+      fetch(`${MEDIA}/speeches/${slug}.json`).then(r => (r.ok ? r.json() : null)),
+      listRevisions(slug),
+    ]).then(([fitRes, revRes]) => {
+      const fit = fitRes.status === 'fulfilled' ? fitRes.value : null;
+      if (!fit) return;
+      let found = (fit.speeches ?? []).filter((s: any) => s.confidence > 0 && s.end > s.start);
+      if (!found.length) return;
+
+      // An accepted timing correction wins over the machine fit.
+      if (revRes.status === 'fulfilled') {
+        const moves = new Map<string, number>();
+        for (const r of revRes.value.revisions) {
+          if (r.kind === 'boundary') moves.set(r.anchor, Number(r.value));
+        }
+        if (moves.size) {
+          found = found
+            .map((s: any) => ({ ...s, start: moves.get(s.label) ?? s.start, confidence: moves.has(s.label) ? 1 : s.confidence }))
+            .sort((a: any, b: any) => a.start - b.start)
+            .map((s: any, i: number, arr: any[]) => ({ ...s, end: arr[i + 1] ? arr[i + 1].start : s.end }));
+        }
+      }
+
+      fitted = found;
+      applyFitted(found);
+      const fix = document.getElementById('fix-speeches');
+      if (fix) fix.hidden = false;
+    });
 
     canvas.addEventListener('keydown', e => {
       if (e.key === 'Home') { e.preventDefault(); audio.currentTime = 0; }
@@ -583,6 +672,86 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         e.preventDefault();
         audio.currentTime = speechStarts[n - 1];
         void audio.play();
+      }
+    });
+
+    // Timing corrections. Boundaries are proposed, not written directly, so
+    // they go through the same review as transcript edits.
+    let fitted: Array<{ label: string; start: number; end: number; confidence: number }> = [];
+    let draft: Record<string, number> = {};
+
+    function openFixer() {
+      if (!getUser()) { document.dispatchEvent(new CustomEvent('gt:open-signin')); return; }
+      draft = Object.fromEntries(fitted.map(s => [s.label, s.start]));
+      const rows = document.getElementById('fixer-rows')!;
+      rows.innerHTML = '';
+      for (const s of fitted) {
+        const row = document.createElement('div');
+        row.className = 'fixer-row';
+        const label = document.createElement('span');
+        label.className = 'fixer-label';
+        label.textContent = s.label;
+        const at = document.createElement('span');
+        at.className = 'fixer-at';
+        at.textContent = formatTime(draft[s.label]);
+        const set = document.createElement('button');
+        set.className = 'chip';
+        set.textContent = 'Set';
+        set.title = `Move ${s.label} to the current position`;
+        set.addEventListener('click', () => {
+          draft[s.label] = Math.round(audio.currentTime);
+          at.textContent = formatTime(draft[s.label]);
+          previewDraft();
+        });
+        row.append(label, at, set);
+        rows.appendChild(row);
+      }
+      document.getElementById('fixer')!.hidden = false;
+    }
+
+    function previewDraft() {
+      const AFF = new Set(['PMC', 'MG', 'PMR']);
+      const ordered = fitted
+        .map(s => ({ ...s, start: draft[s.label] ?? s.start }))
+        .sort((a, b) => a.start - b.start);
+      wave.setSegments(ordered.map((s, i) => ({
+        label: s.label,
+        start: s.start,
+        end: ordered[i + 1] ? ordered[i + 1].start : s.end,
+        confidence: s.confidence,
+        side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
+      })));
+    }
+
+    document.getElementById('fix-speeches')?.addEventListener('click', openFixer);
+    document.getElementById('fixer-cancel')?.addEventListener('click', () => {
+      document.getElementById('fixer')!.hidden = true;
+      applyFitted(fitted);
+    });
+
+    document.getElementById('fixer-submit')?.addEventListener('click', async e => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const status = document.getElementById('fixer-status')!;
+      const changed = fitted.filter(s => Math.abs((draft[s.label] ?? s.start) - s.start) > 2);
+      if (!changed.length) { status.textContent = 'No changes to propose'; return; }
+      btn.disabled = true;
+      try {
+        for (const s of changed) {
+          await propose(slug, {
+            kind: 'boundary',
+            anchor: s.label,
+            original: String(Math.round(s.start)),
+            proposed: String(draft[s.label]),
+            startS: draft[s.label],
+          });
+        }
+        status.textContent = `Proposed ${changed.length} correction${changed.length === 1 ? '' : 's'}`;
+        track('boundary.propose', slug, { count: changed.length });
+      } catch (ex) {
+        status.textContent = ex instanceof NotSignedIn ? 'Sign in first' : 'Could not submit';
+        if (ex instanceof NotSignedIn) document.dispatchEvent(new CustomEvent('gt:open-signin'));
+      } finally {
+        btn.disabled = false;
       }
     });
 

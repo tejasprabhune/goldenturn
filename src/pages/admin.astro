@@ -32,18 +32,35 @@ const PANELS = [
           <option value="365">Last year</option>
         </select>
       </div>
-      <canvas class="admin-canvas admin-canvas--tall" id="chart-daily"></canvas>
+      <div class="chart-wrap"><canvas class="admin-canvas admin-canvas--tall" id="chart-daily"></canvas></div>
     </section>
 
     <div class="admin-grid">
       {PANELS.map(p => (
         <section class="admin-panel">
           <p class="section-head">{p.title}</p>
-          <canvas class="admin-canvas" id={`chart-${p.id}`} data-accent={p.accent}></canvas>
+          <div class="chart-wrap"><canvas class="admin-canvas" id={`chart-${p.id}`} data-accent={p.accent}></canvas></div>
           <p class="page-lede admin-empty" id={`empty-${p.id}`} hidden>Nothing recorded yet.</p>
         </section>
       ))}
     </div>
+
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <p class="section-head">Proposed edits awaiting review</p>
+        <span class="label label-muted" id="queue-count"></span>
+      </div>
+      <ul class="queue" id="admin-queue"></ul>
+      <p class="page-lede admin-empty" id="queue-empty" hidden>Nothing waiting.</p>
+    </section>
+
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <p class="section-head">Live activity</p>
+        <button class="chip" id="stream-toggle" aria-pressed="true">Live</button>
+      </div>
+      <ul class="stream" id="admin-stream"></ul>
+    </section>
 
     <section class="admin-panel">
       <p class="section-head">Contributors</p>
@@ -134,7 +151,10 @@ const PANELS = [
 </style>
 
 <script>
-  import { adminStats, getUser, type AdminStats } from '../lib/api';
+  import {
+    adminStats, adminEvents, adminProposals, adminResolve, getUser,
+    type AdminStats, type AdminEvent,
+  } from '../lib/api';
   import { areaChart, barChart } from '../lib/chart';
 
   const lede = document.getElementById('admin-lede')!;
@@ -218,12 +238,119 @@ const PANELS = [
       denied.hidden = true;
       body.hidden = false;
       drawAll(stats);
+      void pollEvents();
+      void loadQueue();
+      if (live && !timer) timer = setInterval(pollEvents, 5000);
     } catch (e: any) {
       lede.textContent = 'Access denied.';
       denied.hidden = false;
       body.hidden = true;
     }
   }
+
+  // Live tail. Only rows newer than the last id are fetched, so the poll stays
+  // cheap however long the page is left open.
+  let lastEventId = 0;
+  let live = true;
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  function describe(e: AdminEvent): string {
+    let extra = '';
+    try {
+      const p = JSON.parse(e.payload || '{}');
+      if (p.q) extra = `"${p.q}"`;
+      else if (p.label) extra = p.label;
+      else if (p.tag) extra = p.tag;
+    } catch { /* payload is best effort */ }
+    const where = e.slug ? e.slug.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ') : '';
+    return [extra, where].filter(Boolean).join(' — ');
+  }
+
+  async function pollEvents() {
+    try {
+      const { events } = await adminEvents(lastEventId, 60);
+      if (!events.length) return;
+      const list = document.getElementById('admin-stream')!;
+      // Ascending so the newest ends up on top after prepending.
+      for (const e of [...events].reverse()) {
+        if (e.id <= lastEventId) continue;
+        lastEventId = Math.max(lastEventId, e.id);
+        const li = document.createElement('li');
+        if (lastEventId > 0) li.className = 'is-new';
+        const at = document.createElement('span');
+        at.className = 'stream-at';
+        at.textContent = new Date(e.created_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const who = document.createElement('span');
+        who.className = 'stream-who';
+        who.textContent = e.who;
+        const what = document.createElement('span');
+        what.className = 'stream-what';
+        what.textContent = `${e.kind} ${describe(e)}`.trim();
+        li.append(at, who, what);
+        list.prepend(li);
+        setTimeout(() => li.classList.remove('is-new'), 2000);
+      }
+      while (list.children.length > 200) list.lastElementChild?.remove();
+    } catch { /* keep polling */ }
+  }
+
+  async function loadQueue() {
+    const list = document.getElementById('admin-queue')!;
+    const empty = document.getElementById('queue-empty')!;
+    const count = document.getElementById('queue-count')!;
+    const { proposals } = await adminProposals().catch(() => ({ proposals: [] as any[] }));
+    list.innerHTML = '';
+    empty.hidden = proposals.length > 0;
+    count.textContent = proposals.length ? `${proposals.length} open` : '';
+
+    for (const p of proposals as any[]) {
+      const li = document.createElement('li');
+      const head = document.createElement('div');
+      head.className = 'queue-head';
+      head.textContent = `${p.kind} · ${p.author} · score ${p.score} · ${p.slug.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ')}`
+        .replace(/ · /g, '   ');
+      const diff = document.createElement('div');
+      diff.className = 'queue-diff';
+      const was = document.createElement('span');
+      was.className = 'proposal-was';
+      was.textContent = p.original.slice(0, 160);
+      diff.append(was, document.createElement('br'), document.createTextNode(p.proposed.slice(0, 200)));
+
+      const actions = document.createElement('div');
+      actions.className = 'queue-actions';
+      for (const action of ['accept', 'reject'] as const) {
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = action === 'accept' ? 'Accept' : 'Reject';
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          try {
+            await adminResolve(p.id, action);
+            li.remove();
+            void loadQueue();
+          } catch { b.disabled = false; }
+        });
+        actions.appendChild(b);
+      }
+
+      li.append(head, diff, actions);
+      if (p.note) {
+        const n = document.createElement('div');
+        n.className = 'queue-head';
+        n.textContent = p.note;
+        li.appendChild(n);
+      }
+      list.appendChild(li);
+    }
+  }
+
+  document.getElementById('stream-toggle')?.addEventListener('click', e => {
+    live = !live;
+    (e.currentTarget as HTMLElement).setAttribute('aria-pressed', String(live));
+    (e.currentTarget as HTMLElement).textContent = live ? 'Live' : 'Paused';
+    if (live) timer = setInterval(pollEvents, 5000);
+    else clearInterval(timer);
+  });
 
   document.getElementById('admin-days')?.addEventListener('change', e => {
     void load(Number((e.currentTarget as HTMLSelectElement).value));

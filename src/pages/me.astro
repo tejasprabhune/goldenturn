@@ -30,6 +30,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     </div>
 
     <p class="me-actions">
+      <a class="chip" href="/admin" id="me-admin" hidden>Admin dashboard</a>
       <button class="chip" id="me-signout">Sign out</button>
     </p>
   </div>
@@ -87,11 +88,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   .me-actions {
     margin-top: 3rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
   }
 </style>
 
 <script>
-  import { getUser, signOut, listFavorites, listNotes, listTags, NotSignedIn } from '../lib/api';
+  import { getUser, signOut, listFavorites, listNotes, listTags, isAdmin, NotSignedIn } from '../lib/api';
   import { formatTime } from '../lib/waveform';
 
   const title = document.getElementById('me-title')!;
@@ -117,6 +121,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     lede.textContent = `${user.rep} circuit rep`;
     guest.hidden = true;
     body.hidden = false;
+    const adminLink = document.getElementById('me-admin');
+    if (adminLink) adminLink.hidden = !isAdmin();
 
     try {
       const [{ favorites }, { notes }, { tags }] = await Promise.all([
