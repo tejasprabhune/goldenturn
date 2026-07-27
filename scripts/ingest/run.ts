@@ -13,7 +13,8 @@ const shardCount = Number(process.env.SHARD_COUNT ?? '1');
 async function main() {
   const manifestPath = process.env.MANIFEST ?? 'scripts/ingest/manifest.json';
   const all: ManifestEntry[] = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-  const eligible = all.filter(m => m.dropbox);
+  const wantExternal = process.env.EXTERNAL === '1';
+  const eligible = all.filter(m => wantExternal ? m.match === 'external' : !!m.dropbox);
   const mine = shardCount > 1 ? eligible.filter((_, i) => i % shardCount === shard) : eligible;
   const queue = mine.slice(offset, offset + limit);
   console.log(`shard ${shard}/${shardCount}: ingesting ${queue.length} of ${eligible.length}, concurrency ${concurrency}`);

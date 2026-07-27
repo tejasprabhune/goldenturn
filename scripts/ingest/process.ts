@@ -30,6 +30,19 @@ export interface ManifestEntry {
   dropbox?: { id: string; path: string; size: number };
 }
 
+/** YouTube and Vimeo rounds have no Dropbox source, so the audio comes from the host. */
+async function downloadExternal(link: string, destDir: string): Promise<string> {
+  const out = join(destDir, 'external.%(ext)s');
+  await run('yt-dlp', [
+    '-f', 'bestaudio/best', '-o', out, '--no-playlist',
+    '--no-progress', '--quiet', link,
+  ], { maxBuffer: 1024 * 1024 * 32 });
+  const { stdout } = await run('sh', ['-c', `ls ${destDir}/external.* | head -1`]);
+  const path = stdout.trim();
+  if (!path) throw new Error('yt-dlp produced no file');
+  return path;
+}
+
 function s3(): S3Client {
   const account = loadEnv('CLOUDFLARE_ACCOUNT_ID');
   return new S3Client({
@@ -103,7 +116,8 @@ async function computePeaks(src: string, buckets: number): Promise<number[]> {
 }
 
 export async function ingestOne(entry: ManifestEntry, opts: { force?: boolean } = {}) {
-  if (!entry.dropbox) return { slug: entry.slug, skipped: 'no dropbox source' };
+  const external = !entry.dropbox && entry.match === 'external';
+  if (!entry.dropbox && !external) return { slug: entry.slug, skipped: 'no source' };
 
   const client = s3();
   const audioKey = `audio/${entry.slug}.m4a`;
@@ -116,12 +130,17 @@ export async function ingestOne(entry: ManifestEntry, opts: { force?: boolean } 
   const dir = mkdtempSync(join(tmpdir(), 'gt-'));
   const started = Date.now();
   try {
-    const ext = entry.dropbox.path.split('.').pop() ?? 'bin';
-    const src = join(dir, `src.${ext}`);
     const out = join(dir, 'out.m4a');
+    let src: string;
 
-    const token = await dropboxToken();
-    await downloadFromDropbox(token, entry.dropbox.id, src);
+    if (external) {
+      src = await downloadExternal(entry.link, dir);
+    } else {
+      const ext = entry.dropbox!.path.split('.').pop() ?? 'bin';
+      src = join(dir, `src.${ext}`);
+      const token = await dropboxToken();
+      await downloadFromDropbox(token, entry.dropbox!.id, src);
+    }
 
     // 64k mono AAC: speech-only content, and it keeps the archive streamable.
     await run('ffmpeg', ['-v', 'error', '-y', '-i', src, '-vn', '-ac', '1',
@@ -145,7 +164,7 @@ export async function ingestOne(entry: ManifestEntry, opts: { force?: boolean } 
     return {
       slug: entry.slug,
       duration: Math.round(duration),
-      sourceMB: +(entry.dropbox.size / 1e6).toFixed(1),
+      sourceMB: entry.dropbox ? +(entry.dropbox.size / 1e6).toFixed(1) : 0,
       audioMB: +(audio.length / 1e6).toFixed(1),
       seconds: +((Date.now() - started) / 1000).toFixed(1),
     };
