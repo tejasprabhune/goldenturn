@@ -12,6 +12,7 @@ import tempfile
 import time
 import urllib.request
 
+import compat  # noqa: F401  (patches huggingface_hub before pyannote binds it)
 import boto3
 import torch
 import whisperx

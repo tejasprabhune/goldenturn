@@ -43,13 +43,11 @@ const videoEmbed = ytId
 const meta = [entry.year, entry.tournament].filter(Boolean).join(', ');
 const tags = (entry._tags ?? []).filter(t => t.startsWith('#'));
 
+// aff_type and neg_strategy_count are derived from the aff and neg text, so
+// showing them here just repeats what the reader already has.
 const facts: Array<[string, string]> = [];
 if (entry.aff) facts.push(['aff', entry.aff]);
 if (entry.neg) facts.push(['neg', entry.neg]);
-if (entry.aff_type) facts.push(['aff type', entry.aff_type]);
-if (typeof entry.neg_strategy_count === 'number') {
-  facts.push(['neg strategies', `${entry.neg_strategy_count}-off`]);
-}
 ---
 
 <BaseLayout
