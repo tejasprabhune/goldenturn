@@ -136,6 +136,33 @@
 }
 
 @layer components {
+  /* Fingers need a bigger target than a cursor does; desktop density is left
+     alone by scoping this to coarse pointers. */
+  @media (pointer: coarse) {
+    .chip,
+    .tag,
+    .vote,
+    .speech-jump,
+    .rec-card__tag,
+    .rec-card__action,
+    .masthead-link,
+    .footer-link,
+    .minimap-handle {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .minimap-handle {
+      height: 8px;
+      min-height: 8px;
+    }
+
+    .minimap {
+      width: 22px;
+    }
+  }
+
   /* Swiss shell: one column measure, one gutter, used by every page. */
   .shell {
     width: 100%;

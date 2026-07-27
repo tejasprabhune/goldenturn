@@ -29,7 +29,7 @@ const { slug = '' } = Astro.props;
         <p class="label label-muted">Your tags</p>
         <div class="tag-list" id="my-tags"></div>
         <form class="account-inline" id="tag-form">
-          <input class="field" id="tag-input" placeholder="Add a tag" maxlength="40" />
+          <input class="field" id="tag-input" placeholder="Add a tag" maxlength="40" aria-label="Add a tag to this round" />
           <button class="chip" type="submit">Add</button>
         </form>
       </div>
@@ -38,7 +38,7 @@ const { slug = '' } = Astro.props;
         <p class="label label-muted">Your notes</p>
         <ul class="note-list" id="my-notes"></ul>
         <form class="account-inline" id="note-form">
-          <input class="field" id="note-input" placeholder="Note at the current time" maxlength="4000" />
+          <input class="field" id="note-input" placeholder="Note at the current time" maxlength="4000" aria-label="Note at the current playback time" />
           <button class="chip" type="submit">Add</button>
         </form>
       </div>

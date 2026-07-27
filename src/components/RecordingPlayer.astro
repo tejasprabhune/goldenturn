@@ -38,7 +38,16 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
   {hasMedia ? (
     <>
       <div class="wave-wrap">
-        <canvas id="wave" class="wave" aria-label={`Waveform for ${title}`} role="img"></canvas>
+        <canvas
+          id="wave"
+          class="wave"
+          tabindex="0"
+          role="slider"
+          aria-label={`Seek within ${title}`}
+          aria-valuemin="0"
+          aria-valuenow="0"
+          aria-valuetext="0:00"
+        ></canvas>
         <div class="wave-tip" id="wave-tip" hidden></div>
         <p class="wave-loading label label-muted" id="wave-loading">loading waveform</p>
       </div>
@@ -127,6 +136,11 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     height: 132px;
     cursor: crosshair;
     touch-action: none;
+  }
+
+  .wave:focus-visible {
+    outline: 2px solid var(--sky-deep);
+    outline-offset: -2px;
   }
 
   .wave-loading {
@@ -381,7 +395,10 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     audio.addEventListener('play', () => setPlaying(true));
     audio.addEventListener('pause', () => setPlaying(false));
     audio.addEventListener('loadedmetadata', () => {
-      if (isFinite(audio.duration)) totalEl.textContent = formatTime(audio.duration);
+      if (isFinite(audio.duration)) {
+        totalEl.textContent = formatTime(audio.duration);
+        canvas.setAttribute('aria-valuemax', String(Math.floor(audio.duration)));
+      }
     });
 
     let lastSaved = 0;
@@ -389,6 +406,9 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       const t = audio.currentTime;
       wave.position = t;
       timeEl.textContent = formatTime(t);
+      // The canvas is the seek control, so assistive tech needs its position.
+      canvas.setAttribute('aria-valuenow', String(Math.floor(t)));
+      canvas.setAttribute('aria-valuetext', formatTime(t));
       wave.draw();
 
       if (wave.selection && t >= wave.selection.end) {
@@ -548,6 +568,12 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         });
       })
       .catch(() => {});
+
+    canvas.addEventListener('keydown', e => {
+      if (e.key === 'Home') { e.preventDefault(); audio.currentTime = 0; }
+      else if (e.key === 'End') { e.preventDefault(); audio.currentTime = Math.max(0, audio.duration - 1); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (audio.paused) void audio.play(); else audio.pause(); }
+    });
 
     document.addEventListener('keydown', e => {
       const tag = document.activeElement?.tagName;

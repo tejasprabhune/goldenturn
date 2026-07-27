@@ -92,7 +92,7 @@ export function primarySpeakers(turns: Turn[], minShare = 0.05): string[] {
 }
 
 /** Merges turns from the same speaker separated only by noise from others. */
-function blocksFor(turns: Turn[], speaker: string, tolerate = 45): Turn[] {
+function blocksFor(turns: Turn[], speaker: string, tolerate = 25): Turn[] {
   const mine = turns.filter(t => t.speaker === speaker);
   const blocks: Turn[] = [];
   for (const t of mine) {
@@ -111,8 +111,9 @@ function durationScore(actualSeconds: number, expectedMinutes: number): number {
   const expected = expectedMinutes * 60;
   const ratio = actualSeconds / expected;
   if (ratio <= 0) return 0;
-  // Speeches routinely run a little short and almost never run long.
-  const spread = ratio < 1 ? 0.55 : 0.35;
+  // Speeches routinely run short and are capped by the clock, so overrunning is
+  // far more suspicious than underrunning.
+  const spread = ratio < 1 ? 0.55 : 0.22;
   return Math.exp(-Math.pow(Math.log(ratio), 2) / (2 * spread * spread));
 }
 
@@ -155,6 +156,9 @@ function scoreAssignment(
 
 interface Candidate extends Turn { length: number }
 
+/** No parli speech survives past this multiple of its slot, even with POIs. */
+const MAX_OVERRUN = 1.45;
+
 export function fitSpeeches(slug: string, segments: TranscriptSegment[], duration: number): FitResult {
   const turns = toTurns(segments);
   const primaries = primarySpeakers(turns);
@@ -181,9 +185,18 @@ export function fitSpeeches(slug: string, segments: TranscriptSegment[], duratio
       return;
     }
     const speech = SPEECHES[speechIdx];
+    const prev = [...current].reverse().find(Boolean) ?? null;
+
     for (let k = candIdx; k < candidates.length; k++) {
       const cand = candidates[k];
-      if (durationScore(cand.length, speech.minutes) < 0.12) continue;  // hopeless length
+
+      // Hard constraints, not scoring nudges. Index order is not time order,
+      // so overlap has to be rejected explicitly.
+      if (prev && cand.start < prev.cand.end - 1) continue;
+      if (prev && cand.speaker === prev.cand.speaker) continue;
+      if (cand.length > speech.minutes * 60 * MAX_OVERRUN) continue;
+      if (durationScore(cand.length, speech.minutes) < 0.12) continue;
+
       current.push({ cand, speech });
       search(speechIdx + 1, k + 1);
       current.pop();

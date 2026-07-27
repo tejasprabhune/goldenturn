@@ -152,9 +152,11 @@ export async function ingestOne(entry: ManifestEntry, opts: { force?: boolean } 
     const audio = readFileSync(out);
     await client.send(new PutObjectCommand({
       Bucket: BUCKET, Key: audioKey, Body: audio, ContentType: 'audio/mp4',
+      CacheControl: 'public, max-age=31536000, immutable',
     }));
     await client.send(new PutObjectCommand({
       Bucket: BUCKET, Key: peaksKey, ContentType: 'application/json',
+      CacheControl: 'public, max-age=31536000, immutable',
       Body: JSON.stringify({
         slug: entry.slug, objectID: entry.objectID, duration,
         buckets: peaks.length, peaks,

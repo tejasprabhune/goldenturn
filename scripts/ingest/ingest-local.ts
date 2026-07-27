@@ -53,9 +53,11 @@ async function main() {
     const audio = readFileSync(out);
     await client.send(new PutObjectCommand({
       Bucket: BUCKET, Key: `audio/${slug}.m4a`, Body: audio, ContentType: 'audio/mp4',
+      CacheControl: 'public, max-age=31536000, immutable',
     }));
     await client.send(new PutObjectCommand({
       Bucket: BUCKET, Key: `peaks/${slug}.json`, ContentType: 'application/json',
+      CacheControl: 'public, max-age=31536000, immutable',
       Body: JSON.stringify({ slug, duration, buckets: peaks.length, peaks }),
     }));
     console.log(`ok ${slug} ${(duration / 60).toFixed(1)}min ${(audio.length / 1e6).toFixed(1)}MB`);

@@ -85,11 +85,15 @@ const { slug } = Astro.props;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   .transcript-search {
     width: 14rem;
-    max-width: 45vw;
+    max-width: 100%;
+    min-width: 0;
+    flex: 1 1 8rem;
   }
 
   /* Lines take the full measure; the minimap is a narrow rail beside them and
