@@ -6,11 +6,17 @@ import { ingestOne, type ManifestEntry } from './process.js';
 const limit = Number(process.env.LIMIT ?? '2');
 const concurrency = Number(process.env.CONCURRENCY ?? '2');
 const offset = Number(process.env.OFFSET ?? '0');
+// Work is split across parallel workers by index so each shard is disjoint.
+const shard = Number(process.env.SHARD ?? '0');
+const shardCount = Number(process.env.SHARD_COUNT ?? '1');
 
 async function main() {
-  const all: ManifestEntry[] = JSON.parse(readFileSync('scripts/ingest/manifest.json', 'utf-8'));
-  const queue = all.filter(m => m.dropbox).slice(offset, offset + limit);
-  console.log(`ingesting ${queue.length} recordings, concurrency ${concurrency}`);
+  const manifestPath = process.env.MANIFEST ?? 'scripts/ingest/manifest.json';
+  const all: ManifestEntry[] = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  const eligible = all.filter(m => m.dropbox);
+  const mine = shardCount > 1 ? eligible.filter((_, i) => i % shardCount === shard) : eligible;
+  const queue = mine.slice(offset, offset + limit);
+  console.log(`shard ${shard}/${shardCount}: ingesting ${queue.length} of ${eligible.length}, concurrency ${concurrency}`);
 
   let done = 0;
   const results: any[] = [];

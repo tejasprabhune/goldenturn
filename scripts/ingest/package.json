@@ -1,0 +1,10 @@
+{
+  "name": "goldenturn-ingest",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.716.0",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.22.1"
+  }
+}

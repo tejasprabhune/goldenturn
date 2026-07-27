@@ -8,7 +8,9 @@
 import 'dotenv/config';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, readFileSync, createWriteStream, rmSync } from 'fs';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
@@ -49,6 +51,10 @@ async function alreadyIngested(client: S3Client, key: string): Promise<boolean> 
   }
 }
 
+/**
+ * Streamed to disk rather than buffered: source files run to 500MB+ and
+ * several of these run concurrently in a memory-capped container.
+ */
 async function downloadFromDropbox(token: string, fileId: string, dest: string): Promise<void> {
   const res = await fetch('https://content.dropboxapi.com/2/files/download', {
     method: 'POST',
@@ -57,8 +63,8 @@ async function downloadFromDropbox(token: string, fileId: string, dest: string):
       'Dropbox-API-Arg': JSON.stringify({ path: fileId }),
     },
   });
-  if (!res.ok) throw new Error(`download ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+  if (!res.ok || !res.body) throw new Error(`download ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  await pipeline(Readable.fromWeb(res.body as any), createWriteStream(dest));
 }
 
 async function probeDuration(path: string): Promise<number> {
@@ -74,12 +80,13 @@ async function probeDuration(path: string): Promise<number> {
  * structure, small enough to compute in seconds.
  */
 async function computePeaks(src: string, buckets: number): Promise<number[]> {
-  const { stdout } = await run('ffmpeg', [
-    '-v', 'error', '-i', src, '-ac', '1', '-ar', '8000',
-    '-f', 's16le', '-acodec', 'pcm_s16le', 'pipe:1',
-  ], { maxBuffer: 1024 * 1024 * 900, encoding: 'buffer' } as any) as unknown as { stdout: Buffer };
-
-  const samples = new Int16Array(stdout.buffer, stdout.byteOffset, Math.floor(stdout.length / 2));
+  const pcm = `${src}.pcm`;
+  await run('ffmpeg', [
+    '-v', 'error', '-y', '-i', src, '-ac', '1', '-ar', '8000',
+    '-f', 's16le', '-acodec', 'pcm_s16le', pcm,
+  ]);
+  const raw = readFileSync(pcm);
+  const samples = new Int16Array(raw.buffer, raw.byteOffset, Math.floor(raw.length / 2));
   const per = Math.max(1, Math.floor(samples.length / buckets));
   const peaks: number[] = [];
   for (let i = 0; i < buckets; i++) {
