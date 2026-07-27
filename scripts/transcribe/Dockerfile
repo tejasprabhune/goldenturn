@@ -6,12 +6,19 @@ RUN apt-get update \
 
 # torch 2.2 is built against numpy 1.x; whisperx pulls matplotlib in through
 # pyannote. Both are pinned here rather than discovered at runtime.
+# Three-way pin. pyannote calls hf_hub_download(use_auth_token=...) which
+# huggingface_hub dropped in 0.26; transformers >=4.47 imports is_offline_mode
+# which 0.25 does not export; numpy 2 breaks torch 2.2. Changing any one of
+# these without the others breaks the build.
 RUN pip install --no-cache-dir \
       "numpy<2" \
       whisperx==3.3.1 \
       matplotlib \
       boto3 \
- && pip install --no-cache-dir --force-reinstall "numpy<2"
+ && pip install --no-cache-dir --force-reinstall \
+      "numpy<2" \
+      "huggingface_hub==0.25.2" \
+      "transformers==4.46.3"
 
 # Fail the build, not a GPU job ten minutes later, if the import graph is broken.
 COPY smoke.py ./

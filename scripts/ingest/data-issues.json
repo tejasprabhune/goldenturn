@@ -1,0 +1,570 @@
+{
+  "shifted": [
+    {
+      "objectID": "e70294ed4ae83_dashboard_generated_id",
+      "title": "Quarterfinals - Minnesota BS vs Cal BR",
+      "aff": "Discussion of sexual assault",
+      "neg": "fem rage; pmr goes for policing as a relink to the kritik",
+      "decision": "#k-aff, #feminism, #fem-rage, #rage, #debate-community, #narrative, #ivi, #kritik, #framework-t, #focalize-orient, #orientalism, #spatiality, #k-on-k, #layers-preempts",
+      "_tags": [
+        "2-off (framework-t",
+        "orientalism)",
+        "with transmisogyny ivis on case; collapse to orientalism and the ivis"
+      ]
+    },
+    {
+      "objectID": "88663940cb144_dashboard_generated_id",
+      "title": "Elim 5 - Cal RY vs El Camino EL",
+      "aff": "Discussion of sexual assault",
+      "neg": "topical, launch all nukes at moscow (spark), extinction first rob and mg theory good underview; mg reads condo bad and trigger warning ivi; pmr extends the aff and goes for condo",
+      "decision": "#topical-case, #spark, #preemptive-rob, #theory, #topicality, #fx-t, #counterplan, #cp-pic, #mg-theory, #condo, #ivi, #trigger-warning",
+      "_tags": [
+        "2-off (eliminate t",
+        "pic out of 1960 ICBMs)",
+        "with ivis on case; collapse to t"
+      ]
+    },
+    {
+      "objectID": "1b647985a9037f_dashboard_generated_id",
+      "title": "Round 1 - Cal/Texas Tech AP vs Cal BR",
+      "aff": "Discussion of sexual violence.",
+      "neg": "feminist killjoy; mg reads ivis on the cp and theory",
+      "decision": "#k-aff, #feminism, #debate-community, #fem-killjoy, #framework-t, #theory, #object-fiat-bad, #counterplan, #cp-vote-neg, #ivi, #layers-preempts, #feedback",
+      "_tags": [
+        "3-off (framework-t",
+        "object fiat bad",
+        "vote neg cp)",
+        "with transphobia case turns; collapse to object fiat bad and case turns"
+      ]
+    },
+    {
+      "objectID": "16302607b69fb5_dashboard_generated_id",
+      "title": "Elim 4 - Texas Tech GK vs Point Loma MR",
+      "aff": "Discussion of queer suicide",
+      "neg": "futurism kritik, enter the anthropocene",
+      "decision": "#k-aff, #queer-theory, #temporality, #discourse, #counterplan, #cp-vote-neg, #presumption",
+      "_tags": [
+        "1-off (vote neg cp)"
+      ]
+    },
+    {
+      "objectID": "156aa39679bf20_dashboard_generated_id",
+      "title": "Round 4 - Cal BR vs Rice CS",
+      "aff": "water management in the Western U.S.",
+      "neg": "topical (water scarcity, econ), post-fiat rob; mg reads ks bad; pmr goes for ks bad",
+      "decision": "#topical-case, #econ, #water-rights, #preemptive-rob, #kritik, #dynamic-solidarity, #legalism, #settcol, #theory, #mg-theory, #ks-bad",
+      "_tags": [
+        "1-off (western legalism kritik)"
+      ]
+    },
+    {
+      "objectID": "b31ead1e8ed47_dashboard_generated_id",
+      "title": "Elim 6 - Rice AL vs McKendree DG",
+      "aff": "topical, doe bioenergy (warming, landfills), governmental policy action rob; mg reads condo; pmr goes for the aff and disease impact turn",
+      "neg": "4-off (energy production t, saudi aramco econ da, china dairy ban cp, cap w/ uncompromising rejection alt); collapse to cap",
+      "decision": "4-1 Neg",
+      "_tags": [
+        "#topical-case",
+        "#preemptive-rob",
+        ""
+      ]
+    },
+    {
+      "objectID": "750706002",
+      "title": "Round 2 - Cal PZ vs KCKCC LB",
+      "aff": "topical (drought, dams, AI)",
+      "neg": "3-off (a-spec, spec, cap), collapse to a-spec",
+      "decision": "Aff",
+      "_tags": [
+        "#topical-case",
+        "#cap",
+        "#kritik",
+        "#spec",
+        "a-spec"
+      ]
+    }
+  ],
+  "oddDecision": [
+    {
+      "objectID": "faff876097d7a_dashboard_generated_id",
+      "title": "Round 4 - Western Washington CF vs Texas Tech GH",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "f33f055c4ec5_dashboard_generated_id",
+      "title": "Round 5 - Cal MM vs Concordia CL",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "eccc2ca4fe564_dashboard_generated_id",
+      "title": "Round 5 - Cal BR vs Concordia CM",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "e66a51fafe7b3_dashboard_generated_id",
+      "title": "Round 1 - McKendree PS vs UT Tyler LW",
+      "decision": "1-1 Split"
+    },
+    {
+      "objectID": "e5ac9574d431d_dashboard_generated_id",
+      "title": "Round 1 - Rice SW vs Cal BR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "e5a78fd901ca6_dashboard_generated_id",
+      "title": "Round 2 - Oregon HS vs Cal DR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "e190d8f1a92d_dashboard_generated_id",
+      "title": "Round 2 - Cal MR vs Point Loma MS",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "df81abfede6a6_dashboard_generated_id",
+      "title": "Round 5 - Point Loma JT vs Cal BR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "d5cea0392ea9f_dashboard_generated_id",
+      "title": "Round 3 - Western Washington AD vs Cal KY",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "d117318769f6e_dashboard_generated_id",
+      "title": "Round 5 - Cal AJ vs Rice CS",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "c1f53a16d15e6_dashboard_generated_id",
+      "title": "Round 4 - Rice AL vs Cal MR",
+      "decision": "1-1 Split"
+    },
+    {
+      "objectID": "b22df1f83c36a_dashboard_generated_id",
+      "title": "Round 8 - Missouri Western MS vs Washburn BW",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "a9f9ece1783bc_dashboard_generated_id",
+      "title": "Round 1 - Cal MY vs Rice AL",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "a4fcee53be274_dashboard_generated_id",
+      "title": "Round 4 - Minnesota PG vs Cal KZ",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "a3c75c8e1292c_dashboard_generated_id",
+      "title": "Round 2 - Oregon GL vs Cal BR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "a104b5183f25d_dashboard_generated_id",
+      "title": "Round 3 - Cal JS vs UT Tyler PR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "97f70c79f5fdf_dashboard_generated_id",
+      "title": "Round 5 - Cal MR vs Point Loma JT",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "96987c7a9bad0_dashboard_generated_id",
+      "title": "Round 1 - Concordia SV vs Cal DR",
+      "decision": "1-1 Split"
+    },
+    {
+      "objectID": "8dcb7b147594d_dashboard_generated_id",
+      "title": "Round 1 - Cal BR vs Pacific FL",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "88d9126c68b48_dashboard_generated_id",
+      "title": "Round 5 - Cal JS vs Texas Tech CC",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "82513226000",
+      "title": "Round 6 - Cal PZ vs Whitman GM",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "82513225000",
+      "title": "Round 5 - Rice GW vs Cal PZ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "82513224000",
+      "title": "Round 4 - Cal PZ vs Rice NS",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "82513223000",
+      "title": "Round 3 - Concordia CP vs Cal PZ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "82513222000",
+      "title": "Round 2 - Pacific BC vs Cal PZ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "82513221000",
+      "title": "Round 1 - Cal PZ vs Whitman HM",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "817f1f5219d47_dashboard_generated_id",
+      "title": "Round 6 - Rice AL vs Cal BR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "8174002",
+      "title": "Round 2 - Cal BC vs KCKCC CL",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "7e9b2ac405874_dashboard_generated_id",
+      "title": "Round 2 - Cal JS vs Lewis and Clark MT",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "7b73273ae4736_dashboard_generated_id",
+      "title": "Round 3 - Cal MR vs El Camino ER",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "750715002",
+      "title": "Round 4 - Pacific AB vs Cal PZ",
+      "decision": "1-1 Split"
+    },
+    {
+      "objectID": "750710002",
+      "title": "Round 6 - Whitman KH vs Cal PZ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "750709002",
+      "title": "Round 5 - Cal PZ vs Rice SS",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "750708002",
+      "title": "Round 4 - Cal PZ vs DVC LP",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "750707002",
+      "title": "Round 3 - UTT HS vs Cal PZ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "750706002",
+      "title": "Round 2 - Cal PZ vs KCKCC LB",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "749710002",
+      "title": "Round 3 - William Jewell DT vs Cal BC",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "739c959c3d6c5_dashboard_generated_id",
+      "title": "Round 3 - Minnesota KK vs Cal MY",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "6cc64936c29ed_dashboard_generated_id",
+      "title": "Round 3 - Lewis and Clark MT vs Cal KZ",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "69be1ddf88dc2_dashboard_generated_id",
+      "title": "Round 3 - Rice AL vs Cal KZ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "69a54140da4ad_dashboard_generated_id",
+      "title": "Round 1 - Concordia CM vs Cal KZ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "632654001",
+      "title": "Round 4 - Cal BC vs UOP CP",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "495420000",
+      "title": "Round 2 - Cal BC vs William Jewell DT",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "495419000",
+      "title": "Round 5 - Cal BC vs William Jewell DT",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "3d50518014ed1_dashboard_generated_id",
+      "title": "Round 4 - Cal AM vs Concordia SV",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "3cc1fd378814e_dashboard_generated_id",
+      "title": "Round 4 - Cal KZ vs UT Tyler LR",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "38180f4d4392e_dashboard_generated_id",
+      "title": "Round 6 - Cal AK vs Pacific PT",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "2eb155e2ba56_dashboard_generated_id",
+      "title": "Round 6 - Oregon GL vs Cal KZ",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "2d70d9dd82a4b_dashboard_generated_id",
+      "title": "Round 1 - Texas Tech DG vs Cal RY",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "25334296002",
+      "title": "Round 3 - Rice TY vs UCLA-Cal Hybrid MS",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "25333734002",
+      "title": "Round 5 - Rice AS vs Cal BC",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "25333575002",
+      "title": "Round 3 - UCLA-Cal Hybrid SP vs Pacific GR",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "25332062002",
+      "title": "Round 1 - UChicago-Cal Hybrid DZ vs UT Tyler WM",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1fb76fcd6165eb_dashboard_generated_id",
+      "title": "Round 1 - Cal MY vs Texas Tech CC",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1f576df581e91f_dashboard_generated_id",
+      "title": "Round 7 - Cal DR vs Oregon GL",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1f191fd454d57c_dashboard_generated_id",
+      "title": "Round 6 - Oregon MP vs Washburn BK",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1e5d08526af948_dashboard_generated_id",
+      "title": "Round 4 - McKendree GS vs Cal MY",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1e38ba07cc5df8_dashboard_generated_id",
+      "title": "Round 5 - Texas Tech BT vs Cal AM",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1e1fceff4da0d8_dashboard_generated_id",
+      "title": "Round 3 - Cal MY vs Oregon GL",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1d0b59269d4d4d_dashboard_generated_id",
+      "title": "Round 7 - Texas Tech GT vs Cal RY",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1d02df9dc406ba_dashboard_generated_id",
+      "title": "Round 5 - Cal MY vs Rice CS",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1cf12e0f041ae4_dashboard_generated_id",
+      "title": "Round 2 - Cal JS vs Oregon GL",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1cda647cd47dc6_dashboard_generated_id",
+      "title": "Round 1 - Rice ST vs Cal AJ",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1cb5805a6bc478_dashboard_generated_id",
+      "title": "Round 5 - Cal KZ vs Rice KW",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1c66460b43ef61_dashboard_generated_id",
+      "title": "Round 7 - Cal AK vs UT Tyler KR",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1c32491d5ce775_dashboard_generated_id",
+      "title": "Round 4 - SFSU GK vs Cal MM",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1ae8a8508abab2_dashboard_generated_id",
+      "title": "Round 6 - Cal BR vs Western Washington AD",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1a345865dadb25_dashboard_generated_id",
+      "title": "Round 3 - Cal MR vs SDSU HP",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1a035c9e7b398c_dashboard_generated_id",
+      "title": "Round 3 - McKendree DP vs Cal AJ",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "19d7c97ae4d065_dashboard_generated_id",
+      "title": "Semifinals - William Jewell HU vs Rice CS",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "196d69a6a2b1c8_dashboard_generated_id",
+      "title": "Round 3 - Texas Tech DG vs Washburn DW",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "19099a7859afae_dashboard_generated_id",
+      "title": "Round 5 - Cal KZ vs Minnesota KK",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "18cc1ad9369007_dashboard_generated_id",
+      "title": "Round 4 - Cal BR vs Rice CS",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "18988c580b3396_dashboard_generated_id",
+      "title": "Round 6 - Rice CS vs Cal MY",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "180c201d653590_dashboard_generated_id",
+      "title": "Round 6 - Western Washington AD vs Cal AJ",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "17ef1da9aa63d5_dashboard_generated_id",
+      "title": "Round 4 - Cal MR vs Mercer SW",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "17c5573ac37fde_dashboard_generated_id",
+      "title": "Round 5 - Rice AL vs Cal BR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "178bf7f4eca141_dashboard_generated_id",
+      "title": "Round 1 - Texas Tech DG vs Concordia CL",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1775ac2904a0f6_dashboard_generated_id",
+      "title": "Semifinals - Rice AL vs Cal MY",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "1724444559b348_dashboard_generated_id",
+      "title": "Round 4 - Cal BR vs McKendree DP",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "16a62d4602de0e_dashboard_generated_id",
+      "title": "Round 2 - Cal TK vs Texas Tech HH",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "160bdcffba242c_dashboard_generated_id",
+      "title": "Round 2 - Cal AJ vs McKendree GS",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "14c02028d6a85c_dashboard_generated_id",
+      "title": "Round 2 - Cal CF vs Oregon GL",
+      "decision": "1-1 Split"
+    },
+    {
+      "objectID": "14b3ba1806848e_dashboard_generated_id",
+      "title": "Round 4 - Cal AJ vs Texas Tech BT",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "14a41a89f79f82_dashboard_generated_id",
+      "title": "Round 5 - Saint Mary’s AJ vs Cal AH",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1471786c9ed0d4_dashboard_generated_id",
+      "title": "Round 4 - Pacific LS vs Cal AK",
+      "decision": "1-1 Split"
+    },
+    {
+      "objectID": "13d83634e6960b_dashboard_generated_id",
+      "title": "Round 5 - McKendree DG vs Cal MR",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "131f1013df6451_dashboard_generated_id",
+      "title": "Round 3 - McKendree DG vs Texas Tech HT",
+      "decision": "1-1 Split"
+    },
+    {
+      "objectID": "130c0f4dab7316_dashboard_generated_id",
+      "title": "Round 1 - Cal BR vs Concordia CM",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "1307c925336804_dashboard_generated_id",
+      "title": "Round 5 - Cal BR vs Rice CS",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "12d129aee2251e_dashboard_generated_id",
+      "title": "Round 6 - Rice CS vs Cal KZ",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "125fa6258691c9_dashboard_generated_id",
+      "title": "Round 4 - Texas Tech HH vs Cal MM",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "11da6b6dc45274_dashboard_generated_id",
+      "title": "Round 6 - Minnesota KK vs Cal MY",
+      "decision": "Neg"
+    },
+    {
+      "objectID": "11989a22014fa2_dashboard_generated_id",
+      "title": "Round 8 - Rice AL vs Cal MY",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "10d9fad8713c29_dashboard_generated_id",
+      "title": "Round 4 - Cal BR vs Lewis and Clark MT",
+      "decision": "Aff"
+    },
+    {
+      "objectID": "10868d3d4b154a_dashboard_generated_id",
+      "title": "Round 3 - Cal MR vs Rice CS",
+      "decision": "Neg"
+    }
+  ],
+  "noDecision": []
+}

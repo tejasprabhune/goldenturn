@@ -50,5 +50,98 @@
       "link": "https://dl.dropbox.com/scl/fi/itcy3l9qwz03n3cpik2vg/NPTE-semifinals.m4a?rlkey=rfk73kb6cf00afhrzctq95g5x&st=z4s8lel6&dl=0",
       "reason": "unmatched"
     }
-  ]
+  ],
+  "shiftedFields": [
+    {
+      "objectID": "e70294ed4ae83_dashboard_generated_id",
+      "title": "Quarterfinals - Minnesota BS vs Cal BR",
+      "aff": "Discussion of sexual assault",
+      "neg": "fem rage; pmr goes for policing as a relink to the kritik",
+      "decision": "#k-aff, #feminism, #fem-rage, #rage, #debate-community, #narrative, #ivi, #kritik, #framework-t, #focalize-orient, #orientalism, #spatiality, #k-on-k, #layers-preempts",
+      "_tags": [
+        "2-off (framework-t",
+        "orientalism)",
+        "with transmisogyny ivis on case; collapse to orientalism and the ivis"
+      ],
+      "problem": "column shift: neg text split into _tags, tags landed in decision, real decision lost"
+    },
+    {
+      "objectID": "88663940cb144_dashboard_generated_id",
+      "title": "Elim 5 - Cal RY vs El Camino EL",
+      "aff": "Discussion of sexual assault",
+      "neg": "topical, launch all nukes at moscow (spark), extinction first rob and mg theory good underview; mg reads condo bad and trigger warning ivi; pmr extends the aff and goes for condo",
+      "decision": "#topical-case, #spark, #preemptive-rob, #theory, #topicality, #fx-t, #counterplan, #cp-pic, #mg-theory, #condo, #ivi, #trigger-warning",
+      "_tags": [
+        "2-off (eliminate t",
+        "pic out of 1960 ICBMs)",
+        "with ivis on case; collapse to t"
+      ],
+      "problem": "column shift: neg text split into _tags, tags landed in decision, real decision lost"
+    },
+    {
+      "objectID": "1b647985a9037f_dashboard_generated_id",
+      "title": "Round 1 - Cal/Texas Tech AP vs Cal BR",
+      "aff": "Discussion of sexual violence.",
+      "neg": "feminist killjoy; mg reads ivis on the cp and theory",
+      "decision": "#k-aff, #feminism, #debate-community, #fem-killjoy, #framework-t, #theory, #object-fiat-bad, #counterplan, #cp-vote-neg, #ivi, #layers-preempts, #feedback",
+      "_tags": [
+        "3-off (framework-t",
+        "object fiat bad",
+        "vote neg cp)",
+        "with transphobia case turns; collapse to object fiat bad and case turns"
+      ],
+      "problem": "column shift: neg text split into _tags, tags landed in decision, real decision lost"
+    },
+    {
+      "objectID": "16302607b69fb5_dashboard_generated_id",
+      "title": "Elim 4 - Texas Tech GK vs Point Loma MR",
+      "aff": "Discussion of queer suicide",
+      "neg": "futurism kritik, enter the anthropocene",
+      "decision": "#k-aff, #queer-theory, #temporality, #discourse, #counterplan, #cp-vote-neg, #presumption",
+      "_tags": [
+        "1-off (vote neg cp)"
+      ],
+      "problem": "column shift: neg text split into _tags, tags landed in decision, real decision lost"
+    },
+    {
+      "objectID": "156aa39679bf20_dashboard_generated_id",
+      "title": "Round 4 - Cal BR vs Rice CS",
+      "aff": "water management in the Western U.S.",
+      "neg": "topical (water scarcity, econ), post-fiat rob; mg reads ks bad; pmr goes for ks bad",
+      "decision": "#topical-case, #econ, #water-rights, #preemptive-rob, #kritik, #dynamic-solidarity, #legalism, #settcol, #theory, #mg-theory, #ks-bad",
+      "_tags": [
+        "1-off (western legalism kritik)"
+      ],
+      "problem": "column shift: neg text split into _tags, tags landed in decision, real decision lost"
+    },
+    {
+      "objectID": "b31ead1e8ed47_dashboard_generated_id",
+      "title": "Elim 6 - Rice AL vs McKendree DG",
+      "aff": "topical, doe bioenergy (warming, landfills), governmental policy action rob; mg reads condo; pmr goes for the aff and disease impact turn",
+      "neg": "4-off (energy production t, saudi aramco econ da, china dairy ban cp, cap w/ uncompromising rejection alt); collapse to cap",
+      "decision": "4-1 Neg",
+      "_tags": [
+        "#topical-case",
+        "#preemptive-rob",
+        ""
+      ],
+      "problem": "column shift: neg text split into _tags, tags landed in decision, real decision lost"
+    },
+    {
+      "objectID": "750706002",
+      "title": "Round 2 - Cal PZ vs KCKCC LB",
+      "aff": "topical (drought, dams, AI)",
+      "neg": "3-off (a-spec, spec, cap), collapse to a-spec",
+      "decision": "Aff",
+      "_tags": [
+        "#topical-case",
+        "#cap",
+        "#kritik",
+        "#spec",
+        "a-spec"
+      ],
+      "problem": "column shift: neg text split into _tags, tags landed in decision, real decision lost"
+    }
+  ],
+  "note": "decision values of \"Aff\", \"Neg\" and \"1-1 Split\" are valid (single judge and 2-judge panels), not data errors"
 }

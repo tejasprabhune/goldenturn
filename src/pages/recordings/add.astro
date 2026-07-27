@@ -64,7 +64,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       <div class="mb-7">
         <label class="form-label" for="field-decision">Decision</label>
-        <p class="form-hint">e.g. 3-0 Aff or 2-1 Neg</p>
+        <p class="form-hint">Aff or Neg for prelims, 3-0 Aff for panels</p>
         <input type="text" id="field-decision" name="decision" placeholder="3-0 Aff"
           class="form-input" />
         <p class="validation-hint"></p>
@@ -185,7 +185,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     },
     decision: (v) => {
       if (!v.trim()) return null;
-      return /^\d+-\d+ (Aff|Neg)$/.test(v.trim()) ? null : 'Expected: 3-0 Aff or 2-1 Neg';
+      // Prelims are decided by one judge ("Aff"), elims by a panel ("3-0 Aff"),
+      // and two-judge panels can split ("1-1 Split"). All three are valid.
+      const ok = /^(\d+-\d+\s+(aff|neg)|aff|neg|\d+-\d+\s+split)$/i.test(v.trim());
+      return ok ? null : 'Expected: Aff, Neg, 3-0 Aff, or 1-1 Split';
     },
     year: (v) => {
       if (!v.trim()) return null;
