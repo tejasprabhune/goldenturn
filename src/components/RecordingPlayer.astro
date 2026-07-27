@@ -72,8 +72,10 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         <button class="chip" id="loop-clear">clear</button>
       </div>
 
+      <div class="speeches" id="speeches" hidden></div>
+
       <p class="player-hint label label-muted">
-        space play, arrows seek, shift-drag on the waveform to loop a range
+        space play, arrows seek, 1-6 jump to a speech, shift-drag to loop
       </p>
 
       <audio id="audio" preload="metadata" src={`${MEDIA}/audio/${slug}.m4a`}></audio>
@@ -235,6 +237,48 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     margin: 0.9rem 0 0;
   }
 
+  .speeches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-top: 0.9rem;
+  }
+
+  .speeches[hidden] {
+    display: none;
+  }
+
+  .speech-jump {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--ink);
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+    transition: background-color 60ms linear, border-color 60ms linear;
+  }
+
+  .speech-jump:hover {
+    background: var(--sky);
+    border-color: var(--ink);
+  }
+
+  /* A dashed border marks a boundary the fitter is unsure about, so it reads
+     as a suggestion rather than fact. */
+  .speech-jump[data-unsure='1'] {
+    border-style: dashed;
+    color: rgba(23, 21, 15, 0.55);
+  }
+
+  .speech-jump-at {
+    color: rgba(23, 21, 15, 0.45);
+    margin-left: 0.35rem;
+    font-variant-numeric: tabular-nums;
+  }
+
   audio {
     display: none;
   }
@@ -254,6 +298,9 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
 <script>
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
+
+  // The frontmatter MEDIA constant is server-side only; the client needs its own.
+  const MEDIA = 'https://media.goldenturn.org';
 
   const root = document.querySelector<HTMLElement>('.player');
   const audio = document.getElementById('audio') as HTMLAudioElement | null;
@@ -417,6 +464,45 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         audio.currentTime = Math.max(0, audio.currentTime - (e.shiftKey ? 30 : 5));
+      }
+    });
+
+    // Speech regions shade the waveform and give keyboard jumps 1-6.
+    let speechStarts: number[] = [];
+    fetch(`${MEDIA}/speeches/${slug}.json`)
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('none'))))
+      .then((fit: { speeches: Array<{ label: string; start: number; end: number; confidence: number }> }) => {
+        const found = fit.speeches.filter(s => s.confidence > 0 && s.end > s.start);
+        if (!found.length) return;
+        wave.setSegments(found.map(s => ({
+          label: s.label, start: s.start, end: s.end, confidence: s.confidence,
+        })));
+
+        const box = document.getElementById('speeches')!;
+        box.hidden = false;
+        speechStarts = found.map(s => s.start);
+        found.forEach((s, i) => {
+          const b = document.createElement('button');
+          b.className = 'speech-jump';
+          if (s.confidence < 0.6) {
+            b.dataset.unsure = '1';
+            b.title = 'boundary is uncertain';
+          }
+          b.innerHTML = `${s.label}<span class="speech-jump-at">${formatTime(s.start)}</span>`;
+          b.addEventListener('click', () => { audio.currentTime = s.start; void audio.play(); });
+          box.appendChild(b);
+        });
+      })
+      .catch(() => {});
+
+    document.addEventListener('keydown', e => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= 6 && speechStarts[n - 1] !== undefined) {
+        e.preventDefault();
+        audio.currentTime = speechStarts[n - 1];
+        void audio.play();
       }
     });
 
