@@ -763,6 +763,39 @@
     }
   }
 
+  /* Open timing corrections, built in the browser after the proposals load. */
+  .timing-list {
+    list-style: none;
+    margin: 0.6rem 0 0;
+    padding: 0;
+  }
+
+  .timing-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    padding: 0.35rem 0;
+    font-size: 0.8125rem;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .timing-label {
+    min-width: 2.8rem;
+    font-weight: 500;
+  }
+
+  .timing-move {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-muted);
+    margin-right: auto;
+  }
+
+  .timing-author {
+    font-size: 0.75rem;
+    color: rgba(23, 21, 15, 0.5);
+  }
+
   /* Note rows are built in the browser as notes are added. */
 
   .note-list li {

@@ -454,10 +454,16 @@ const { slug } = Astro.props;
       btn?.setAttribute('aria-pressed', String(on));
     }
 
-    /** Any scroll the page did not initiate means the reader has taken over. */
-    function onManualScroll() {
+    /**
+     * Follow yields only to a scroll of whatever it drives: the lines box while
+     * that box scrolls, the page once the transcript is expanded and the box no
+     * longer does. Scrolling the rest of the page to read around the transcript
+     * leaves following alone.
+     */
+    function onManualScroll(source: 'lines' | 'window') {
       if (programmatic || !follow) return;
-      setFollow(false);
+      const boxScrolls = linesEl.scrollHeight > linesEl.clientHeight + 4;
+      if (source === 'lines' ? boxScrolls : !boxScrolls) setFollow(false);
     }
 
     /** Scrolls the transcript to whatever paragraph covers this time. */
@@ -505,8 +511,8 @@ const { slug } = Astro.props;
       }
     });
 
-    linesEl.addEventListener('scroll', onManualScroll, { passive: true });
-    window.addEventListener('scroll', onManualScroll, { passive: true });
+    linesEl.addEventListener('scroll', () => onManualScroll('lines'), { passive: true });
+    window.addEventListener('scroll', () => onManualScroll('window'), { passive: true });
     linesEl.addEventListener('wheel', () => setFollow(false), { passive: true });
 
     document.getElementById('tx-expand')?.addEventListener('click', e => {

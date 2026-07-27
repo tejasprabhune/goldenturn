@@ -24,6 +24,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <option value="performance">Performance</option>
         <option value="other">Other</option>
       </select>
+      <select id="filter-tournament" class="field" aria-label="Filter by tournament">
+        <option value="">All tournaments</option>
+      </select>
+      <select id="sort-by" class="field" aria-label="Sort results">
+        <option value="">Best match</option>
+        <option value="year-desc">Newest first</option>
+        <option value="year-asc">Oldest first</option>
+        <option value="title-asc">Title A to Z</option>
+        <option value="title-desc">Title Z to A</option>
+        <option value="tournament-asc">Tournament A to Z</option>
+      </select>
       <button id="toggle-blur" aria-pressed="true" class="chip blur-toggle">Blur decisions</button>
     </div>
 
@@ -128,6 +139,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const searchInput = document.getElementById('search-input') as HTMLInputElement;
   const filterYear = document.getElementById('filter-year') as HTMLSelectElement;
   const filterAffType = document.getElementById('filter-aff-type') as HTMLSelectElement;
+  const filterTournament = document.getElementById('filter-tournament') as HTMLSelectElement;
+  const sortBy = document.getElementById('sort-by') as HTMLSelectElement;
   const resultsEl = document.getElementById('results') as HTMLDivElement;
   const resultsCount = document.getElementById('results-count') as HTMLParagraphElement;
   const loadMoreBtn = document.getElementById('load-more') as HTMLButtonElement;
@@ -142,24 +155,52 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     resultsEl.classList.toggle('decisions-blurred', decisionsBlurred);
   });
 
+  const PAGE_SIZE = 20;
+
   let currentPage = 0;
   let currentQuery = '';
   let currentYear = '';
   let currentAffType = '';
+  let currentTournament = '';
+  let currentSort = '';
   let totalPages = 0;
-  let yearDropdownPopulated = false;
+  let facetsPopulated = false;
   let activeTags: string[] = [];
   let expandedObjectID = '';
+  /** The whole sorted result set, held only while a sort is active. */
+  let sorted: Record<string, unknown>[] = [];
 
-  function buildFilters(year: string, affType: string, tags: string[]): string {
+  function buildFilters(year: string, affType: string, tournament: string, tags: string[]): string {
     const parts: string[] = [];
     if (year) parts.push(`year:"${year}"`);
     if (affType) parts.push(`aff_type:"${affType}"`);
+    if (tournament) parts.push(`tournament:"${tournament}"`);
     if (tags.length > 0) {
       const tagFilter = tags.map(t => `_tags:"${t}"`).join(' AND ');
       parts.push(tagFilter);
     }
     return parts.join(' AND ');
+  }
+
+  /**
+   * Algolia orders by relevance, and ordering by a field instead would mean a
+   * replica index per order. The whole collection is under three hundred
+   * rounds, so a sorted view is one request for everything that matches and
+   * then a comparison here.
+   */
+  const SORTS: Record<string, (a: any, b: any) => number> = {
+    'year-desc': (a, b) => str(b.year).localeCompare(str(a.year)) || str(a.title).localeCompare(str(b.title)),
+    'year-asc': (a, b) => str(a.year).localeCompare(str(b.year)) || str(a.title).localeCompare(str(b.title)),
+    'title-asc': (a, b) => str(a.title).localeCompare(str(b.title)),
+    'title-desc': (a, b) => str(b.title).localeCompare(str(a.title)),
+    'tournament-asc': (a, b) =>
+      str(a.tournament).localeCompare(str(b.tournament))
+      || str(b.year).localeCompare(str(a.year))
+      || str(a.title).localeCompare(str(b.title)),
+  };
+
+  function str(v: unknown): string {
+    return typeof v === 'string' ? v : '';
   }
 
   function shuffleArray<T>(arr: T[]): T[] {
@@ -184,6 +225,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     if (currentQuery) params.set('q', currentQuery);
     if (currentYear) params.set('year', currentYear);
     if (currentAffType) params.set('affType', currentAffType);
+    if (currentTournament) params.set('tournament', currentTournament);
+    if (currentSort) params.set('sort', currentSort);
     activeTags.forEach(t => params.append('tag', t));
     if (expandedObjectID) params.set('expand', expandedObjectID);
     const url = params.toString() ? `/recordings?${params}` : '/recordings';
@@ -281,17 +324,44 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     `;
   }
 
-  function populateYearDropdown(facetYears: Record<string, number>) {
-    if (yearDropdownPopulated) return;
-    yearDropdownPopulated = true;
+  /**
+   * The filter options come from one unfiltered facet query rather than from
+   * whatever the current search returned, so narrowing by year never removes
+   * the other years from the dropdown.
+   */
+  async function loadFilterOptions() {
+    const r = await client.searchSingleIndex({
+      indexName: INDEX_NAME,
+      searchParams: { query: '', hitsPerPage: 0, facets: ['year', 'tournament'], maxValuesPerFacet: 200 },
+    }).catch(() => null);
+    const facets = r?.facets as Record<string, Record<string, number>> | undefined;
+    if (facets) populateFacetDropdowns(facets['year'] ?? {}, facets['tournament'] ?? {});
+  }
 
-    const years = Object.keys(facetYears).sort().reverse();
-    for (const yr of years) {
+  function populateFacetDropdowns(
+    facetYears: Record<string, number>,
+    facetTournaments: Record<string, number>,
+  ) {
+    if (facetsPopulated) return;
+    facetsPopulated = true;
+
+    for (const yr of Object.keys(facetYears).sort().reverse()) {
       const opt = document.createElement('option');
       opt.value = yr;
       opt.textContent = yr;
       filterYear.appendChild(opt);
     }
+
+    for (const name of Object.keys(facetTournaments).sort()) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      filterTournament.appendChild(opt);
+    }
+
+    // The selection may have come from the URL before the options existed.
+    filterYear.value = currentYear;
+    filterTournament.value = currentTournament;
   }
 
   function standardizeDropbox(url: string): string {
@@ -422,9 +492,21 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   async function search(page: number, append: boolean) {
-    const filters = buildFilters(currentYear, currentAffType, activeTags);
-    const isBrowse = !currentQuery && !currentYear && !currentAffType && activeTags.length === 0 && page === 0;
+    const filters = buildFilters(currentYear, currentAffType, currentTournament, activeTags);
+    const filtered = Boolean(currentYear || currentAffType || currentTournament || activeTags.length);
+    // Browse is the bare landing state: a random slice, so the archive does not
+    // always open on the same rounds. A chosen order replaces that.
+    const isBrowse = !currentQuery && !filtered && !currentSort && page === 0;
     try {
+      // A sorted view pages through the sorted array rather than through
+      // Algolia, so it only fetches once.
+      if (currentSort && append && sorted.length) {
+        currentPage = page;
+        renderPage(sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), true);
+        loadMoreBtn.classList.toggle('hidden', (page + 1) * PAGE_SIZE >= sorted.length);
+        return;
+      }
+
       let effectivePage = page;
       if (isBrowse) {
         const probe = await client.searchSingleIndex({
@@ -439,52 +521,50 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         indexName: INDEX_NAME,
         searchParams: {
           query: currentQuery,
-          hitsPerPage: 20,
-          page: effectivePage,
-          facets: ['year', 'tournament', 'aff_type'],
+          hitsPerPage: currentSort ? 1000 : PAGE_SIZE,
+          page: currentSort ? 0 : effectivePage,
           ...(filters ? { filters } : {}),
         },
       });
 
       const rawHits = result.hits as Record<string, unknown>[];
-      const hits = isBrowse ? shuffleArray(rawHits) : rawHits;
       const nbHits = result.nbHits ?? 0;
-      const nbPages = result.nbPages ?? 0;
-      const facets = result.facets as Record<string, Record<string, number>> | undefined;
 
-      totalPages = nbPages;
+      let hits: Record<string, unknown>[];
+      if (currentSort) {
+        sorted = [...rawHits].sort(SORTS[currentSort]);
+        totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+        hits = sorted.slice(0, PAGE_SIZE);
+      } else {
+        sorted = [];
+        totalPages = result.nbPages ?? 0;
+        hits = isBrowse ? shuffleArray(rawHits) : rawHits;
+      }
       currentPage = page;
 
-      if (facets?.['year'] && !yearDropdownPopulated) {
-        populateYearDropdown(facets['year']);
-      }
-
       let countLabel = `${nbHits} round${nbHits === 1 ? '' : 's'}`;
-      if (activeTags.length > 0 || currentYear || currentAffType) {
-        countLabel += ' matching filters';
-      }
+      if (filtered) countLabel += ' matching filters';
       resultsCount.textContent = countLabel;
 
-      if (!append) {
-        resultsEl.innerHTML = '';
-      }
-
-      for (const hit of hits) {
-        resultsEl.insertAdjacentHTML('beforeend', renderCard(hit));
-      }
-
+      renderPage(hits, append);
       loadMoreBtn.classList.toggle('hidden', currentPage + 1 >= totalPages);
-
-      if (initExpandID && !append) {
-        const card = resultsEl.querySelector(`[data-objectid="${CSS.escape(initExpandID)}"]`) as HTMLElement | null;
-        if (card) {
-          expandedObjectID = initExpandID;
-          expandCard(card);
-        }
-      }
     } catch (err) {
       resultsCount.textContent = 'Search unavailable.';
       console.error('Algolia search error:', err);
+    }
+  }
+
+  function renderPage(hits: Record<string, unknown>[], append: boolean) {
+    if (!append) resultsEl.innerHTML = '';
+    for (const hit of hits) {
+      resultsEl.insertAdjacentHTML('beforeend', renderCard(hit));
+    }
+    if (initExpandID && !append) {
+      const card = resultsEl.querySelector(`[data-objectid="${CSS.escape(initExpandID)}"]`) as HTMLElement | null;
+      if (card) {
+        expandedObjectID = initExpandID;
+        expandCard(card);
+      }
     }
   }
 
@@ -571,7 +651,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     clearTimeout(debounceTimer);
     currentQuery = searchInput.value.trim();
     if (currentQuery.length > 2) track('search', undefined, { q: currentQuery, source: 'recordings' });
-    yearDropdownPopulated = false;
     updateURL();
     search(0, false);
   }
@@ -584,6 +663,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   function onFilterChange() {
     currentYear = filterYear.value;
     currentAffType = filterAffType.value;
+    currentTournament = filterTournament.value;
+    currentSort = sortBy.value;
     updateURL();
     search(0, false);
   }
@@ -598,32 +679,39 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   });
   filterYear.addEventListener('change', onFilterChange);
   filterAffType.addEventListener('change', onFilterChange);
+  filterTournament.addEventListener('change', onFilterChange);
+  sortBy.addEventListener('change', () => {
+    track('recordings.sort', undefined, { sort: sortBy.value || 'relevance' });
+    onFilterChange();
+  });
 
-  window.addEventListener('popstate', () => {
-    const p = new URLSearchParams(window.location.search);
+  function readParams(p: URLSearchParams) {
     currentQuery = p.get('q') || '';
     currentYear = p.get('year') || '';
     currentAffType = p.get('affType') || '';
+    currentTournament = p.get('tournament') || '';
+    currentSort = SORTS[p.get('sort') || ''] ? p.get('sort')! : '';
     activeTags = p.getAll('tag');
     expandedObjectID = p.get('expand') || '';
     searchInput.value = currentQuery;
     filterYear.value = currentYear;
     filterAffType.value = currentAffType;
+    filterTournament.value = currentTournament;
+    sortBy.value = currentSort;
+  }
+
+  window.addEventListener('popstate', () => {
+    readParams(new URLSearchParams(window.location.search));
     renderActiveFilters();
     search(0, false);
   });
 
   const initParams = new URLSearchParams(window.location.search);
-  currentQuery = initParams.get('q') || '';
-  currentYear = initParams.get('year') || '';
-  currentAffType = initParams.get('affType') || '';
-  activeTags = initParams.getAll('tag');
+  readParams(initParams);
   const initExpandID = initParams.get('expand') || '';
-  if (currentQuery) searchInput.value = currentQuery;
-  if (currentYear) filterYear.value = currentYear;
-  if (currentAffType) filterAffType.value = currentAffType;
   renderActiveFilters();
 
+  void loadFilterOptions();
   search(0, false);
 </script>
 

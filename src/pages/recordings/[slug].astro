@@ -143,10 +143,16 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 </BaseLayout>
 
 <style>
-  /* Round titles are long; sized to sit on one line at the shell width. */
+  /* The same face as the recordings list, a few sizes up. A round title is a
+     string of team codes and abbreviations, which the display serif sets
+     poorly and lowercasing makes worse. */
   .rec-title {
-    font-size: clamp(1.5rem, 3.2vw, 2.5rem);
-    line-height: 1.05;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-weight: 500;
+    font-size: clamp(1.5rem, 3vw, 2.125rem);
+    line-height: 1.2;
+    letter-spacing: -0.005em;
+    text-transform: none;
   }
 
   .rec-layout {
@@ -173,13 +179,12 @@ if (entry.neg) facts.push(['neg', entry.neg]);
   }
 
   .rec-resolution {
-    font-family: 'PP Editorial New', Georgia, serif;
-    font-weight: 300;
-    font-size: clamp(1.25rem, 2.4vw, 1.75rem);
-    line-height: 1.2;
-    letter-spacing: -0.01em;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: clamp(1.0625rem, 1.7vw, 1.25rem);
+    line-height: 1.4;
     margin: 0;
-    max-width: 40ch;
+    max-width: 52ch;
   }
 
   .rec-player :is(iframe, video, audio) {
@@ -232,7 +237,6 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 
   .rec-decision[data-revealed='true'] {
     filter: none;
-    cursor: default;
   }
 
   .tag-list a.tag {
@@ -246,8 +250,13 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 </style>
 
 <script>
+  // Reveal and re-blur, matching the decisions on the recordings list. Reading
+  // a result and hiding it again is the normal way to use this.
   const decision = document.getElementById('decision');
   decision?.addEventListener('click', () => {
-    decision.dataset.revealed = 'true';
+    const shown = decision.dataset.revealed === 'true';
+    decision.dataset.revealed = String(!shown);
+    decision.setAttribute('aria-label', shown ? 'Reveal decision' : 'Hide decision');
+    decision.setAttribute('aria-pressed', String(!shown));
   });
 </script>

@@ -86,6 +86,13 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         <button class="chip" id="fix-speeches" hidden>Fix timings</button>
       </div>
 
+      <p class="label label-muted speech-note" id="speech-note" hidden></p>
+
+      <div class="timing-votes" id="timing-votes" hidden>
+        <p class="label label-muted">Proposed timings</p>
+        <ul class="timing-list" id="timing-list"></ul>
+      </div>
+
       <div class="fixer" id="fixer" hidden>
         <p class="label label-muted">
           Drag the edges of a speech on the waveform, or scrub and use the
@@ -384,6 +391,26 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
     flex-wrap: wrap;
   }
 
+  .speech-note {
+    margin: 0.6rem 0 0;
+  }
+
+  .speech-note[hidden] {
+    display: none;
+  }
+
+  /* Pending timing corrections. Rows are built in the browser, so their styles
+     live in global.css. */
+  .timing-votes {
+    border-top: 1px solid var(--rule);
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+  }
+
+  .timing-votes[hidden] {
+    display: none;
+  }
+
   .speeches[hidden] {
     display: none;
   }
@@ -407,8 +434,12 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
 <script>
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
-  import { track, propose, listRevisions, getUser, NotSignedIn } from '../lib/api';
+  import {
+    track, propose, listRevisions, listProposals, vote, getUser, NotSignedIn,
+    type Proposal,
+  } from '../lib/api';
   import { sideOf, usable, applyBoundaries, type Speech } from '../lib/speeches';
+
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
   const MEDIA = 'https://media.goldenturn.org';
@@ -702,6 +733,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       applyFitted(found);
       const fix = document.getElementById('fix-speeches');
       if (fix) fix.hidden = false;
+      void loadTimingProposals();
     });
 
     canvas.addEventListener('keydown', e => {
@@ -810,11 +842,21 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
     document.getElementById('fix-speeches')?.addEventListener('click', openFixer);
     document.getElementById('fixer-cancel')?.addEventListener('click', () => {
+      closeFixer();
+      applyFitted(fitted);
+    });
+
+    function closeFixer() {
       document.getElementById('fixer')!.hidden = true;
       fixing = false;
       root!.dataset.fixing = '';
-      applyFitted(fitted);
-    });
+    }
+
+    function say(message: string) {
+      const note = document.getElementById('speech-note')!;
+      note.textContent = message;
+      note.hidden = !message;
+    }
 
     document.getElementById('fixer-submit')?.addEventListener('click', async e => {
       const btn = e.currentTarget as HTMLButtonElement;
@@ -826,9 +868,10 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
       if (!changed.length) { status.textContent = 'No changes to propose'; return; }
       btn.disabled = true;
       try {
+        let allAccepted = true;
         for (const s of changed) {
           const d = draft[s.label];
-          await propose(slug, {
+          const res = await propose(slug, {
             kind: 'boundary',
             anchor: s.label,
             original: JSON.stringify({ start: Math.round(s.start), end: Math.round(s.end) }),
@@ -836,9 +879,29 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
             startS: d.start,
             endS: d.end,
           });
+          if (!res.accepted) allAccepted = false;
         }
-        status.textContent = `Proposed ${changed.length} correction${changed.length === 1 ? '' : 's'}`;
         track('boundary.propose', slug, { count: changed.length });
+
+        const n = changed.length;
+        const plural = n === 1 ? '' : 's';
+        // An accepted correction is the live timing, so the waveform, the jump
+        // buttons and the transcript all move to it now rather than on reload.
+        if (allAccepted) {
+          fitted = fitted
+            .map(s => (draft[s.label]
+              ? { ...s, start: draft[s.label].start, end: draft[s.label].end, confidence: 1 }
+              : s))
+            .sort((a, b) => a.start - b.start);
+          applyFitted(fitted);
+          say(`${n} timing${plural} updated`);
+        } else {
+          say(`Proposed ${n} correction${plural}. It goes live once others agree.`);
+          applyFitted(fitted);
+        }
+        status.textContent = '';
+        closeFixer();
+        void loadTimingProposals();
       } catch (ex) {
         status.textContent = ex instanceof NotSignedIn ? 'Sign in first' : 'Could not submit';
         if (ex instanceof NotSignedIn) document.dispatchEvent(new CustomEvent('gt:open-signin'));
@@ -846,6 +909,81 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
         btn.disabled = false;
       }
     });
+
+    /**
+     * Open timing corrections, with the same up and down votes the transcript
+     * margin gives text corrections. Timings are the part of a round people
+     * most often need to fix, so they need a way to settle them between
+     * themselves rather than waiting on an admin.
+     */
+    async function loadTimingProposals() {
+      const box = document.getElementById('timing-votes');
+      const list = document.getElementById('timing-list');
+      if (!box || !list) return;
+
+      const all = await listProposals(slug).catch(() => ({ proposals: [] as Proposal[] }));
+      const open = all.proposals.filter(p => p.kind === 'boundary' && p.status === 'open');
+      box.hidden = open.length === 0;
+      list.innerHTML = '';
+
+      for (const p of open) {
+        const li = document.createElement('li');
+        li.className = 'timing-row';
+
+        const label = document.createElement('span');
+        label.className = 'timing-label';
+        label.textContent = p.anchor;
+
+        const move = document.createElement('span');
+        move.className = 'timing-move';
+        move.textContent = `${describe(p.original)} to ${describe(p.proposed)}`;
+
+        const up = document.createElement('button');
+        up.className = 'vote'; up.textContent = '+';
+        up.setAttribute('aria-label', `Agree with the ${p.anchor} timing`);
+        const score = document.createElement('span');
+        score.className = 'proposal-score'; score.textContent = String(p.score);
+        const down = document.createElement('button');
+        down.className = 'vote'; down.textContent = '−';
+        down.setAttribute('aria-label', `Disagree with the ${p.anchor} timing`);
+        const who = document.createElement('span');
+        who.className = 'timing-author';
+        who.textContent = p.author;
+
+        const cast = async (value: 1 | -1) => {
+          try {
+            const r = await vote(p.id, value);
+            score.textContent = String(r.score);
+            if (r.accepted) await adoptRevisions();
+          } catch (ex) {
+            if (ex instanceof NotSignedIn) document.dispatchEvent(new CustomEvent('gt:open-signin'));
+          }
+        };
+        up.addEventListener('click', () => cast(1));
+        down.addEventListener('click', () => cast(-1));
+
+        li.append(label, move, up, score, down, who);
+        list.appendChild(li);
+      }
+    }
+
+    /** Re-reads accepted timings and repaints everything that shows them. */
+    async function adoptRevisions() {
+      const res = await listRevisions(slug).catch(() => null);
+      if (!res) return;
+      fitted = applyBoundaries(fitted, res.revisions);
+      applyFitted(fitted);
+      void loadTimingProposals();
+    }
+
+    function describe(value: string): string {
+      try {
+        const v = JSON.parse(value);
+        return `${formatTime(Number(v.start))}–${formatTime(Number(v.end))}`;
+      } catch {
+        return formatTime(Number(value));
+      }
+    }
 
     const ro = new ResizeObserver(() => wave.resize());
     ro.observe(canvas);
