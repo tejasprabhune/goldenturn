@@ -41,7 +41,82 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <script>
   import { algoliasearch } from 'algoliasearch';
-  import { recordingHref } from '../../lib/recordings';
+  import { recordingHref, recordingSlug } from '../../lib/recordings';
+  import { Waveform, formatTime, type PeaksFile } from '../../lib/waveform';
+
+  const MEDIA = 'https://media.goldenturn.org';
+
+  // Which rounds have audio in R2; anything else falls back to its source embed.
+  let playable = new Set<string>();
+  fetch(`${MEDIA}/index.json`)
+    .then(r => r.json())
+    .then(j => { playable = new Set<string>(j.playable ?? []); })
+    .catch(() => {});
+
+  /**
+   * The card gets the same waveform as the round page, minus the parts that
+   * belong to a dedicated page: no loop, notes, tags or transcript.
+   */
+  function buildWaveformPlayer(host: HTMLElement, slug: string) {
+    host.innerHTML = `
+      <div class="cardplayer">
+        <div class="cardplayer-wave"><canvas></canvas></div>
+        <div class="cardplayer-transport">
+          <button class="cardplayer-play" aria-label="Play">play</button>
+          <span class="cardplayer-time">0:00</span>
+          <span class="cardplayer-sep">/</span>
+          <span class="cardplayer-total">0:00</span>
+          <select class="field cardplayer-speed" aria-label="Playback speed">
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="1.75">1.75x</option>
+            <option value="2">2x</option>
+          </select>
+        </div>
+        <audio preload="metadata" src="${MEDIA}/audio/${slug}.m4a"></audio>
+      </div>`;
+
+    const canvas = host.querySelector('canvas') as HTMLCanvasElement;
+    const audio = host.querySelector('audio') as HTMLAudioElement;
+    const playBtn = host.querySelector('.cardplayer-play') as HTMLButtonElement;
+    const timeEl = host.querySelector('.cardplayer-time') as HTMLElement;
+    const totalEl = host.querySelector('.cardplayer-total') as HTMLElement;
+    const speed = host.querySelector('.cardplayer-speed') as HTMLSelectElement;
+    const wave = new Waveform(canvas);
+
+    fetch(`${MEDIA}/peaks/${slug}.json`)
+      .then(r => r.json())
+      .then((file: PeaksFile) => {
+        wave.setData(file);
+        totalEl.textContent = formatTime(file.duration);
+      })
+      .catch(() => { host.querySelector('.cardplayer-wave')!.textContent = ''; });
+
+    playBtn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
+    audio.addEventListener('play', () => { playBtn.textContent = 'pause'; });
+    audio.addEventListener('pause', () => { playBtn.textContent = 'play'; });
+    audio.addEventListener('timeupdate', () => {
+      wave.position = audio.currentTime;
+      timeEl.textContent = formatTime(audio.currentTime);
+      wave.draw();
+    });
+    speed.addEventListener('change', () => { audio.playbackRate = Number(speed.value); });
+
+    canvas.addEventListener('pointerdown', e => {
+      const rect = canvas.getBoundingClientRect();
+      audio.currentTime = wave.xToTime(e.clientX - rect.left);
+    });
+    canvas.addEventListener('pointermove', e => {
+      const rect = canvas.getBoundingClientRect();
+      wave.hover = wave.xToTime(e.clientX - rect.left);
+      wave.draw();
+    });
+    canvas.addEventListener('pointerleave', () => { wave.hover = null; wave.draw(); });
+
+    new ResizeObserver(() => wave.resize()).observe(canvas);
+  }
 
   const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
   const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
@@ -165,6 +240,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       ? (hit['_tags'] as string[]).filter(t => typeof t === 'string' && t.startsWith('#'))
       : [];
 
+    const href = escapeHtml(recordingHref({
+      title: hit['title'] as string ?? '',
+      objectID: hit['objectID'] as string ?? '',
+    }));
+
     const tagPills = tags
       .map(t => `<button class="rec-card__tag" data-tag="${escapeHtml(t)}" data-active="${activeTags.includes(t)}">${escapeHtml(t)}</button>`)
       .join('');
@@ -173,7 +253,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <article class="rec-card" data-objectid="${objectID}" data-link="${link}">
         <div class="rec-card__header" role="button" tabindex="0" aria-expanded="false">
           <div class="rec-card__main">
-            <h2 class="rec-card__title">${title}<a class="rec-card__open" href="${escapeHtml(recordingHref({ title: hit['title'] as string ?? '', objectID: hit['objectID'] as string ?? '' }))}" aria-label="Open the page for ${title}">&#8599;</a></h2>
+            <h2 class="rec-card__title"><a class="rec-card__link" href="${href}">${title}</a><a class="rec-card__open" href="${href}" tabindex="-1" aria-hidden="true">&#8599;</a></h2>
             <p class="rec-card__resolution">${resolution}</p>
             <div class="rec-card__strategies">
               <p class="rec-card__strategy"><span class="rec-card__label">Aff</span> ${aff}</p>
@@ -244,6 +324,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   function injectPlayer(card: HTMLElement) {
     const link = card.dataset.link || '';
     const playerEl = card.querySelector('.rec-card__player') as HTMLElement;
+
+    const slug = recordingSlug({
+      title: card.querySelector('.rec-card__link')?.textContent ?? '',
+      objectID: card.dataset.objectid ?? '',
+    });
+    if (playable.has(slug)) {
+      buildWaveformPlayer(playerEl, slug);
+      return;
+    }
 
     // YouTube
     const ytId = ytVidId(link);
@@ -653,6 +742,83 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gap: 0.5rem;
     max-width: 9rem;
     flex-shrink: 0;
+  }
+
+  .rec-card__link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .rec-card__link:hover {
+    box-shadow: inset 0 -0.1em 0 var(--gold);
+  }
+
+  /* Hovering the title lights the arrow too, so it reads as one target. */
+  .rec-card__title:hover .rec-card__open {
+    background: var(--gold);
+    color: var(--ink);
+  }
+
+  .cardplayer-wave {
+    border-top: 1px solid var(--rule-soft);
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--paper);
+  }
+
+  .cardplayer-wave canvas {
+    display: block;
+    width: 100%;
+    height: 84px;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .cardplayer-transport {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.7rem;
+  }
+
+  .cardplayer-play {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    background: var(--gold);
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    min-width: 5rem;
+    transition: background-color 60ms linear;
+  }
+
+  .cardplayer-play:hover {
+    background: var(--sky);
+  }
+
+  .cardplayer-time,
+  .cardplayer-total {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cardplayer-total,
+  .cardplayer-sep {
+    color: rgba(23, 21, 15, 0.45);
+  }
+
+  .cardplayer-speed {
+    margin-left: auto;
+    padding: 0.25rem 0.35rem;
+    font-size: 0.8125rem;
+  }
+
+  .cardplayer audio {
+    display: none;
   }
 
   .rec-card__open {
