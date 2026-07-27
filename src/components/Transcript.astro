@@ -58,9 +58,11 @@ const { slug } = Astro.props;
     <label class="signin-label" for="tx-note-input">Note (optional)</label>
     <input class="field" id="tx-note-input" maxlength="200" placeholder="Why this is right" />
     <p class="signin-error" id="tx-error" hidden></p>
+    <!-- Cancel is a plain button: as the first submit button it would become
+         the default, and Enter in the note field would discard the edit. -->
     <div class="signin-actions">
-      <button class="chip" value="cancel" formnovalidate>Cancel</button>
-      <button class="btn" value="ok" id="tx-submit">Submit</button>
+      <button type="button" class="chip" id="tx-cancel">Cancel</button>
+      <button type="submit" class="btn" value="ok" id="tx-submit">Submit</button>
     </div>
   </form>
 </dialog>
@@ -184,9 +186,13 @@ const { slug } = Astro.props;
     gap: 0.4rem;
   }
 
+  /* The passage being corrected. The words either side are context, so they
+     read quieter than the selection. The mark itself is built in the browser
+     and so is styled in global.css. */
   .tx-original {
     font-size: 0.875rem;
     line-height: 1.5;
+    color: var(--ink-muted);
     background: var(--paper-raised);
     border: 1px solid var(--rule);
     padding: 0.6rem;
@@ -202,9 +208,10 @@ const { slug } = Astro.props;
   import { formatTime } from '../lib/waveform';
   import {
     listProposals, listRevisions, propose, vote, getUser, NotSignedIn,
-    addNote, track, updateProposal, deleteProposal, type Proposal,
+    addNote, track, updateProposal, deleteProposal, type Proposal, type Revision,
   } from '../lib/api';
   import { AFF, usable, applyBoundaries, type Speech } from '../lib/speeches';
+  import { diffWords, headContext, tailContext, windowAround } from '../lib/textdiff';
 
   interface Word { w: string; s: number | null; e: number | null; p: number | null }
   interface Segment {
@@ -257,12 +264,7 @@ const { slug } = Astro.props;
         speeches = usable(spRes.value.speeches ?? []);
       }
       if (revRes.status === 'fulfilled') {
-        for (const r of revRes.value.revisions) {
-          if (r.kind === 'transcript') revisions.set(r.anchor, r.value);
-        }
-        // Accepted timing corrections move the dividers, the tinting and the
-        // minimap, not just the waveform.
-        speeches = applyBoundaries(speeches, revRes.value.revisions);
+        takeRevisions(revRes.value.revisions);
       }
       render();
       buildMinimap();
@@ -550,7 +552,48 @@ const { slug } = Astro.props;
     });
 
     const tip = document.getElementById('tx-tip')!;
-    let pendingSel: { anchor: string; original: string; at: number } | null = null;
+    /**
+     * A correction is written against a passage: the selection plus a little
+     * either side. What gets stored is still the whole paragraph, with that
+     * passage spliced back in, so an accepted edit applies without having to
+     * find its window again later.
+     */
+    interface PendingSel {
+      anchor: string;
+      /** The paragraph as it currently reads. */
+      paraText: string;
+      /** The passage shown for editing, as offsets into paraText. */
+      winStart: number;
+      winEnd: number;
+      /** Where the selection sits inside the passage. */
+      selStart: number;
+      selEnd: number;
+      at: number;
+    }
+    let pendingSel: PendingSel | null = null;
+
+    /**
+     * Reads a paragraph as one string and locates a range inside it. The
+     * timestamp is skipped so offsets line up with the words a reader sees.
+     */
+    function offsetsIn(para: HTMLElement, range: Range) {
+      const walker = document.createTreeWalker(para, NodeFilter.SHOW_TEXT, {
+        acceptNode: n =>
+          (n.parentElement?.closest('.tx-at')
+            ? NodeFilter.FILTER_REJECT
+            : NodeFilter.FILTER_ACCEPT),
+      });
+      let text = '';
+      let start: number | null = null;
+      let end: number | null = null;
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (node === range.startContainer) start = text.length + range.startOffset;
+        if (node === range.endContainer) end = text.length + range.endOffset;
+        text += node.nodeValue ?? '';
+      }
+      return { text, start, end };
+    }
 
     document.addEventListener('selectionchange', () => {
       const sel = document.getSelection();
@@ -559,15 +602,28 @@ const { slug } = Astro.props;
       const para = (node instanceof Element ? node : node?.parentElement)?.closest('.tx-para');
       if (!para || !linesEl.contains(para)) { tip.hidden = true; return; }
 
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
       if (!rect.width) { tip.hidden = true; return; }
       tip.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
       tip.style.top = `${rect.top + window.scrollY - 6}px`;
       tip.hidden = false;
       setFollow(false);
+
+      const { text, start, end } = offsetsIn(para as HTMLElement, range);
+      // A selection reaching past this paragraph has no offset inside it, so
+      // fall back to the whole thing rather than guess at a window.
+      const from = Math.min(start ?? 0, end ?? text.length);
+      const to = Math.max(start ?? 0, end ?? text.length);
+      const win = windowAround(text, from, to);
+
       pendingSel = {
         anchor: segId(Number((para as HTMLElement).dataset.index)),
-        original: (para as HTMLElement).innerText.replace(/^\d+:\d+\s*/, '').trim(),
+        paraText: text,
+        winStart: win.start,
+        winEnd: win.end,
+        selStart: from - win.start,
+        selEnd: to - win.start,
         at: Number((para as HTMLElement).dataset.at),
       };
     });
@@ -576,10 +632,25 @@ const { slug } = Astro.props;
     document.getElementById('tx-propose')?.addEventListener('click', () => {
       if (!pendingSel) return;
       if (!getUser()) { document.getElementById('account-signin')?.click(); return; }
-      (document.getElementById('tx-original') as HTMLElement).textContent = pendingSel.original;
-      (document.getElementById('tx-proposed') as HTMLTextAreaElement).value = pendingSel.original;
+      const { paraText, winStart, winEnd, selStart, selEnd } = pendingSel;
+      const passage = paraText.slice(winStart, winEnd);
+
+      // Show the passage with the selected words marked, so it is obvious which
+      // part is the edit and which is only there for context.
+      const orig = document.getElementById('tx-original') as HTMLElement;
+      orig.textContent = '';
+      const picked = document.createElement('span');
+      picked.className = 'tx-original-sel';
+      picked.textContent = passage.slice(selStart, selEnd);
+      orig.append(passage.slice(0, selStart), picked, passage.slice(selEnd));
+
+      const box = document.getElementById('tx-proposed') as HTMLTextAreaElement;
+      box.value = passage;
       tip.hidden = true;
       dialog.showModal();
+      // The caret starts where the highlight did, not at the end of the box.
+      box.focus();
+      box.setSelectionRange(selStart, selStart);
     });
 
     // Selecting text and taking a note anchors it to that moment in the round.
@@ -597,26 +668,102 @@ const { slug } = Astro.props;
       }
     });
 
+    document.getElementById('tx-cancel')?.addEventListener('click', () => dialog.close());
+
     document.getElementById('tx-form')?.addEventListener('submit', async e => {
       const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
-      if (submitter?.value !== 'ok' || !pendingSel) return;
+      if ((submitter && submitter.value !== 'ok') || !pendingSel) return;
       e.preventDefault();
-      const proposed = (document.getElementById('tx-proposed') as HTMLTextAreaElement).value.trim();
+      const { paraText, winStart, winEnd } = pendingSel;
+      const passage = (document.getElementById('tx-proposed') as HTMLTextAreaElement).value.trim();
+      // The corrected passage goes back into its paragraph before it is sent:
+      // a revision replaces the paragraph, so it has to carry the whole thing.
+      const proposed = paraText.slice(0, winStart) + passage + paraText.slice(winEnd);
       const note = (document.getElementById('tx-note-input') as HTMLInputElement).value.trim();
       const err = document.getElementById('tx-error')!;
       try {
-        await propose(slug, {
+        const res = await propose(slug, {
           kind: 'transcript', anchor: pendingSel.anchor,
-          original: pendingSel.original, proposed, note: note || undefined,
+          original: paraText, proposed, note: note || undefined,
         });
         err.hidden = true;
         dialog.close();
+        // An admin's edit is accepted on submit, so the passage has to redraw
+        // rather than wait for the next visit.
+        if (res.accepted) await refreshRevisions();
         void loadProposals();
       } catch (ex: any) {
         err.textContent = ex instanceof NotSignedIn ? 'Sign in first' : (ex.message ?? 'Failed');
         err.hidden = false;
       }
     });
+
+    /**
+     * Transcript revisions replace their paragraph; boundary revisions move the
+     * dividers, the tinting and the minimap with them.
+     */
+    function takeRevisions(list: Revision[]) {
+      revisions.clear();
+      for (const r of list) {
+        if (r.kind === 'transcript') revisions.set(r.anchor, r.value);
+      }
+      speeches = applyBoundaries(speeches, list);
+    }
+
+    async function refreshRevisions() {
+      const res = await listRevisions(slug).catch(() => null);
+      if (!res) return;
+      takeRevisions(res.revisions);
+      render();
+      buildMinimap();
+    }
+
+    /**
+     * Shows what a correction changes rather than two near-identical blocks of
+     * text. Corrections share almost all their words with the original, so the
+     * shared head and tail are trimmed to a little context and only the
+     * changed run is spelled out.
+     */
+    function diffView(original: string, proposed: string): HTMLElement {
+      const box = document.createElement('span');
+      box.className = 'proposal-text';
+
+      const d = diffWords(original, proposed);
+      if (!d.removed && !d.added) {
+        box.textContent = headContext(proposed, 120).text;
+        return box;
+      }
+
+      const before = tailContext(d.prefix);
+      const after = headContext(d.suffix);
+
+      if (before.clipped) box.append(ellipsis());
+      if (before.text) box.append(document.createTextNode(before.text));
+
+      if (d.removed) {
+        const del = document.createElement('del');
+        del.className = 'proposal-del';
+        del.textContent = d.removed;
+        box.append(del);
+      }
+      if (d.added) {
+        const ins = document.createElement('ins');
+        ins.className = 'proposal-ins';
+        ins.textContent = d.added;
+        box.append(ins);
+      }
+
+      if (after.text) box.append(document.createTextNode(after.text));
+      if (after.clipped) box.append(ellipsis());
+      return box;
+    }
+
+    function ellipsis(): HTMLElement {
+      const e = document.createElement('span');
+      e.className = 'proposal-clip';
+      e.textContent = '…';
+      return e;
+    }
 
     async function loadProposals() {
       const list = document.getElementById('tx-proposals');
@@ -656,12 +803,7 @@ const { slug } = Astro.props;
           const el = target();
           if (el) scrollLinesTo(el, 'top');
         });
-        const text = document.createElement('span');
-        text.className = 'proposal-text';
-        const was = document.createElement('span');
-        was.className = 'proposal-was';
-        was.textContent = p.original.slice(0, 80);
-        text.append(was, document.createElement('br'), document.createTextNode(p.proposed.slice(0, 120)));
+        li.append(diffView(p.original, p.proposed));
 
         const meta = document.createElement('div');
         meta.className = 'proposal-meta';
@@ -686,7 +828,7 @@ const { slug } = Astro.props;
         up.addEventListener('click', () => cast(1));
         down.addEventListener('click', () => cast(-1));
         meta.append(up, score, down, who);
-        li.append(text, meta);
+        li.append(meta);
 
         // An author can revise or withdraw their own edit while it is open.
         if (me && p.author_id === me.id && p.status === 'open') {

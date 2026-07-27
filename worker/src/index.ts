@@ -106,8 +106,25 @@ async function logEvent(env: Env, kind: string, userId: string | null, slug: str
 }
 
 /**
+ * Promotes a proposal and writes the revision, which is what readers actually
+ * see. The vote threshold, an admin's resolve and an admin's own edit all land
+ * here so there is one definition of what acceptance does.
+ */
+async function acceptProposal(env: Env, proposal: any) {
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE proposals SET status = 'accepted' WHERE id = ?1`).bind(proposal.id),
+    env.DB.prepare(
+      `INSERT INTO revisions (id, slug, kind, anchor, value, proposal_id, applied_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+    ).bind(id(), proposal.slug, proposal.kind, proposal.anchor, proposal.proposed, proposal.id, now()),
+    // Reputation follows accepted work, not raw activity.
+    env.DB.prepare(`UPDATE users SET rep = rep + 10 WHERE id = ?1`).bind(proposal.user_id),
+  ]);
+}
+
+/**
  * Recomputes a proposal's score and promotes it once the margin clears the
- * threshold. Acceptance writes a revision, which is what readers actually see.
+ * threshold.
  */
 async function settleProposal(env: Env, proposalId: string) {
   const tally = await env.DB.prepare(
@@ -123,15 +140,7 @@ async function settleProposal(env: Env, proposalId: string) {
   if (!proposal || proposal.status !== 'open') return { score, accepted: false };
 
   if (score >= ACCEPT_THRESHOLD) {
-    await env.DB.batch([
-      env.DB.prepare(`UPDATE proposals SET status = 'accepted' WHERE id = ?1`).bind(proposalId),
-      env.DB.prepare(
-        `INSERT INTO revisions (id, slug, kind, anchor, value, proposal_id, applied_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
-      ).bind(id(), proposal.slug, proposal.kind, proposal.anchor, proposal.proposed, proposalId, now()),
-      // Reputation follows accepted work, not raw activity.
-      env.DB.prepare(`UPDATE users SET rep = rep + 10 WHERE id = ?1`).bind(proposal.user_id),
-    ]);
+    await acceptProposal(env, proposal);
     await logEvent(env, 'proposal.accepted', proposal.user_id, proposal.slug, { proposalId, score });
     return { score, accepted: true };
   }
@@ -307,14 +316,7 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
       return json({ ok: true, status: 'rejected' });
     }
 
-    await env.DB.batch([
-      env.DB.prepare(`UPDATE proposals SET status = 'accepted' WHERE id = ?1`).bind(pid),
-      env.DB.prepare(
-        `INSERT INTO revisions (id, slug, kind, anchor, value, proposal_id, applied_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
-      ).bind(id(), proposal.slug, proposal.kind, proposal.anchor, proposal.proposed, pid, now()),
-      env.DB.prepare(`UPDATE users SET rep = rep + 10 WHERE id = ?1`).bind(proposal.user_id),
-    ]);
+    await acceptProposal(env, proposal);
     await logEvent(env, 'proposal.accepted', user!.id, proposal.slug, { pid, by: 'admin' });
     return json({ ok: true, status: 'accepted' });
   },
@@ -365,9 +367,20 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     await env.DB.prepare(
       `INSERT INTO votes (proposal_id, user_id, value, created_at) VALUES (?1,?2,1,?3)`
     ).bind(pid, user.id, now()).run();
-    const settled = await settleProposal(env, pid);
 
     await logEvent(env, 'proposal.created', user.id, slug, { pid, kind });
+
+    // An admin does not have to wait on the vote: their edit is the decision.
+    if (isAdmin(user, env)) {
+      const proposal = await env.DB.prepare(`SELECT * FROM proposals WHERE id = ?1`)
+        .bind(pid).first<any>();
+      await env.DB.prepare(`UPDATE proposals SET score = 1 WHERE id = ?1`).bind(pid).run();
+      await acceptProposal(env, proposal);
+      await logEvent(env, 'proposal.accepted', user.id, slug, { pid, by: 'admin-author' });
+      return json({ id: pid, score: 1, accepted: true }, { status: 201 });
+    }
+
+    const settled = await settleProposal(env, pid);
     return json({ id: pid, ...settled }, { status: 201 });
   },
 
