@@ -10,7 +10,10 @@ name: onboard submitted rounds
 # token, and a round has no page until the site is rebuilt.
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    # GitHub delays and drops scheduled runs under load, and the ones on the
+    # hour are the most contended. Asking often, and off the hour, is what
+    # makes the "within an hour" on the submit page true rather than hopeful.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 
 permissions:

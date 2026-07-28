@@ -11,8 +11,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </nav>
     <h1 class="page-title">submit a recording</h1>
     <p class="page-lede">
-      A round appears in search straight away. Its audio, transcript and speech
-      markers are pulled in afterwards, so the page fills in over the next run.
+      Please try to follow the format as described for maintainability. Your
+      round will be available to search immediately. The audio, transcript, and
+      speech markers are processed after and will be visible within an hour.
+      Email me: <a href="mailto:prabhune@berkeley.edu" class="link">prabhune@berkeley.edu</a>
+      if you're having issues.
     </p>
   </div>
 
@@ -36,7 +39,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <label class="form-label" for="field-link">Link <span class="form-required">required</span></label>
         <p class="form-hint">
           A Dropbox, YouTube or Vimeo link to the recording itself, not to a
-          folder. It is checked before the round is accepted.
+          folder.
         </p>
         <input type="text" id="field-link" name="link" placeholder="https://..."
           class="form-input" required />
@@ -99,7 +102,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       <div class="flex items-center gap-4">
         <button type="submit" id="submit-btn" class="btn submit-btn">
-          Submit recording
+          Submit a recording
         </button>
         <p id="submit-error" class="form-hint hidden" style="margin: 0;"></p>
       </div>
@@ -318,13 +321,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       document.getElementById('success-line')!.textContent =
         `${payload.title} is in search.`;
       document.getElementById('success-detail')!.textContent =
-        'Its audio and transcript are queued; the round page fills in once the '
-        + 'next ingest run picks it up.';
+        'Its audio, transcript and speech markers are being processed and '
+        + 'should be on the page within an hour.';
       const open = document.getElementById('success-round') as HTMLAnchorElement;
       open.href = recordingHref({ title: payload.title, objectID: res.objectID });
     } catch (err) {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit recording';
+      submitBtn.textContent = 'Submit a recording';
       if (err instanceof FieldErrors) {
         showFieldErrors(err.fields);
       } else if (err instanceof NotSignedIn) {
@@ -341,7 +344,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     form.reset();
     clearErrors();
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Submit recording';
+    submitBtn.textContent = 'Submit a recording';
     successState.classList.add('hidden');
     form.classList.remove('hidden');
     getField('title').focus();
