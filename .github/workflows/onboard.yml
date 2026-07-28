@@ -1,0 +1,97 @@
+name: onboard submitted rounds
+
+# Runs itself so a submitted round becomes a complete one without anybody
+# doing anything. Each step works out its own outstanding work from what is in
+# the bucket, so a run that finds nothing costs a minute and a run that finds
+# half-finished work finishes it.
+#
+# It deploys the site itself when something changed, rather than asking the
+# deploy workflow to run: a workflow cannot trigger another with the built-in
+# token, and a round has no page until the site is rebuilt.
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # Shares the deploy workflow's group: two Pages deployments at once fail.
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  onboard:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.run.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # ffmpeg transcodes and measures; yt-dlp is the path for YouTube and
+      # Vimeo submissions.
+      - name: install media tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          pipx install yt-dlp
+
+      # Only needed to start the transcription jobs. Without it the run still
+      # pulls audio and fits speeches, and says transcription was skipped.
+      - name: sign in to Azure
+        if: ${{ env.AZURE_CREDENTIALS != '' }}
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: onboard
+        id: run
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_S3_KEY: ${{ secrets.CLOUDFLARE_S3_KEY }}
+          CLOUDFLARE_S3_SECRET: ${{ secrets.CLOUDFLARE_S3_SECRET }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          GT_ADMIN_TOKEN: ${{ secrets.GT_ADMIN_TOKEN }}
+        run: pnpm exec tsx scripts/ingest/auto.ts
+
+      # Only when a round actually changed: a rebuild every twenty minutes
+      # would republish the whole site for nothing.
+      - name: build
+        if: steps.run.outputs.changed == 'true'
+        env:
+          PUBLIC_ALGOLIA_APP_ID: CS1MDMNJTO
+          PUBLIC_ALGOLIA_SEARCH_KEY: ${{ secrets.ALGOLIA_SEARCH_KEY }}
+          PUBLIC_ALGOLIA_INDEX_NAME: all_rounds
+          ALGOLIA_ADMIN_KEY: ${{ secrets.ALGOLIA_ADMIN_KEY }}
+        run: pnpm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.run.outputs.changed == 'true'
+        with:
+          path: ./dist
+
+  deploy:
+    needs: onboard
+    if: needs.onboard.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -11,3 +11,9 @@ ALLOWED_ORIGINS = "https://goldenturn.org,http://localhost:4321,http://localhost
 binding = "DB"
 database_name = "goldenturn"
 database_id = "0baf36dd-91c8-42e3-9818-582e82b7f560"
+
+# Removing a round has to take its audio, transcript and timings with it, or
+# the files stay served at a guessable address after the round is gone.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "goldenturn-media"

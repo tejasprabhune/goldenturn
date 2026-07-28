@@ -56,11 +56,16 @@ const PANELS = [
 
     <section class="admin-panel">
       <div class="admin-panel-head">
-        <p class="section-head">Submitted, waiting on audio</p>
+        <p class="section-head">Submitted rounds</p>
         <span class="label label-muted" id="pending-count"></span>
       </div>
+      <p class="panel-note">
+        Rounds go live on their own. Confirming one stops it asking to be
+        looked at; removing takes it out of search and deletes its audio,
+        transcript and timings.
+      </p>
       <ul class="queue" id="admin-pending"></ul>
-      <p class="page-lede admin-empty" id="pending-empty" hidden>Nothing waiting.</p>
+      <p class="page-lede admin-empty" id="pending-empty" hidden>Nothing submitted yet.</p>
     </section>
 
     <section class="admin-panel">
@@ -147,6 +152,15 @@ const PANELS = [
     margin-top: 0.5rem;
   }
 
+  /* What a panel does, said once at the top of it. */
+  .panel-note {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    max-width: 60ch;
+    margin: 0.6rem 0 0;
+  }
+
   .admin-table {
     width: 100%;
     border-collapse: collapse;
@@ -167,7 +181,8 @@ const PANELS = [
 
 <script>
   import {
-    adminStats, adminEvents, adminProposals, adminResolve, getUser, pendingRecordings,
+    adminStats, adminEvents, adminProposals, adminResolve, getUser,
+    listSubmissions, confirmRecording, removeRecording,
     type AdminStats, type AdminEvent,
   } from '../lib/api';
   import { areaChart, barChart } from '../lib/chart';
@@ -395,33 +410,81 @@ const PANELS = [
    * arrived until the ingest run has pulled its audio, and this is the only
    * place that backlog is visible.
    */
+  const STAGE: Record<string, string> = {
+    pending: 'audio not pulled yet',
+    ingested: 'audio in',
+    failed: 'ingest failed',
+  };
+
   async function loadPending() {
     const list = document.getElementById('admin-pending')!;
     const empty = document.getElementById('pending-empty')!;
     const count = document.getElementById('pending-count')!;
-    const { pending } = await pendingRecordings().catch(() => ({ pending: [] as any[] }));
+    const { submissions } = await listSubmissions().catch(() => ({ submissions: [] as any[] }));
 
-    empty.hidden = pending.length > 0;
-    count.textContent = pending.length ? `${pending.length} waiting` : '';
+    empty.hidden = submissions.length > 0;
+    const unreviewed = submissions.filter((s: any) => s.review === 'unreviewed').length;
+    count.textContent = unreviewed ? `${unreviewed} to look at` : '';
     list.innerHTML = '';
 
-    for (const p of pending) {
+    for (const s of submissions) {
       const li = document.createElement('li');
+      li.dataset.review = s.review;
+
       const head = document.createElement('div');
       head.className = 'queue-head';
       const round = document.createElement('a');
       round.className = 'queue-round';
-      round.href = `/recordings/${p.slug}`;
-      round.textContent = p.title;
-      const who = document.createElement('span');
-      who.textContent = [p.year, p.tournament, p.author].filter(Boolean).join('   ');
-      head.append(round, who);
+      round.href = `/recordings/${s.slug}`;
+      round.textContent = s.title;
+      const meta = document.createElement('span');
+      meta.textContent = [s.year, s.tournament, s.author, STAGE[s.status] ?? s.status]
+        .filter(Boolean).join('   ');
+      head.append(round, meta);
 
       const src = document.createElement('div');
       src.className = 'queue-note';
-      src.textContent = p.link;
+      src.textContent = s.note ? `${s.link}   ${s.note}` : s.link;
 
       li.append(head, src);
+
+      const actions = document.createElement('div');
+      actions.className = 'queue-actions';
+
+      if (s.review === 'confirmed') {
+        const kept = document.createElement('span');
+        kept.className = 'submission-kept';
+        kept.textContent = 'confirmed';
+        actions.append(kept);
+      } else {
+        const keep = document.createElement('button');
+        keep.className = 'chip';
+        keep.textContent = 'Confirm';
+        keep.addEventListener('click', async () => {
+          keep.disabled = true;
+          try { await confirmRecording(s.object_id); void loadPending(); }
+          catch { keep.disabled = false; }
+        });
+        actions.append(keep);
+      }
+
+      // Removal deletes the media as well as the listing, so it asks first.
+      const drop = document.createElement('button');
+      drop.className = 'chip';
+      drop.textContent = 'Remove';
+      drop.addEventListener('click', async () => {
+        const why = window.prompt(
+          `Remove "${s.title}"?\n\nThis takes it out of search and deletes its `
+          + `audio, transcript and speech timings. It cannot be undone.\n\n`
+          + `Reason (optional):`);
+        if (why === null) return;
+        drop.disabled = true;
+        try { await removeRecording(s.object_id, why || undefined); void loadPending(); }
+        catch { drop.disabled = false; }
+      });
+      actions.append(drop);
+
+      li.append(actions);
       list.appendChild(li);
     }
   }

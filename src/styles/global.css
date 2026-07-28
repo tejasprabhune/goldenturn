@@ -943,6 +943,21 @@
     font-size: 0.75rem;
     color: rgba(23, 21, 15, 0.5);
     margin-top: 0.4rem;
+    word-break: break-all;
+  }
+
+  /* A submission nobody has looked at yet asks for attention; one that has
+     been confirmed stops asking. */
+  .queue li[data-review='unreviewed'] {
+    box-shadow: inset 2px 0 0 var(--gold);
+    padding-left: 0.6rem;
+    margin-left: -0.6rem;
+  }
+
+  .submission-kept {
+    font-size: 0.75rem;
+    color: rgba(23, 21, 15, 0.45);
+    align-self: center;
   }
 
   .signin {

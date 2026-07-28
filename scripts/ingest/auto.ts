@@ -1,0 +1,172 @@
+/**
+ * Brings submitted rounds all the way in, without being asked.
+ *
+ * Written to be run on a schedule and to be safe to run when there is nothing
+ * to do, which is most of the time. Each step discovers its own work from what
+ * is in the bucket rather than from a list handed to it, so a round that only
+ * got half way on one run is picked up by the next: no queue to get out of
+ * step, and no round stuck because a single run died between steps.
+ *
+ *   audio      submissions marked pending
+ *   transcript audio in R2 with no transcript
+ *   speeches   a transcript with no fit
+ *   pages      a deploy, because which rounds have pages and which show a
+ *              player are both decided at build time
+ *
+ * Transcription runs on GPUs elsewhere; this starts those jobs and leaves them
+ * to finish, so a long round does not hold the run open.
+ */
+import 'dotenv/config';
+import { execFileSync } from 'child_process';
+import { appendFileSync } from 'fs';
+import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+
+const API = process.env.GT_API ?? 'https://goldenturn-api.tejas-prabhune.workers.dev';
+const BUCKET = 'goldenturn-media';
+const RG = process.env.AZ_RESOURCE_GROUP ?? 'thava';
+const TX_JOBS = (process.env.TX_JOBS ?? 'gt-rx-2,gt-rx-4,gt-rx-6,gt-rx-8,gt-rx-10').split(',');
+/** One round takes a few minutes on a T4; this bounds a single run's spend. */
+const TX_LIMIT = Number(process.env.TX_LIMIT ?? '20');
+
+function sh(cmd: string, args: string[]): string {
+  return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 });
+}
+
+function s3(): S3Client {
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.CLOUDFLARE_S3_KEY!,
+      secretAccessKey: process.env.CLOUDFLARE_S3_SECRET!,
+    },
+  });
+}
+
+async function slugsUnder(client: S3Client, prefix: string, suffix: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  let token: string | undefined;
+  do {
+    const r = await client.send(new ListObjectsV2Command({
+      Bucket: BUCKET, Prefix: prefix, ContinuationToken: token,
+    }));
+    for (const o of r.Contents ?? []) {
+      if (o.Key?.endsWith(suffix)) out.add(o.Key.slice(prefix.length, -suffix.length));
+    }
+    token = r.NextContinuationToken;
+  } while (token);
+  return out;
+}
+
+async function main() {
+  // Scheduled, so it runs whether or not anyone has finished wiring it up.
+  // Saying what is missing and stopping beats failing every twenty minutes.
+  const missing = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_S3_KEY', 'CLOUDFLARE_S3_SECRET']
+    .filter(k => !process.env[k]);
+  if (missing.length) {
+    console.log(`not configured yet: ${missing.join(', ')} unset. Nothing done.`);
+    return;
+  }
+
+  const client = s3();
+  let changed = false;
+
+  // 1. Audio for anything submitted and not yet pulled.
+  const pending = await fetch(`${API}/recordings/pending`)
+    .then(r => r.json() as Promise<{ pending: Array<{ slug: string; title: string }> }>)
+    .catch(() => ({ pending: [] }));
+
+  if (pending.pending.length) {
+    console.log(`pulling audio for ${pending.pending.length} submitted round(s)`);
+    console.log(sh('npx', ['tsx', 'scripts/ingest/drain-submissions.ts']));
+    changed = true;
+  }
+
+  const audio = await slugsUnder(client, 'audio/', '.m4a');
+  const peaks = await slugsUnder(client, 'peaks/', '.json');
+  const transcripts = await slugsUnder(client, 'transcripts/', '.json');
+  const speeches = await slugsUnder(client, 'speeches/', '.json');
+
+  // 2. Transcribe anything playable that has no transcript. Discovered rather
+  //    than remembered, so a round half-done last run is finished this one.
+  const playable = [...audio].filter(s => peaks.has(s));
+  const untranscribed = playable.filter(s => !transcripts.has(s)).slice(0, TX_LIMIT);
+
+  if (untranscribed.length) {
+    console.log(`\nstarting transcription for ${untranscribed.length} round(s)`);
+    const perJob = Math.ceil(untranscribed.length / TX_JOBS.length);
+    for (let i = 0; i < TX_JOBS.length && i * perJob < untranscribed.length; i++) {
+      const batch = untranscribed.slice(i * perJob, (i + 1) * perJob);
+      const job = TX_JOBS[i];
+      try {
+        sh('az', ['containerapp', 'job', 'update', '-n', job, '-g', RG,
+          '--set-env-vars', `SLUGS=${batch.join(' ')}`, '-o', 'none']);
+        sh('az', ['containerapp', 'job', 'start', '-n', job, '-g', RG, '-o', 'none']);
+        console.log(`  ${job}: ${batch.length} round(s)`);
+      } catch (err) {
+        console.log(`  ${job}: could not start (${(err as Error).message.slice(0, 80)})`);
+      }
+    }
+    console.log('  left running; their transcripts are picked up on a later run');
+  }
+
+  // 3. Fit anything transcribed that has no timings yet.
+  const unfitted = [...transcripts].filter(s => !speeches.has(s));
+  if (unfitted.length) {
+    console.log(`\nfitting speeches for ${unfitted.length} round(s)`);
+    console.log(sh('npx', ['tsx', 'scripts/segment/run.ts'], ).slice(-800));
+    changed = true;
+  }
+
+  // 4. The index decides what the site treats as playable.
+  if (changed) {
+    console.log('\nrepublishing the media index');
+    console.log(sh('npx', ['tsx', 'scripts/ingest/publish-index.ts']));
+    await purge([...pending.pending.map(p => p.slug), ...unfitted]);
+    askForRebuild();
+  } else {
+    console.log('nothing to do');
+  }
+}
+
+/** The R2 domain caches by URL, including 404s from before a file existed. */
+async function purge(slugs: string[]) {
+  const key = process.env.CLOUDFLARE_API_TOKEN;
+  const zone = process.env.CLOUDFLARE_ZONE_ID ?? '7627240c9688e6514a397b9509758a2a';
+  const email = process.env.CLOUDFLARE_EMAIL ?? 'tejas.prabhune@gmail.com';
+  if (!key) return;
+
+  const files = ['https://media.goldenturn.org/index.json'];
+  for (const s of new Set(slugs)) {
+    for (const p of ['audio', 'peaks', 'transcripts', 'speeches']) {
+      files.push(`https://media.goldenturn.org/${p}/${s}.${p === 'audio' ? 'm4a' : 'json'}`);
+    }
+  }
+  for (let i = 0; i < files.length; i += 30) {
+    await fetch(`https://api.cloudflare.com/client/v4/zones/${zone}/purge_cache`, {
+      method: 'POST',
+      headers: { 'X-Auth-Email': email, 'X-Auth-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: files.slice(i, i + 30) }),
+    }).catch(() => {});
+  }
+  console.log('purged the edge copies');
+}
+
+/**
+ * A round has no page until the site is built, so the run that gave it audio
+ * is the run that rebuilds. On a runner that is the next step in the workflow;
+ * run by hand it is a reminder, because pushing on someone's behalf is not
+ * this script's business.
+ */
+function askForRebuild() {
+  const out = process.env.GITHUB_OUTPUT;
+  if (out) {
+    appendFileSync(out, 'changed=true\n');
+    console.log('rounds changed; the workflow will rebuild and deploy');
+  } else {
+    console.log('rounds changed. Deploy to give them pages: '
+      + 'git commit --allow-empty -m rebuild && git push');
+  }
+}
+
+main().catch(err => { console.error(err); process.exit(1); });

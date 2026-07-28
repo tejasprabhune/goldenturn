@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Fired by the onboarding run once a submitted round has its audio, so the
+  # round gets a page without anyone having to remember to deploy. The pages
+  # and whether each shows a player are decided at build time.
+  repository_dispatch:
+    types: [rounds-changed]
 
 permissions:
   contents: read

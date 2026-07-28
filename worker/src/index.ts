@@ -8,6 +8,7 @@
 
 export interface Env {
   DB: D1Database;
+  MEDIA: R2Bucket;
   SESSION_TTL_DAYS: string;
   ALLOWED_ORIGINS: string;
   ADMIN_EMAIL: string;
@@ -15,6 +16,8 @@ export interface Env {
   ALGOLIA_APP_ID: string;
   ALGOLIA_ADMIN_KEY: string;
   ALGOLIA_INDEX: string;
+  /** Lets the unattended onboarding run report ingest status. */
+  INGEST_TOKEN: string;
 }
 
 const ACCEPT_THRESHOLD = 5;
@@ -496,19 +499,50 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     return json({ objectID, slug, status: 'pending', probe: probe.info }, { status: 201 });
   },
 
-  /** What has been submitted but not yet ingested. Drives the ingest run. */
+  /** What has been submitted but not yet ingested. Drives the onboarding run. */
   'GET /recordings/pending': async (_req, env) => {
     const { results } = await env.DB.prepare(
       `SELECT s.object_id, s.slug, s.title, s.link, s.year, s.tournament, s.created_at,
               u.display_name AS author
-         FROM submissions s LEFT JOIN users u ON u.id = s.user_id
-        WHERE s.status = 'pending' ORDER BY s.created_at ASC`
+         FROM submissions s
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE s.status = 'pending' AND s.review != 'removed'
+        ORDER BY s.created_at ASC`
     ).all();
     return json({ pending: results });
   },
 
-  'POST /recordings/:id/status': async (req, env, url, user) => {
+  /**
+   * Every submission and where it has got to, for the admin page. A round goes
+   * live on its own; this is where it is looked at afterwards.
+   */
+  'GET /recordings/submissions': async (_req, env, url, user) => {
     if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 200);
+    const { results } = await env.DB.prepare(
+      `SELECT s.object_id, s.slug, s.title, s.link, s.year, s.tournament,
+              s.status, s.review, s.note, s.created_at, u.display_name AS author
+         FROM submissions s
+         LEFT JOIN users u ON u.id = s.user_id
+        WHERE s.review != 'removed'
+        ORDER BY (s.review = 'unreviewed') DESC, s.created_at DESC
+        LIMIT ?1`
+    ).bind(limit).all();
+    return json({ submissions: results });
+  },
+
+  /**
+   * The onboarding run reporting how far it got. Not a judgement on the round.
+   *
+   * It accepts a token of its own as well as an admin session: the run is
+   * unattended and a session expires, which would leave every submission stuck
+   * at pending and re-ingested on every pass. The token authorises this one
+   * report and nothing else.
+   */
+  'POST /recordings/:id/status': async (req, env, url, user) => {
+    const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer /, '');
+    const isRunner = Boolean(env.INGEST_TOKEN) && bearer === env.INGEST_TOKEN;
+    if (!isRunner && !isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
     const objectID = url.pathname.split('/')[2];
     const { status, note } = await req.json<{ status?: string; note?: string }>().catch(() => ({} as any));
     if (!['pending', 'ingested', 'failed'].includes(status ?? '')) {
@@ -518,6 +552,72 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
       `UPDATE submissions SET status = ?1, note = ?2, updated_at = ?3 WHERE object_id = ?4`
     ).bind(status, note ?? null, now(), objectID).run();
     return json({ ok: true });
+  },
+
+  /** Keep it. Nothing changes for the round; it stops asking to be looked at. */
+  'POST /recordings/:id/confirm': async (_req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const objectID = url.pathname.split('/')[2];
+    const row = await env.DB.prepare(`SELECT slug FROM submissions WHERE object_id = ?1`)
+      .bind(objectID).first<{ slug: string }>();
+    if (!row) return json({ error: 'no such submission' }, { status: 404 });
+
+    await env.DB.prepare(
+      `UPDATE submissions SET review = 'confirmed', updated_at = ?1 WHERE object_id = ?2`
+    ).bind(now(), objectID).run();
+    await logEvent(env, 'recording.confirmed', user!.id, row.slug, { objectID });
+    return json({ ok: true, review: 'confirmed' });
+  },
+
+  /**
+   * Remove it. A round that should not be here has to go from everywhere it
+   * reached on its own: out of search, and its audio, transcript and timings
+   * out of the bucket, or the files stay served at a guessable address.
+   */
+  'DELETE /recordings/:id': async (req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const objectID = url.pathname.split('/')[2];
+    const row = await env.DB.prepare(
+      `SELECT slug, title FROM submissions WHERE object_id = ?1`
+    ).bind(objectID).first<{ slug: string; title: string }>();
+    if (!row) return json({ error: 'no such submission' }, { status: 404 });
+
+    const { note } = await req.json<{ note?: string }>().catch(() => ({} as any));
+
+    const search = await fetch(
+      `https://${env.ALGOLIA_APP_ID}.algolia.net/1/indexes/${env.ALGOLIA_INDEX}/${objectID}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'X-Algolia-API-Key': env.ALGOLIA_ADMIN_KEY,
+          'X-Algolia-Application-Id': env.ALGOLIA_APP_ID,
+        },
+      },
+    );
+    if (!search.ok && search.status !== 404) {
+      return json({ error: `search index refused the removal (${search.status})` }, { status: 502 });
+    }
+
+    const keys = [
+      `audio/${row.slug}.m4a`,
+      `peaks/${row.slug}.json`,
+      `transcripts/${row.slug}.json`,
+      `speeches/${row.slug}.json`,
+    ];
+    const removed: string[] = [];
+    for (const key of keys) {
+      if (await env.MEDIA.head(key)) {
+        await env.MEDIA.delete(key);
+        removed.push(key);
+      }
+    }
+
+    await env.DB.prepare(
+      `UPDATE submissions SET review = 'removed', note = ?1, updated_at = ?2 WHERE object_id = ?3`
+    ).bind(note ?? null, now(), objectID).run();
+    await logEvent(env, 'recording.removed', user!.id, row.slug, { objectID, removed: removed.length });
+
+    return json({ ok: true, review: 'removed', removed });
   },
 
   'GET /rounds/:slug/revisions': async (_req, env, url) => {

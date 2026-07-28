@@ -177,6 +177,27 @@ export function pendingRecordings() {
   return call<{ pending: Submission[] }>('/recordings/pending');
 }
 
+export interface ReviewedSubmission extends Submission {
+  status: 'pending' | 'ingested' | 'failed';
+  review: 'unreviewed' | 'confirmed' | 'removed';
+  note: string | null;
+}
+
+export function listSubmissions() {
+  return call<{ submissions: ReviewedSubmission[] }>('/recordings/submissions', {}, true);
+}
+
+export function confirmRecording(objectID: string) {
+  return call<{ ok: true }>(`/recordings/${encodeURIComponent(objectID)}/confirm`,
+    { method: 'POST' }, true);
+}
+
+/** Removes the round from search and deletes its media. Not reversible. */
+export function removeRecording(objectID: string, note?: string) {
+  return call<{ ok: true; removed: string[] }>(`/recordings/${encodeURIComponent(objectID)}`,
+    { method: 'DELETE', body: JSON.stringify({ note }) }, true);
+}
+
 export function vote(proposalId: string, value: -1 | 0 | 1) {
   return call<{ score: number; accepted: boolean }>(
     `/proposals/${encodeURIComponent(proposalId)}/vote`,
