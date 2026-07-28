@@ -10,24 +10,36 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <span aria-current="page">submit</span>
     </nav>
     <h1 class="page-title">submit a recording</h1>
-    <p class="page-lede">Recordings appear in search immediately.</p>
+    <p class="page-lede">
+      A round appears in search straight away. Its audio, transcript and speech
+      markers are pulled in afterwards, so the page fills in over the next run.
+    </p>
   </div>
 
   <div class="shell-prose page-body">
-    <form id="submission-form" novalidate>
+    <p class="page-lede add-signin" id="add-signin" hidden style="margin-top: 0;">
+      Please <button class="link account-link" id="add-signin-btn">sign in</button>
+      to submit a recording, so it can be credited to you.
+    </p>
+
+    <form id="submission-form" novalidate hidden>
 
       <div class="mb-7">
-        <label class="form-label" for="field-title">Round title</label>
+        <label class="form-label" for="field-title">Round title <span class="form-required">required</span></label>
+        <p class="form-hint">Stage, then both teams, e.g. Finals - Cal MR vs Rice AL</p>
         <input type="text" id="field-title" name="title" placeholder="Finals - Cal MR vs Rice AL"
-          class="form-input" />
+          class="form-input" required />
         <p class="validation-hint"></p>
       </div>
 
       <div class="mb-7">
-        <label class="form-label" for="field-link">Link</label>
-        <p class="form-hint">Dropbox, YouTube, or Vimeo URL</p>
+        <label class="form-label" for="field-link">Link <span class="form-required">required</span></label>
+        <p class="form-hint">
+          A Dropbox, YouTube or Vimeo link to the recording itself, not to a
+          folder. It is checked before the round is accepted.
+        </p>
         <input type="text" id="field-link" name="link" placeholder="https://..."
-          class="form-input" />
+          class="form-input" required />
         <p class="validation-hint"></p>
       </div>
 
@@ -95,8 +107,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </form>
 
     <div id="success-state" class="hidden pt-2">
-      <p class="page-lede" style="margin-top: 0;">Recording submitted and live in search.</p>
-      <a href="/recordings" class="link">Back to recordings</a>
+      <p class="page-lede" style="margin-top: 0;" id="success-line"></p>
+      <p class="form-hint" id="success-detail"></p>
+      <p style="margin-top: 1rem;">
+        <a href="/recordings" class="link">Back to recordings</a>
+        <span aria-hidden="true" style="opacity: 0.4; margin: 0 0.5rem;">/</span>
+        <a href="#" class="link" id="success-round">Open the round</a>
+        <span aria-hidden="true" style="opacity: 0.4; margin: 0 0.5rem;">/</span>
+        <button class="link account-link" id="submit-another">Submit another</button>
+      </p>
     </div>
   </div>
 </BaseLayout>
@@ -148,6 +167,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     min-height: 1rem;
   }
 
+  /* A hint that is a refusal rather than advice reads as one. */
+  .validation-hint[data-error] {
+    color: var(--diff-del);
+    font-weight: 500;
+  }
+
+  .form-required {
+    font-weight: 400;
+    letter-spacing: 0;
+    color: rgba(23, 21, 15, 0.4);
+    text-transform: none;
+  }
+
+  .add-signin[hidden],
+  #submission-form[hidden] {
+    display: none;
+  }
+
   .submit-btn:disabled {
     opacity: 0.4;
     cursor: default;
@@ -155,13 +192,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 </style>
 
 <script>
-  import { algoliasearch } from 'algoliasearch';
-
-  const APP_ID = 'CS1MDMNJTO';
-  const WRITE_KEY = '24934eda81fbfc13e8875adc571d8043';
-  const INDEX_NAME = 'all_rounds';
-
-  const client = algoliasearch(APP_ID, WRITE_KEY);
+  // The write key used to live here, which meant anyone reading the bundle
+  // could rewrite or empty the index. Submission goes through the Worker now,
+  // which holds the key and validates before it writes.
+  import { submitRecording, getUser, FieldErrors, NotSignedIn } from '../../lib/api';
+  import { recordingHref } from '../../lib/recordings';
 
   const form = document.getElementById('submission-form') as HTMLFormElement;
   const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
@@ -177,6 +212,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   const validators: Record<string, (v: string) => string | null> = {
+    title: (v) => (v.trim() ? null : 'A round title is required'),
+    link: (v) => {
+      if (!v.trim()) return 'A link to the recording is required';
+      if (!/^https?:\/\//i.test(v.trim())) return 'That does not look like a URL';
+      // A folder link cannot be played, and the round would arrive empty.
+      if (/dropbox\.com\/(home|scl\/fo)\//i.test(v)) return 'That is a folder; link the file itself';
+      return null;
+    },
     tags: (v) => {
       if (!v.trim()) return null;
       const bad = v.split(',').map(t => t.trim()).filter(t => t && !t.startsWith('#'));
@@ -206,59 +249,101 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     field.addEventListener('input', () => { hint.textContent = validate(field.value) ?? ''; });
   }
 
-  function computeAffType(tags: string[]): string {
-    if (tags.some(t => t === '#k-aff')) return 'k-aff';
-    if (tags.some(t => t === '#performance')) return 'performance';
-    return 'topical';
+  // Signed in or the form is not offered: a submission is credited to whoever
+  // made it, and the server will refuse an anonymous one anyway.
+  const signinNote = document.getElementById('add-signin')!;
+
+  function renderAuth() {
+    const signedIn = Boolean(getUser());
+    form.hidden = !signedIn;
+    signinNote.hidden = signedIn;
   }
 
-  function computeNegStrategyCount(neg: string): number | null {
-    const m = neg.match(/(\d+)-off/i);
-    return m ? parseInt(m[1], 10) : null;
+  document.getElementById('add-signin-btn')?.addEventListener('click', () =>
+    document.dispatchEvent(new CustomEvent('gt:open-signin')));
+  document.addEventListener('gt:signed-in', renderAuth);
+  renderAuth();
+
+  function showFieldErrors(fields: Record<string, string>) {
+    for (const [name, message] of Object.entries(fields)) {
+      const field = form.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
+      if (!field) continue;
+      getHint(name).textContent = message;
+      getHint(name).dataset.error = '1';
+    }
+    const first = Object.keys(fields)[0];
+    getField(first)?.focus();
+  }
+
+  function clearErrors() {
+    form.querySelectorAll<HTMLElement>('.validation-hint').forEach(h => {
+      if (h.dataset.error) { h.textContent = ''; delete h.dataset.error; }
+    });
+    submitError.classList.add('hidden');
   }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    clearErrors();
 
-    const title      = getField('title').value.trim();
-    const link       = getField('link').value.trim();
-    const resolution = getField('resolution').value.trim();
-    const aff        = getField('aff').value.trim();
-    const neg        = getField('neg').value.trim();
-    const tagsRaw    = getField('tags').value.trim();
-    const decision   = getField('decision').value.trim();
-    const year       = getField('year').value.trim();
-    const tournament = getField('tournament').value.trim();
-
-    const tags = tagsRaw
-      ? tagsRaw.split(',').map(t => t.trim()).filter(t => t.startsWith('#'))
-      : [];
-
-    const record = {
-      objectID: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      title, link, resolution, aff, neg,
-      _tags: tags,
-      searchable_tags: tags,
-      decision, year, tournament,
-      teams: [],
-      aff_type: computeAffType(tags),
-      neg_strategy_count: computeNegStrategyCount(neg),
+    const value = (name: string) => getField(name).value.trim();
+    const tagsRaw = value('tags');
+    const payload = {
+      title: value('title'),
+      link: value('link'),
+      resolution: value('resolution'),
+      aff: value('aff'),
+      neg: value('neg'),
+      decision: value('decision'),
+      year: value('year'),
+      tournament: value('tournament'),
+      tags: tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(t => t.startsWith('#')) : [],
     };
 
+    // Catch what we can before the round trip; the server checks again.
+    const local: Record<string, string> = {};
+    for (const [name, validate] of Object.entries(validators)) {
+      const message = validate(getField(name).value);
+      if (message && (name === 'title' || name === 'link')) local[name] = message;
+    }
+    if (Object.keys(local).length) { showFieldErrors(local); return; }
+
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting...';
-    submitError.classList.add('hidden');
+    submitBtn.textContent = 'Checking the link...';
 
     try {
-      await client.saveObject({ indexName: INDEX_NAME, body: record });
+      const res = await submitRecording(payload);
       form.classList.add('hidden');
       successState.classList.remove('hidden');
+      document.getElementById('success-line')!.textContent =
+        `${payload.title} is in search.`;
+      document.getElementById('success-detail')!.textContent =
+        'Its audio and transcript are queued; the round page fills in once the '
+        + 'next ingest run picks it up.';
+      const open = document.getElementById('success-round') as HTMLAnchorElement;
+      open.href = recordingHref({ title: payload.title, objectID: res.objectID });
     } catch (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Submit recording';
-      submitError.textContent = 'Submission failed. Please try again.';
-      submitError.classList.remove('hidden');
-      console.error(err);
+      if (err instanceof FieldErrors) {
+        showFieldErrors(err.fields);
+      } else if (err instanceof NotSignedIn) {
+        renderAuth();
+        document.dispatchEvent(new CustomEvent('gt:open-signin'));
+      } else {
+        submitError.textContent = (err as Error).message ?? 'Submission failed. Please try again.';
+        submitError.classList.remove('hidden');
+      }
     }
+  });
+
+  document.getElementById('submit-another')?.addEventListener('click', () => {
+    form.reset();
+    clearErrors();
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit recording';
+    successState.classList.add('hidden');
+    form.classList.remove('hidden');
+    getField('title').focus();
   });
 </script>

@@ -11,6 +11,10 @@ export interface Env {
   SESSION_TTL_DAYS: string;
   ALLOWED_ORIGINS: string;
   ADMIN_EMAIL: string;
+  /** Server-side Algolia write key, so the browser never carries one. */
+  ALGOLIA_APP_ID: string;
+  ALGOLIA_ADMIN_KEY: string;
+  ALGOLIA_INDEX: string;
 }
 
 const ACCEPT_THRESHOLD = 5;
@@ -149,6 +153,70 @@ async function settleProposal(env: Env, proposalId: string) {
 
 function isAdmin(user: User | null, env: Env): boolean {
   return Boolean(user && user.email === (env.ADMIN_EMAIL ?? '').toLowerCase());
+}
+
+/**
+ * Must match recordingSlug in src/lib/recordings.ts: the page a round lives at
+ * is derived from these two strings on both sides, and a submission that lands
+ * at a different address than the site builds is a round nobody can open.
+ */
+function slugFor(title: string, objectID: string): string {
+  const base = (title || 'round')
+    .toLowerCase()
+    .replace(/['‘’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 70)
+    .replace(/-+$/g, '');
+  const suffix = objectID.replace(/[^a-z0-9]/gi, '').slice(0, 6).toLowerCase();
+  return `${base}-${suffix}`;
+}
+
+/** The direct-download form; a share page is HTML and streams nothing. */
+function directUrl(url: string): string {
+  try {
+    if (url.includes('/scl/fi/')) {
+      const u = new URL(url);
+      u.hostname = 'dl.dropboxusercontent.com';
+      u.searchParams.set('dl', '1');
+      return u.toString();
+    }
+    return url
+      .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
+      .replace('dl.dropbox.com', 'dl.dropboxusercontent.com')
+      .split('?')[0];
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Confirms the link serves a recording rather than a web page or a 404.
+ * YouTube and Vimeo are taken on trust: their pages are HTML by design and the
+ * ingest run pulls the audio through yt-dlp.
+ */
+async function probeMedia(link: string): Promise<{ ok: true; info: string } | { ok: false; reason: string }> {
+  if (/youtube\.com|youtu\.be|vimeo\.com/i.test(link)) {
+    return { ok: true, info: 'video host, checked at ingest' };
+  }
+  try {
+    const res = await fetch(directUrl(link), { headers: { Range: 'bytes=0-1023' } });
+    if (res.status === 404) return { ok: false, reason: 'That link returns not found' };
+    if (!res.ok && res.status !== 206) {
+      return { ok: false, reason: `That link answered ${res.status}` };
+    }
+    const type = res.headers.get('content-type') ?? '';
+    if (type.includes('text/html')) {
+      return { ok: false, reason: 'That link opens a web page rather than a file. Use a direct or shared file link.' };
+    }
+    const size = Number(res.headers.get('content-range')?.split('/')[1] ?? res.headers.get('content-length') ?? 0);
+    if (size && size < 100_000) {
+      return { ok: false, reason: 'That file is too small to be a round' };
+    }
+    return { ok: true, info: size ? `${Math.round(size / 1e6)}MB ${type || 'media'}` : (type || 'media') };
+  } catch (err) {
+    return { ok: false, reason: 'That link could not be reached' };
+  }
 }
 
 /** Kinds accepted from the browser, so the events table cannot be filled with junk. */
@@ -334,6 +402,122 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
         WHERE p.slug = ?1 ORDER BY p.score DESC, p.created_at ASC`
     ).bind(slug).all();
     return json({ proposals: results });
+  },
+
+  /**
+   * Submits a round.
+   *
+   * The write key used to sit in the page, which meant anyone could rewrite or
+   * empty the index, and an empty form submitted happily and reported success.
+   * Submission is now attributable, validated, and checked against the source
+   * actually playing something before it reaches search: a round matched to a
+   * dead or wrong link is the failure that cost eighteen rounds their audio.
+   */
+  'POST /recordings': async (req, env, _url, user) => {
+    if (!user) return json({ error: 'sign in to submit a recording' }, { status: 401 });
+
+    const body = await req.json<any>().catch(() => ({}));
+    const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const title = str(body.title);
+    const link = str(body.link);
+    const year = str(body.year);
+    const decision = str(body.decision);
+    const tags: string[] = Array.isArray(body.tags)
+      ? body.tags.map(str).filter((t: string) => t.startsWith('#'))
+      : [];
+
+    const errors: Record<string, string> = {};
+    if (!title) errors.title = 'A round title is required';
+    else if (title.length > 200) errors.title = 'That title is too long';
+    if (!link) errors.link = 'A link to the recording is required';
+    else if (!/^https?:\/\//i.test(link)) errors.link = 'That does not look like a URL';
+    if (year && !/^\d{4}-\d{2}$/.test(year)) errors.year = 'Expected a season like 2020-21';
+    if (decision && !/^(\d+-\d+\s+(aff|neg)|aff|neg|\d+-\d+\s+split)$/i.test(decision)) {
+      errors.decision = 'Expected Aff, Neg, 3-0 Aff, or 1-1 Split';
+    }
+    if (Object.keys(errors).length) return json({ errors }, { status: 400 });
+
+    const norm = title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const dup = await env.DB.prepare(
+      `SELECT object_id FROM submissions WHERE lower(title) = ?1 AND COALESCE(year,'') = ?2`
+    ).bind(title.toLowerCase(), year).first();
+    if (dup) return json({ errors: { title: 'That round has already been submitted' } }, { status: 409 });
+
+    // Does the link actually serve a recording? A range GET, because Dropbox
+    // answers HEAD with the content type of its own web page.
+    const probe = await probeMedia(link);
+    if (!probe.ok) {
+      return json({ errors: { link: probe.reason } }, { status: 400 });
+    }
+
+    const objectID = `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const slug = slugFor(title, objectID);
+
+    const record = {
+      objectID, title, link,
+      resolution: str(body.resolution),
+      aff: str(body.aff),
+      neg: str(body.neg),
+      _tags: tags,
+      searchable_tags: tags,
+      decision, year,
+      tournament: str(body.tournament),
+      teams: [],
+      aff_type: tags.includes('#k-aff') ? 'k-aff'
+        : tags.includes('#performance') ? 'performance' : 'topical',
+      neg_strategy_count: Number(str(body.neg).match(/(\d+)-off/i)?.[1]) || null,
+    };
+
+    const res = await fetch(
+      `https://${env.ALGOLIA_APP_ID}.algolia.net/1/indexes/${env.ALGOLIA_INDEX}/${objectID}`,
+      {
+        method: 'PUT',
+        headers: {
+          'X-Algolia-API-Key': env.ALGOLIA_ADMIN_KEY,
+          'X-Algolia-Application-Id': env.ALGOLIA_APP_ID,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(record),
+      },
+    );
+    if (!res.ok) {
+      return json({ error: `search index rejected the round (${res.status})` }, { status: 502 });
+    }
+
+    // Pending until its audio is in R2: appearing in search is not the same as
+    // being playable, and the ingest run reads this to know what is owed.
+    await env.DB.prepare(
+      `INSERT INTO submissions (object_id, slug, title, link, year, tournament, user_id, status, created_at, updated_at)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,'pending',?8,?8)`
+    ).bind(objectID, slug, title, link, year || null, str(body.tournament) || null,
+      user.id, now()).run();
+
+    await logEvent(env, 'recording.submitted', user.id, slug, { objectID, norm });
+    return json({ objectID, slug, status: 'pending', probe: probe.info }, { status: 201 });
+  },
+
+  /** What has been submitted but not yet ingested. Drives the ingest run. */
+  'GET /recordings/pending': async (_req, env) => {
+    const { results } = await env.DB.prepare(
+      `SELECT s.object_id, s.slug, s.title, s.link, s.year, s.tournament, s.created_at,
+              u.display_name AS author
+         FROM submissions s LEFT JOIN users u ON u.id = s.user_id
+        WHERE s.status = 'pending' ORDER BY s.created_at ASC`
+    ).all();
+    return json({ pending: results });
+  },
+
+  'POST /recordings/:id/status': async (req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const objectID = url.pathname.split('/')[2];
+    const { status, note } = await req.json<{ status?: string; note?: string }>().catch(() => ({} as any));
+    if (!['pending', 'ingested', 'failed'].includes(status ?? '')) {
+      return json({ error: 'bad status' }, { status: 400 });
+    }
+    await env.DB.prepare(
+      `UPDATE submissions SET status = ?1, note = ?2, updated_at = ?3 WHERE object_id = ?4`
+    ).bind(status, note ?? null, now(), objectID).run();
+    return json({ ok: true });
   },
 
   'GET /rounds/:slug/revisions': async (_req, env, url) => {

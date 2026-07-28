@@ -133,6 +133,50 @@ export function propose(slug: string, payload: {
   );
 }
 
+/** Field-level complaints from the server, keyed by field name. */
+export class FieldErrors extends Error {
+  constructor(public fields: Record<string, string>) {
+    super('validation failed');
+    this.name = 'FieldErrors';
+  }
+}
+
+export interface Submission {
+  object_id: string;
+  slug: string;
+  title: string;
+  link: string;
+  year: string | null;
+  tournament: string | null;
+  author: string | null;
+  created_at: number;
+}
+
+/**
+ * Submits a round. The server validates, checks the link plays something and
+ * writes to the index with its own key, so the browser carries none.
+ */
+export async function submitRecording(payload: Record<string, unknown>) {
+  const token = getToken();
+  if (!token) throw new NotSignedIn();
+  const res = await fetch(`${API}/recordings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({} as any));
+  if (res.status === 401) { signOut(); throw new NotSignedIn(); }
+  if (!res.ok) {
+    if ((body as any).errors) throw new FieldErrors((body as any).errors);
+    throw new Error((body as any).error ?? `submission failed (${res.status})`);
+  }
+  return body as { objectID: string; slug: string; status: string; probe?: string };
+}
+
+export function pendingRecordings() {
+  return call<{ pending: Submission[] }>('/recordings/pending');
+}
+
 export function vote(proposalId: string, value: -1 | 0 | 1) {
   return call<{ score: number; accepted: boolean }>(
     `/proposals/${encodeURIComponent(proposalId)}/vote`,

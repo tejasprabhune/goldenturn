@@ -56,6 +56,15 @@ const PANELS = [
 
     <section class="admin-panel">
       <div class="admin-panel-head">
+        <p class="section-head">Submitted, waiting on audio</p>
+        <span class="label label-muted" id="pending-count"></span>
+      </div>
+      <ul class="queue" id="admin-pending"></ul>
+      <p class="page-lede admin-empty" id="pending-empty" hidden>Nothing waiting.</p>
+    </section>
+
+    <section class="admin-panel">
+      <div class="admin-panel-head">
         <p class="section-head">Live activity</p>
         <button class="chip" id="stream-toggle" aria-pressed="true">Live</button>
       </div>
@@ -158,7 +167,7 @@ const PANELS = [
 
 <script>
   import {
-    adminStats, adminEvents, adminProposals, adminResolve, getUser,
+    adminStats, adminEvents, adminProposals, adminResolve, getUser, pendingRecordings,
     type AdminStats, type AdminEvent,
   } from '../lib/api';
   import { areaChart, barChart } from '../lib/chart';
@@ -250,6 +259,7 @@ const PANELS = [
       drawAll(stats);
       void pollEvents();
       void loadQueue();
+      void loadPending();
       if (live && !timer) timer = setInterval(pollEvents, 5000);
     } catch (e: any) {
       lede.textContent = 'Access denied.';
@@ -376,6 +386,42 @@ const PANELS = [
         n.textContent = p.note;
         li.appendChild(n);
       }
+      list.appendChild(li);
+    }
+  }
+
+  /**
+   * Rounds that are in search but not yet playable. A submission is only half
+   * arrived until the ingest run has pulled its audio, and this is the only
+   * place that backlog is visible.
+   */
+  async function loadPending() {
+    const list = document.getElementById('admin-pending')!;
+    const empty = document.getElementById('pending-empty')!;
+    const count = document.getElementById('pending-count')!;
+    const { pending } = await pendingRecordings().catch(() => ({ pending: [] as any[] }));
+
+    empty.hidden = pending.length > 0;
+    count.textContent = pending.length ? `${pending.length} waiting` : '';
+    list.innerHTML = '';
+
+    for (const p of pending) {
+      const li = document.createElement('li');
+      const head = document.createElement('div');
+      head.className = 'queue-head';
+      const round = document.createElement('a');
+      round.className = 'queue-round';
+      round.href = `/recordings/${p.slug}`;
+      round.textContent = p.title;
+      const who = document.createElement('span');
+      who.textContent = [p.year, p.tournament, p.author].filter(Boolean).join('   ');
+      head.append(round, who);
+
+      const src = document.createElement('div');
+      src.className = 'queue-note';
+      src.textContent = p.link;
+
+      li.append(head, src);
       list.appendChild(li);
     }
   }

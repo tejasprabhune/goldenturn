@@ -10,3 +10,6 @@ STYLE_GUIDE.md
 
 # ingest working files
 scripts/ingest/manifest.json
+
+# wrangler local state
+worker/.wrangler/
