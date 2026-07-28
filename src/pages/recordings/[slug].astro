@@ -90,76 +90,84 @@ if (entry.neg) facts.push(['neg', entry.neg]);
     </div>
 
     <div class="shell page-body rec-grid">
-      <!-- The resolution and the player travel together in both layouts, so
-           they share one area rather than two that have to be kept adjacent. -->
-      <div class="rec-area-play">
-        {entry.resolution && (
+      <!--
+        The player and the round's facts sit in one column in compact and in
+        separate ones otherwise, so they are wrapped. The wrapper is
+        display:contents everywhere except compact, which hands its children
+        back to the grid to be placed by their own areas.
+      -->
+      <div class="rec-area-left">
+        <div class="rec-area-play">
+          {entry.resolution && (
+            <section class="rec-block">
+              <p class="label label-muted">resolution</p>
+              <p class="rec-resolution">{entry.resolution}</p>
+            </section>
+          )}
+
           <section class="rec-block">
-            <p class="label label-muted">resolution</p>
-            <p class="rec-resolution">{entry.resolution}</p>
-          </section>
-        )}
-
-        <section class="rec-block">
-          <p class="label label-muted">player</p>
-          <RecordingPlayer
-            slug={slug}
-            title={entry.title}
-            hasMedia={hasMedia}
-            videoEmbed={videoEmbed}
-            sourceLink={entry.link}
-          />
-          <p class="rec-original">
-            <a href={entry.link} target="_blank" rel="noopener noreferrer" class="link">open original source</a>
-          </p>
-        </section>
-      </div>
-
-      <div class="rec-area-notes">
-        <AccountBar slug={slug} />
-      </div>
-
-      <div class="rec-area-tx">
-        <Transcript slug={slug} />
-      </div>
-
-      <aside class="rec-area-meta rec-side">
-        {facts.length > 0 && (
-          <section class="rec-block">
-            <p class="label label-muted">strategy</p>
-            <dl class="rec-facts">
-              {facts.map(([term, value]) => (
-                <>
-                  <dt class="label label-muted">{term}</dt>
-                  <dd>{value}</dd>
-                </>
-              ))}
-            </dl>
-          </section>
-        )}
-
-        {entry.decision && (
-          <section class="rec-block">
-            <p class="label label-muted">decision</p>
-            <p>
-              <button id="decision" class="rec-decision" data-revealed="false" aria-label="Reveal decision">
-                {entry.decision}
-              </button>
+            <p class="label label-muted">player</p>
+            <RecordingPlayer
+              slug={slug}
+              title={entry.title}
+              hasMedia={hasMedia}
+              videoEmbed={videoEmbed}
+              sourceLink={entry.link}
+            />
+            <p class="rec-original">
+              <a href={entry.link} target="_blank" rel="noopener noreferrer" class="link">open original source</a>
             </p>
           </section>
-        )}
+        </div>
 
-        {tags.length > 0 && (
-          <section class="rec-block">
-            <p class="label label-muted">tags</p>
-            <div class="tag-list">
-              {tags.map(tag => (
-                <a class="tag" href={`/recordings?tag=${encodeURIComponent(tag)}`}>{tagLabel(tag)}</a>
-              ))}
-            </div>
-          </section>
-        )}
-      </aside>
+        <aside class="rec-area-meta rec-side">
+          {facts.length > 0 && (
+            <section class="rec-block">
+              <p class="label label-muted">strategy</p>
+              <dl class="rec-facts">
+                {facts.map(([term, value]) => (
+                  <>
+                    <dt class="label label-muted">{term}</dt>
+                    <dd>{value}</dd>
+                  </>
+                ))}
+              </dl>
+            </section>
+          )}
+
+          {entry.decision && (
+            <section class="rec-block">
+              <p class="label label-muted">decision</p>
+              <p>
+                <button id="decision" class="rec-decision" data-revealed="false" aria-label="Reveal decision">
+                  {entry.decision}
+                </button>
+              </p>
+            </section>
+          )}
+
+          {tags.length > 0 && (
+            <section class="rec-block">
+              <p class="label label-muted">tags</p>
+              <div class="tag-list">
+                {tags.map(tag => (
+                  <a class="tag" href={`/recordings?tag=${encodeURIComponent(tag)}`}>{tagLabel(tag)}</a>
+                ))}
+              </div>
+            </section>
+          )}
+        </aside>
+      </div>
+
+      <div class="rec-area-right">
+        <div class="rec-area-tx">
+          <Transcript slug={slug} />
+        </div>
+
+        <div class="rec-area-notes">
+          <AccountBar slug={slug} />
+        </div>
+      </div>
     </div>
   </div>
 </BaseLayout>
@@ -202,6 +210,8 @@ if (entry.neg) facts.push(['neg', entry.neg]);
       'meta';
   }
 
+  .rec-area-left,
+  .rec-area-right { display: contents; }
   .rec-area-play { grid-area: play; }
   .rec-area-notes { grid-area: notes; }
   .rec-area-tx { grid-area: tx; }
@@ -219,58 +229,103 @@ if (entry.neg) facts.push(['neg', entry.neg]);
   }
 
   /*
-   * Compact: the player on the left, the transcript beside it rather than a
-   * screen below, notes under the transcript, and the round's facts along the
-   * bottom. Everything that was on the page is still on it, and the reading
-   * measure is traded for width, since the point is to see the player and the
-   * transcript at once.
+   * Compact: the player on the left with the round's facts under it, the
+   * transcript beside them rather than a screen below, notes under the
+   * transcript. Everything that was on the page is still on it, and the
+   * reading measure is traded for width, since the point is to see the player
+   * and the words at once.
    */
   @media (min-width: 1000px) {
     :root[data-rec-layout='compact'] .shell {
       max-width: none;
     }
 
+    /*
+     * Two columns, one row. Each side stacks inside its own box rather than
+     * sharing grid rows, so the transcript's fold is set by the viewport alone
+     * and cannot be pushed down by however far the strategy text happens to
+     * wrap on the other side.
+     */
     :root[data-rec-layout='compact'] .rec-grid {
       grid-template-columns: minmax(28rem, 5fr) minmax(0, 6fr);
-      grid-template-areas:
-        'play  tx'
-        'play  notes'
-        'meta  meta';
-      align-content: start;
+      grid-template-areas: 'left right';
+      align-items: start;
     }
 
-    /* The transcript is the tall element and the player column spans both its
-       rows, so the player has to be told to sit at the top rather than take
-       half the transcript's height. */
-    :root[data-rec-layout='compact'] .rec-area-play {
-      align-self: start;
-      position: sticky;
-      top: 1rem;
+    :root[data-rec-layout='compact'] .rec-area-left {
+      display: block;
+      grid-area: left;
     }
 
-    /* The transcript is the tall element, so it sets the fold: it takes what
-       the viewport has left rather than a fixed 46rem. Crosses into the
-       component, hence :global. */
+    :root[data-rec-layout='compact'] .rec-area-right {
+      display: block;
+      grid-area: right;
+    }
+
+    /* The strategy, decision and tags read as columns under the player, which
+       is wider than the sidebar they occupy otherwise. Strategy takes the most
+       room because it is the only one with paragraphs in it. */
+    :root[data-rec-layout='compact'] .rec-area-meta {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+      gap: 0 2rem;
+      align-items: start;
+    }
+
+    :root[data-rec-layout='compact'] .rec-area-meta > :first-child {
+      grid-row: span 2;
+    }
+
+    /* The facts are reference, not reading: set smaller so the round's own
+       words keep the space. */
+    :root[data-rec-layout='compact'] .rec-facts dd {
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      margin-bottom: 0.7rem;
+    }
+
+    /* The transcript sets the fold: it takes what the viewport has left after
+       the masthead, the title and the notes beneath it. Measured against the
+       signed-out notes line, which is the common case; a signed-in reader's
+       note forms are taller and do scroll. Crosses into the component, hence
+       :global. */
     :root[data-rec-layout='compact'] :global(.transcript) {
-      --tx-height: calc(100vh - 12rem);
+      --tx-height: calc(100vh - 25rem);
       margin-top: 0;
       border-top: none;
       padding-top: 0;
     }
 
     :root[data-rec-layout='compact'] .rec-block {
-      margin-bottom: 1.25rem;
+      margin-bottom: 1rem;
+      padding-top: 0.9rem;
+    }
+
+    :root[data-rec-layout='compact'] .rec-original {
+      margin-top: 0.9rem;
     }
 
     :root[data-rec-layout='compact'] .rec-area-notes :global(.account) {
       margin-top: 1.25rem;
     }
 
-    :root[data-rec-layout='compact'] .rec-area-meta {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-      gap: 0 2.5rem;
-      align-items: start;
+    /* The reading layout's footer gap is dead space when the point is to fit
+       the round on one screen. */
+    :root[data-rec-layout='compact'] .page-body {
+      padding-bottom: 2rem;
+    }
+
+    :root[data-rec-layout='compact'] .page-head {
+      padding-top: 2rem;
+      padding-bottom: 1.25rem;
+    }
+  }
+
+  /* Below the compact breakpoint the button would toggle a preference that
+     changes nothing, so it is not offered. */
+  @media (max-width: 999px) {
+    .rec-layout-toggle {
+      display: none;
     }
   }
 
