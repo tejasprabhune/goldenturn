@@ -13,19 +13,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <section class="me-block">
         <p class="section-head">Saved rounds</p>
         <ul class="row-list" id="me-favorites"></ul>
-        <p class="page-lede me-empty" id="me-favorites-empty" hidden>Nothing saved yet.</p>
+        <p class="me-empty" id="me-favorites-empty" hidden>Nothing saved yet.</p>
       </section>
 
       <section class="me-block">
         <p class="section-head">Your tags</p>
         <div class="tag-list" id="me-tags"></div>
-        <p class="page-lede me-empty" id="me-tags-empty" hidden>No tags yet.</p>
+        <p class="me-empty" id="me-tags-empty" hidden>No tags yet.</p>
       </section>
 
       <section class="me-block">
         <p class="section-head">Your notes</p>
         <ul class="me-notes" id="me-notes"></ul>
-        <p class="page-lede me-empty" id="me-notes-empty" hidden>No notes yet.</p>
+        <p class="me-empty" id="me-notes-empty" hidden>No notes yet.</p>
       </section>
     </div>
 
@@ -62,8 +62,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
   }
 
+  /* An empty section says so quietly; it is a state, not a lede. */
   .me-empty {
-    margin-top: 0.75rem;
+    font-size: 0.9375rem;
+    color: var(--ink-muted);
+    margin: 0.75rem 0 3rem;
+  }
+
+  .me-empty[hidden] {
+    display: none;
+  }
+
+  .me-notes:empty {
+    margin: 0;
   }
 
   .me-notes {

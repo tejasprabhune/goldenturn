@@ -40,6 +40,14 @@ function isActive(href: string) {
     <link rel="preload" href="/fonts/PPEditorialNew-Ultralight.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/NeueMontreal-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="the golden turn" />
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    <meta property="og:image" content={new URL('/og-image.png', Astro.site ?? 'https://goldenturn.org')} />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <header class={isHome ? 'masthead masthead--home' : 'masthead'}>

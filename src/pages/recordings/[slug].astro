@@ -59,14 +59,16 @@ if (entry.neg) facts.push(['neg', entry.neg]);
   title={`${entry.title} | Recordings | the golden turn`}
   description={entry.resolution ?? 'A recorded parliamentary debate round.'}
 >
-  <!-- The saved layout is stamped on the root before paint, so a compact
-       reader never sees the wide layout flash first. The root attribute is the
-       single source of truth; the module script below only toggles it. -->
+  <!-- Compact is the layout unless a reader has asked for the reading one, and
+       that choice is stamped on the root before paint so they never see compact
+       flash first. The root attribute is the single source of truth; the module
+       script below only toggles it. -->
   <script is:inline>
     (() => {
       try {
-        const saved = localStorage.getItem('gt:rec-layout');
-        if (saved === 'compact') document.documentElement.dataset.recLayout = 'compact';
+        if (localStorage.getItem('gt:rec-layout') === 'reading') {
+          document.documentElement.dataset.recLayout = 'reading';
+        }
       } catch {}
     })();
   </script>
@@ -86,8 +88,8 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 
       <div class="rec-head-actions">
         <button class="chip" id="account-fav" aria-pressed="false" hidden>Save round</button>
-        <button class="chip rec-layout-toggle" id="rec-layout-toggle" aria-pressed="false">
-          Compact layout
+        <button class="chip rec-layout-toggle" id="rec-layout-toggle" aria-pressed="true">
+          Reading layout
         </button>
       </div>
     </div>
@@ -95,9 +97,9 @@ if (entry.neg) facts.push(['neg', entry.neg]);
     <div class="shell page-body rec-grid">
       <!--
         The player and the round's facts sit in one column in compact and in
-        separate ones otherwise, so they are wrapped. The wrapper is
-        display:contents everywhere except compact, which hands its children
-        back to the grid to be placed by their own areas.
+        separate ones in the reading layout, so they are wrapped. The wrapper is
+        display:contents outside compact, which hands its children back to the
+        grid to be placed by their own areas.
       -->
       <div class="rec-area-left">
         <div class="rec-area-play">
@@ -229,7 +231,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 
   /* Reading layout: the round down the page, its facts in a side column. */
   @media (min-width: 900px) {
-    :root:not([data-rec-layout='compact']) .rec-grid {
+    :root[data-rec-layout='reading'] .rec-grid {
       grid-template-columns: minmax(0, 1fr) 16rem;
       grid-template-areas:
         'play  meta'
@@ -246,7 +248,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
    * and the words at once.
    */
   @media (min-width: 1000px) {
-    :root[data-rec-layout='compact'] .shell {
+    :root:not([data-rec-layout='reading']) .shell {
       max-width: none;
     }
 
@@ -256,18 +258,18 @@ if (entry.neg) facts.push(['neg', entry.neg]);
      * and cannot be pushed down by however far the strategy text happens to
      * wrap on the other side.
      */
-    :root[data-rec-layout='compact'] .rec-grid {
+    :root:not([data-rec-layout='reading']) .rec-grid {
       grid-template-columns: minmax(28rem, 5fr) minmax(0, 6fr);
       grid-template-areas: 'left right';
       align-items: start;
     }
 
-    :root[data-rec-layout='compact'] .rec-area-left {
+    :root:not([data-rec-layout='reading']) .rec-area-left {
       display: block;
       grid-area: left;
     }
 
-    :root[data-rec-layout='compact'] .rec-area-right {
+    :root:not([data-rec-layout='reading']) .rec-area-right {
       display: block;
       grid-area: right;
     }
@@ -275,20 +277,20 @@ if (entry.neg) facts.push(['neg', entry.neg]);
     /* The strategy, decision and tags read as columns under the player, which
        is wider than the sidebar they occupy otherwise. Strategy takes the most
        room because it is the only one with paragraphs in it. */
-    :root[data-rec-layout='compact'] .rec-area-meta {
+    :root:not([data-rec-layout='reading']) .rec-area-meta {
       display: grid;
       grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
       gap: 0 2rem;
       align-items: start;
     }
 
-    :root[data-rec-layout='compact'] .rec-area-meta > :first-child {
+    :root:not([data-rec-layout='reading']) .rec-area-meta > :first-child {
       grid-row: span 2;
     }
 
     /* The facts are reference, not reading: set smaller so the round's own
        words keep the space. */
-    :root[data-rec-layout='compact'] .rec-facts dd {
+    :root:not([data-rec-layout='reading']) .rec-facts dd {
       font-size: 0.8125rem;
       line-height: 1.45;
       margin-bottom: 0.7rem;
@@ -299,33 +301,33 @@ if (entry.neg) facts.push(['neg', entry.neg]);
        signed-out notes line, which is the common case; a signed-in reader's
        note forms are taller and do scroll. Crosses into the component, hence
        :global. */
-    :root[data-rec-layout='compact'] :global(.transcript) {
+    :root:not([data-rec-layout='reading']) :global(.transcript) {
       --tx-height: calc(100vh - 31rem);
       margin-top: 0;
       border-top: none;
       padding-top: 0;
     }
 
-    :root[data-rec-layout='compact'] .rec-block {
+    :root:not([data-rec-layout='reading']) .rec-block {
       margin-bottom: 1rem;
       padding-top: 0.9rem;
     }
 
-    :root[data-rec-layout='compact'] .rec-original {
+    :root:not([data-rec-layout='reading']) .rec-original {
       margin-top: 0.9rem;
     }
 
-    :root[data-rec-layout='compact'] .rec-area-notes :global(.account) {
+    :root:not([data-rec-layout='reading']) .rec-area-notes :global(.account) {
       margin-top: 1.25rem;
     }
 
     /* The reading layout's footer gap is dead space when the point is to fit
        the round on one screen. */
-    :root[data-rec-layout='compact'] .page-body {
+    :root:not([data-rec-layout='reading']) .page-body {
       padding-bottom: 2rem;
     }
 
-    :root[data-rec-layout='compact'] .page-head {
+    :root:not([data-rec-layout='reading']) .page-head {
       padding-top: 2rem;
       padding-bottom: 1.25rem;
     }
@@ -441,17 +443,17 @@ if (entry.neg) facts.push(['neg', entry.neg]);
   const layoutBtn = document.getElementById('rec-layout-toggle');
 
   function isCompact() {
-    return root.dataset.recLayout === 'compact';
+    return root.dataset.recLayout !== 'reading';
   }
 
   function setLayout(compact: boolean, remember = true) {
-    if (compact) root.dataset.recLayout = 'compact';
-    else delete root.dataset.recLayout;
+    if (compact) delete root.dataset.recLayout;
+    else root.dataset.recLayout = 'reading';
 
     layoutBtn?.setAttribute('aria-pressed', String(compact));
     if (layoutBtn) layoutBtn.textContent = compact ? 'Reading layout' : 'Compact layout';
     if (remember) {
-      try { localStorage.setItem(LAYOUT_KEY, compact ? 'compact' : 'default'); } catch {}
+      try { localStorage.setItem(LAYOUT_KEY, compact ? 'compact' : 'reading'); } catch {}
     }
     // The waveform and the transcript both measure themselves, and the columns
     // just changed width underneath them.

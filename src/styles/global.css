@@ -278,6 +278,13 @@
     box-shadow: inset 0 -0.1em 0 theme('colors.gold');
   }
 
+  /* A list with nothing in it should take no room; its trailing margin was
+     pushing the "nothing here yet" line a long way from its heading. */
+  .row-list:empty,
+  .tag-list:empty {
+    margin: 0;
+  }
+
   .row-list {
     list-style: none;
     margin: 0 0 3rem;
@@ -394,6 +401,12 @@
      than in a scoped block. */
   .result-group {
     margin-bottom: 2.5rem;
+  }
+
+  /* A group of rounds is a card list, and a card list opens with its own rule.
+     Under the section heading's rule that read as a double line. */
+  .section-head + .rec-results {
+    border-top: none;
   }
 
   .result-link {
