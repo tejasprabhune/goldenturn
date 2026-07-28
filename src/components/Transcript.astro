@@ -217,7 +217,8 @@ const { slug } = Astro.props;
     addNote, track, updateProposal, deleteProposal, type Proposal, type Revision,
   } from '../lib/api';
   import { AFF, usable, applyBoundaries, type Speech } from '../lib/speeches';
-  import { diffWords, headContext, tailContext, windowAround } from '../lib/textdiff';
+  import { windowAround } from '../lib/textdiff';
+  import { renderDiff } from '../lib/diffview';
 
   interface Word { w: string; s: number | null; e: number | null; p: number | null }
   interface Segment {
@@ -697,6 +698,9 @@ const { slug } = Astro.props;
         const res = await propose(slug, {
           kind: 'transcript', anchor: pendingSel.anchor,
           original: paraText, proposed, note: note || undefined,
+          // The moment the passage is spoken, so a reviewer can hear it
+          // without having to find it first.
+          startS: Math.round(pendingSel.at),
         });
         err.hidden = true;
         dialog.close();
@@ -728,53 +732,6 @@ const { slug } = Astro.props;
       takeRevisions(res.revisions);
       render();
       buildMinimap();
-    }
-
-    /**
-     * Shows what a correction changes rather than two near-identical blocks of
-     * text. Corrections share almost all their words with the original, so the
-     * shared head and tail are trimmed to a little context and only the
-     * changed run is spelled out.
-     */
-    function diffView(original: string, proposed: string): HTMLElement {
-      const box = document.createElement('span');
-      box.className = 'proposal-text';
-
-      const d = diffWords(original, proposed);
-      if (!d.removed && !d.added) {
-        box.textContent = headContext(proposed, 120).text;
-        return box;
-      }
-
-      const before = tailContext(d.prefix);
-      const after = headContext(d.suffix);
-
-      if (before.clipped) box.append(ellipsis());
-      if (before.text) box.append(document.createTextNode(before.text));
-
-      if (d.removed) {
-        const del = document.createElement('del');
-        del.className = 'proposal-del';
-        del.textContent = d.removed;
-        box.append(del);
-      }
-      if (d.added) {
-        const ins = document.createElement('ins');
-        ins.className = 'proposal-ins';
-        ins.textContent = d.added;
-        box.append(ins);
-      }
-
-      if (after.text) box.append(document.createTextNode(after.text));
-      if (after.clipped) box.append(ellipsis());
-      return box;
-    }
-
-    function ellipsis(): HTMLElement {
-      const e = document.createElement('span');
-      e.className = 'proposal-clip';
-      e.textContent = '…';
-      return e;
     }
 
     async function loadProposals() {
@@ -815,7 +772,23 @@ const { slug } = Astro.props;
           const el = target();
           if (el) scrollLinesTo(el, 'top');
         });
-        li.append(diffView(p.original, p.proposed));
+        li.append(renderDiff(p.original, p.proposed));
+
+        // The round's own audio is right here, so hearing the passage is a
+        // seek rather than a second stream.
+        const at = p.start_s ?? paras[Number(p.anchor.replace('seg-', ''))]?.start ?? null;
+        if (at !== null && audio()) {
+          const listen = document.createElement('button');
+          listen.className = 'chip proposal-listen';
+          listen.textContent = `Listen at ${formatTime(at)}`;
+          listen.addEventListener('click', e => {
+            e.stopPropagation();
+            const a = audio()!;
+            a.currentTime = Math.max(0, at - 2);
+            void a.play().catch(() => {});
+          });
+          li.append(listen);
+        }
 
         const meta = document.createElement('div');
         meta.className = 'proposal-meta';

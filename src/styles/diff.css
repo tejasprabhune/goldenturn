@@ -1,0 +1,99 @@
+/*
+ * The two-line diff shown wherever a correction is reviewed.
+ *
+ * Deliberately outside Tailwind's layers: the modifier classes are built by
+ * interpolation (`diff-line--${kind}`), so the literal strings never appear in
+ * the source and the content scanner cannot see them. In a @layer they were
+ * purged and the diff rendered as two plain lines.
+ *
+ * Red and green, as a diff should be, but mixed toward the paper ground rather
+ * than terminal primaries.
+ */
+
+:root {
+  --diff-del: #a33a31;
+  --diff-del-wash: rgba(163, 58, 49, 0.07);
+  --diff-del-mark: rgba(163, 58, 49, 0.2);
+  --diff-ins: #2f6b4f;
+  --diff-ins-wash: rgba(47, 107, 79, 0.08);
+  --diff-ins-mark: rgba(47, 107, 79, 0.22);
+}
+
+.diff {
+  margin: 0.4rem 0 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  border: 1px solid var(--rule-soft);
+}
+
+.diff-line {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.diff-line--del {
+  background: var(--diff-del-wash);
+  border-left: 2px solid var(--diff-del);
+}
+
+.diff-line--ins {
+  background: var(--diff-ins-wash);
+  border-left: 2px solid var(--diff-ins);
+}
+
+.diff-line--same {
+  padding: 0.2rem 0.5rem;
+  color: var(--ink-muted);
+  border-left: 2px solid var(--rule);
+}
+
+.diff-gutter {
+  flex: none;
+  width: 0.7rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.diff-line--del .diff-gutter { color: var(--diff-del); }
+.diff-line--ins .diff-gutter { color: var(--diff-ins); }
+
+.diff-text {
+  min-width: 0;
+  color: var(--ink);
+}
+
+.diff-text--times {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The run that actually changed, inside the line that carries it. */
+.diff-mark--del {
+  background: var(--diff-del-mark);
+  box-shadow: 0 0 0 1px var(--diff-del-mark);
+  text-decoration: line-through;
+  text-decoration-color: rgba(163, 58, 49, 0.7);
+}
+
+.diff-mark--ins {
+  background: var(--diff-ins-mark);
+  box-shadow: 0 0 0 1px var(--diff-ins-mark);
+}
+
+.diff-clip {
+  color: rgba(23, 21, 15, 0.35);
+}
+
+/* Present for assistive tech, out of the way visually. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

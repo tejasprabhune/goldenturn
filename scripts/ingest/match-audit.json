@@ -1,0 +1,367 @@
+{
+  "generated": "audit-match.ts",
+  "wrong": [
+    {
+      "slug": "finals-oregon-em-vs-washburn-bk-c23d88",
+      "title": "Finals - Oregon EM vs Washburn BK",
+      "file": "Mile High 1 Semis - Oregon EM vs Washburn PW.mp4",
+      "match": "fuzzy",
+      "score": 0.8
+    },
+    {
+      "slug": "elim-1-kckcc-cl-vs-william-jewell-dt-825128",
+      "title": "Elim 1 - KCKCC CL vs William Jewell DT",
+      "file": "NPTE Elim 4 - Cal PZ vs Cal BC.m4a",
+      "match": "fuzzy",
+      "score": 0.667
+    },
+    {
+      "slug": "round-4-cal-bc-vs-rice-ss-817600",
+      "title": "Round 4 - Cal BC vs Rice SS",
+      "file": "NPTE Elim 3 - Cal MR vs Rice TB.m4a",
+      "match": "fuzzy",
+      "score": 0.75
+    },
+    {
+      "slug": "round-3-cal-bc-vs-urban-texas-br-817500",
+      "title": "Round 3 - Cal BC vs Urban Texas BR",
+      "file": "NPTE Round 2 - Cal PZ vs UTT HS.m4a",
+      "match": "fuzzy",
+      "score": 0.8
+    },
+    {
+      "slug": "round-2-cal-bc-vs-kckcc-cl-817400",
+      "title": "Round 2 - Cal BC vs KCKCC CL",
+      "file": "NPDA Quarters - Cal PZ vs KCKCC CL.m4a",
+      "match": "fuzzy",
+      "score": 0.75
+    },
+    {
+      "slug": "round-3-william-jewell-dt-vs-cal-bc-749710",
+      "title": "Round 3 - William Jewell DT vs Cal BC",
+      "file": "Bowman Round 4 - William Jewell HU vs Cal KT.m4a",
+      "match": "fuzzy",
+      "score": 0.667
+    },
+    {
+      "slug": "finals-rice-ss-vs-cal-bc-741942",
+      "title": "Finals - Rice SS vs Cal BC",
+      "file": "NPTE Finals - Rice TB vs Cal KT.m4a",
+      "match": "fuzzy",
+      "score": 0.6
+    },
+    {
+      "slug": "semifinals-rice-ss-vs-cal-bc-727200",
+      "title": "Semifinals - Rice SS vs Cal BC",
+      "file": "NPTE Elim 3 - Cal MR vs Rice TB.m4a",
+      "match": "fuzzy",
+      "score": 0.6
+    },
+    {
+      "slug": "octos-cal-sl-vs-kckcc-cl-727100",
+      "title": "Octos - Cal SL vs KCKCC CL",
+      "file": "NPDA Quarters - Cal PZ vs KCKCC CL.m4a",
+      "match": "fuzzy",
+      "score": 0.6
+    },
+    {
+      "slug": "round-4-cal-bc-vs-uop-cp-632654",
+      "title": "Round 4 - Cal BC vs UOP CP",
+      "file": "GGI Round 3 - Washburn BS vs Cal KL.m4a",
+      "match": "fuzzy",
+      "score": 0.6
+    },
+    {
+      "slug": "semifinals-rice-ss-vs-cal-bc-632653",
+      "title": "Semifinals - Rice SS vs Cal BC",
+      "file": "Mile High Swing 1 Semis - Rice AL vs. Cal MY.m4a",
+      "match": "fuzzy",
+      "score": 0.714
+    },
+    {
+      "slug": "octofinals-cal-bc-vs-uop-ab-632652",
+      "title": "Octofinals - Cal BC vs UOP AB",
+      "file": "Mound High Swing 2 Octos - Rice DJ vs Cal PZ.m4a",
+      "match": "fuzzy",
+      "score": 0.714
+    },
+    {
+      "slug": "round-2-cal-bc-vs-william-jewell-dt-495420",
+      "title": "Round 2 - Cal BC vs William Jewell DT",
+      "file": "Mound High Swing 2 Semis - Cal PZ vs William Jewell DT.m4a",
+      "match": "fuzzy",
+      "score": 0.75
+    },
+    {
+      "slug": "round-5-cal-bc-vs-william-jewell-dt-495419",
+      "title": "Round 5 - Cal BC vs William Jewell DT",
+      "file": "Mound High Swing 2 Semis - Cal PZ vs William Jewell DT.m4a",
+      "match": "fuzzy",
+      "score": 0.75
+    },
+    {
+      "slug": "elim-1-rice-tp-vs-cal-bc-462100",
+      "title": "Elim 1 - Rice TP vs Cal BC",
+      "file": "NPTE Elim 3 - Cal MR vs Rice TB.m4a",
+      "match": "fuzzy",
+      "score": 0.8
+    },
+    {
+      "slug": "quarters-whitman-gm-vs-cal-bc-462000",
+      "title": "Quarters - Whitman GM vs Cal BC",
+      "file": "NPDA Quarters - Cal KL vs Concordia MT.m4a",
+      "match": "fuzzy",
+      "score": 0.6
+    },
+    {
+      "slug": "round-4-texas-tech-hh-vs-cal-mm-125fa6",
+      "title": "Round 4 - Texas Tech HH vs Cal MM",
+      "file": "National Round Robin Round 1 - Texas Tech GK vs Cal KT.mp4",
+      "match": "fuzzy",
+      "score": 0.667
+    },
+    {
+      "slug": "elim-3-rice-ss-vs-william-jewell-dt-107655",
+      "title": "Elim 3 - Rice SS vs William Jewell DT",
+      "file": "NPTE Elim 4 - Cal PZ vs Cal BC.m4a",
+      "match": "fuzzy",
+      "score": 0.667
+    }
+  ],
+  "benign": [
+    {
+      "slug": "octafinals-missouri-western-ms-vs-washburn-bs-f8d903",
+      "title": "Octafinals - Missouri Western MS vs Washburn BS",
+      "file": "Bowman Octas - Missouri Western SM vs Washburn BS.m4a"
+    },
+    {
+      "slug": "finals-lewis-and-clark-mt-vs-pacific-ft-ed9c97",
+      "title": "Finals - Lewis and Clark MT vs Pacific FT",
+      "file": "GGO Finals - Lewis and Clark MT vs Pacific FL.m4a"
+    },
+    {
+      "slug": "elim-4-western-washington-cf-vs-lewis-and-clark-mp-c2850c",
+      "title": "Elim 4 - Western Washington CF vs Lewis and Clark MP",
+      "file": "NPTE Elim 4 - Western Washington Fl vs Lewis and Clark MP.mp4"
+    },
+    {
+      "slug": "round-8-missouri-western-ms-vs-washburn-bw-b22df1",
+      "title": "Round 8 - Missouri Western MS vs Washburn BW",
+      "file": "Bowman Round 8 - Missouri Western SM vs Washburn WB.m4a"
+    },
+    {
+      "slug": "semifinals-western-cal-hybrid-jl-vs-lewis-and-clark-mt-a32a92",
+      "title": "Semifinals - Western-Cal Hybrid Jl vs Lewis and Clark MT",
+      "file": "NPDA Semifinals - Western-Cal Hybrid CJ vs Lewis and Clark MT.mp4"
+    },
+    {
+      "slug": "round-1-concordia-sv-vs-cal-dr-96987c",
+      "title": "Round 1 - Concordia SV vs Cal DR",
+      "file": "NPTE Round 1 - Concordia VS vs Cal DR.m4a"
+    },
+    {
+      "slug": "quarterfinals-uchicago-cal-hybrid-dz-vs-rice-ps-659295",
+      "title": "Quarterfinals - UChicago-Cal Hybrid DZ vs Rice PS",
+      "file": "Jannese Davidson Quarters - PDB-UChicago DZ vs Rice PS.m4a"
+    },
+    {
+      "slug": "quarterfinals-william-jewell-hj-vs-washburn-bk-6538af",
+      "title": "Quarterfinals - William Jewell HJ vs Washburn BK",
+      "file": "William-Jewell vs Washburn (Long Beach 2016).mov"
+    },
+    {
+      "slug": "semifinals-concordia-ce-vs-uchicago-cal-hybrid-dz-554682",
+      "title": "Semifinals - Concordia CE vs UChicago-Cal Hybrid DZ ",
+      "file": "Jannese Davidson Semis - Concordia CE vs PDB-UChicago DZ.m4a"
+    },
+    {
+      "slug": "finals-ut-tyler-ch-vs-washburn-bk-43229b",
+      "title": "Finals - UT Tyler CH vs Washburn BK",
+      "file": "NPTE Finals - UT Tyler vs Washburn BK.m4a"
+    },
+    {
+      "slug": "round-2-cal-dr-vs-grand-canyon-cl-3fc1c0",
+      "title": "Round 2 - Cal DR vs Grand Canyon CL",
+      "file": "NPTE Round 2 - Cal DR vs GCU CL.m4a"
+    },
+    {
+      "slug": "debate-in-round-western-cal-hybrid-jl-vs-rice-cs-1fcf6e",
+      "title": "Debate-In Round - Western-Cal Hybrid Jl vs Rice CS",
+      "file": "National Round Robin Debate-In - Western-Cal Hybrid CJ vs Rice CS.mp4"
+    },
+    {
+      "slug": "quarterfinals-washburn-bs-vs-lewis-and-clark-mp-1f4d02",
+      "title": "Quarterfinals - Washburn BS vs Lewis and Clark MP",
+      "file": "GGI Quarters - Washburn BS vs Lewis and Clark McP.m4a"
+    },
+    {
+      "slug": "finals-ut-tyler-cw-vs-el-camino-aw-1eab0b",
+      "title": "Finals - UT Tyler CW vs El Camino AW",
+      "file": "Mile High 1 Finals - UT Tyler CH vs El Camino AW.m4a"
+    },
+    {
+      "slug": "round-5-cal-kz-vs-rice-kw-1cb580",
+      "title": "Round 5 - Cal KZ vs Rice KW",
+      "file": "Steve Hunt Classic Round 5 - Cal KZ vs Rice WK.m4a"
+    },
+    {
+      "slug": "semifinals-cal-my-vs-mckendree-dp-1c9f22",
+      "title": "Semifinals - Cal MY vs McKendree DP",
+      "file": "GGI Semifinals - Cal MY v Mckendree PD.m4a"
+    },
+    {
+      "slug": "semifinals-pacific-pv-vs-cal-cz-1b9123",
+      "title": "Semifinals - Pacific PV vs Cal CZ",
+      "file": "Mile High 2 Semis - UOP PV vs Cal CZ.m4a"
+    },
+    {
+      "slug": "finals-texas-tech-gk-vs-pacific-pv-1a41da",
+      "title": "Finals - Texas Tech GK vs Pacific PV",
+      "file": "Mile High 2 Finals - Texas Tech GK vs UOP PV.m4a"
+    },
+    {
+      "slug": "quarterfinals-cal-my-vs-rice-al-194153",
+      "title": "Quarterfinals - Cal MY vs Rice AL",
+      "file": "Rice Quarterfinals - Cal MY vs Rice LA.m4a"
+    },
+    {
+      "slug": "round-4-cal-mr-vs-mercer-sw-17ef1d",
+      "title": "Round 4 - Cal MR vs Mercer SW",
+      "file": "Rice Round 4 - Cal MR vs Mercer WS.m4a"
+    },
+    {
+      "slug": "round-5-rice-al-vs-cal-br-17c557",
+      "title": "Round 5 - Rice AL vs Cal BR",
+      "file": "Rice Round 5 - Rice LA vs Cal BR.m4a"
+    },
+    {
+      "slug": "round-3-oregon-mg-vs-washburn-bk-1761cb",
+      "title": "Round 3 - Oregon MG vs Washburn BK",
+      "file": "NPTE Round 3 - Oregon mG vs Washburn BK.m4a"
+    },
+    {
+      "slug": "finals-western-washington-cf-vs-cal-dk-11bf72",
+      "title": "Finals - Western Washington CF vs Cal DK",
+      "file": "GGI Finals - Western Washington CF vs Cal KD.m4a"
+    },
+    {
+      "slug": "quarterfinals-cal-dr-vs-rice-al-1165ce",
+      "title": "Quarterfinals - Cal DR vs Rice AL",
+      "file": "Steve Hunt Quarterfinals - Cal DR vs Rice LA.m4a"
+    },
+    {
+      "slug": "elim-2-cal-bc-vs-william-jewell-dt-107655",
+      "title": "Elim 2 - Cal BC vs William Jewell DT",
+      "file": "NPTE Elim 4 - Cal PZ vs Cal BC.m4a"
+    }
+  ],
+  "duplicates": [
+    {
+      "file": "Mile High 1 Semis - Oregon EM vs Washburn PW.mp4",
+      "rounds": [
+        {
+          "slug": "finals-oregon-em-vs-washburn-bk-c23d88",
+          "title": "Finals - Oregon EM vs Washburn BK"
+        },
+        {
+          "slug": "semifinals-oregon-em-vs-washburn-pw-128719",
+          "title": "Semifinals - Oregon EM vs Washburn PW"
+        }
+      ]
+    },
+    {
+      "file": "NPDA Quarters - Cal PZ vs KCKCC CL.m4a",
+      "rounds": [
+        {
+          "slug": "quarterfinals-cal-pz-vs-kckcc-cl-825132",
+          "title": "Quarterfinals - Cal PZ vs KCKCC CL"
+        },
+        {
+          "slug": "round-2-cal-bc-vs-kckcc-cl-817400",
+          "title": "Round 2 - Cal BC vs KCKCC CL"
+        },
+        {
+          "slug": "octos-cal-sl-vs-kckcc-cl-727100",
+          "title": "Octos - Cal SL vs KCKCC CL"
+        }
+      ]
+    },
+    {
+      "file": "NPTE Elim 4 - Cal PZ vs Cal BC.m4a",
+      "rounds": [
+        {
+          "slug": "elim-1-kckcc-cl-vs-william-jewell-dt-825128",
+          "title": "Elim 1 - KCKCC CL vs William Jewell DT"
+        },
+        {
+          "slug": "elim-2-cal-bc-vs-william-jewell-dt-107655",
+          "title": "Elim 2 - Cal BC vs William Jewell DT"
+        },
+        {
+          "slug": "elim-3-rice-ss-vs-william-jewell-dt-107655",
+          "title": "Elim 3 - Rice SS vs William Jewell DT"
+        }
+      ]
+    },
+    {
+      "file": "NPTE Elim 3 - Cal MR vs Rice TB.m4a",
+      "rounds": [
+        {
+          "slug": "round-4-cal-bc-vs-rice-ss-817600",
+          "title": "Round 4 - Cal BC vs Rice SS"
+        },
+        {
+          "slug": "semifinals-rice-ss-vs-cal-bc-727200",
+          "title": "Semifinals - Rice SS vs Cal BC"
+        },
+        {
+          "slug": "elim-1-rice-tp-vs-cal-bc-462100",
+          "title": "Elim 1 - Rice TP vs Cal BC"
+        }
+      ]
+    },
+    {
+      "file": "Mile High Swing 1 Semis - Rice AL vs. Cal MY.m4a",
+      "rounds": [
+        {
+          "slug": "semifinals-rice-ss-vs-cal-bc-632653",
+          "title": "Semifinals - Rice SS vs Cal BC"
+        },
+        {
+          "slug": "semifinals-rice-al-vs-cal-my-1775ac",
+          "title": "Semifinals - Rice AL vs Cal MY"
+        }
+      ]
+    },
+    {
+      "file": "Mound High Swing 2 Octos - Rice DJ vs Cal PZ.m4a",
+      "rounds": [
+        {
+          "slug": "octofinals-cal-bc-vs-uop-ab-632652",
+          "title": "Octofinals - Cal BC vs UOP AB"
+        },
+        {
+          "slug": "octafinals-rice-dj-vs-cal-pz-107634",
+          "title": "Octafinals - Rice DJ vs Cal PZ"
+        }
+      ]
+    },
+    {
+      "file": "Mound High Swing 2 Semis - Cal PZ vs William Jewell DT.m4a",
+      "rounds": [
+        {
+          "slug": "round-2-cal-bc-vs-william-jewell-dt-495420",
+          "title": "Round 2 - Cal BC vs William Jewell DT"
+        },
+        {
+          "slug": "round-5-cal-bc-vs-william-jewell-dt-495419",
+          "title": "Round 5 - Cal BC vs William Jewell DT"
+        },
+        {
+          "slug": "semifinals-cal-pz-vs-william-jewell-dt-107634",
+          "title": "Semifinals - Cal PZ vs William Jewell DT"
+        }
+      ]
+    }
+  ]
+}

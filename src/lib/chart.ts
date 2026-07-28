@@ -114,16 +114,24 @@ export function areaChart(canvas: HTMLCanvasElement, values: number[], labels: s
 }
 
 /** Ranked counts as horizontal bars, label inside, value at the end. */
+/** Bars are a fixed height each, so the panel is as tall as it has rows. */
+const BAR_ROW = 22;
+
 export function barChart(
   canvas: HTMLCanvasElement,
   rows: Array<{ label: string; value: number }>,
   accent: 'gold' | 'sky' = 'sky',
 ) {
+  if (rows.length === 0) return;
+  // A fixed panel height left a stretch of empty canvas under a short list,
+  // which read as a gap between the chart and the rule below it.
+  canvas.style.height = `${rows.length * BAR_ROW}px`;
+
   const set = prepare(canvas);
-  if (!set || rows.length === 0) return;
-  const { ctx, w, h } = set;
+  if (!set) return;
+  const { ctx, w } = set;
   const max = Math.max(...rows.map(r => r.value), 1);
-  const rowH = Math.min(22, h / rows.length);
+  const rowH = BAR_ROW;
   const gap = Math.max(2, rowH * 0.22);
 
   ctx.font = '400 11px "Neue Montreal", system-ui, sans-serif';

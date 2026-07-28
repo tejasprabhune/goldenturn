@@ -98,6 +98,8 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
         <span class="cardplayer-sep">/</span>
         <span class="cardplayer-total">0:00</span>
         <select class="field cardplayer-speed" aria-label="Playback speed">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
           <option value="0.75">0.75x</option>
           <option value="1" selected>1x</option>
           <option value="1.25">1.25x</option>

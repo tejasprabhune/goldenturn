@@ -110,6 +110,12 @@ const PANELS = [
     gap: 2.5rem;
   }
 
+  /* The grid already spaces its cells; the panel's own margin doubled it, which
+     showed up as a long gap under a short chart on a phone. */
+  .admin-grid .admin-panel {
+    margin-bottom: 0;
+  }
+
   @media (min-width: 900px) {
     .admin-grid {
       grid-template-columns: 1fr 1fr;
@@ -156,6 +162,10 @@ const PANELS = [
     type AdminStats, type AdminEvent,
   } from '../lib/api';
   import { areaChart, barChart } from '../lib/chart';
+  import { renderDiff, renderTimingDiff } from '../lib/diffview';
+  import { playClip, stop, onClipChange } from '../lib/clip';
+  import { parseSpan, type Span } from '../lib/speeches';
+  import { formatTime } from '../lib/waveform';
 
   const lede = document.getElementById('admin-lede')!;
   const body = document.getElementById('admin-body')!;
@@ -305,19 +315,44 @@ const PANELS = [
 
     for (const p of proposals as any[]) {
       const li = document.createElement('li');
+      li.dataset.proposal = p.id;
+
       const head = document.createElement('div');
       head.className = 'queue-head';
-      head.textContent = `${p.kind} · ${p.author} · score ${p.score} · ${p.slug.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ')}`
-        .replace(/ · /g, '   ');
-      const diff = document.createElement('div');
-      diff.className = 'queue-diff';
-      const was = document.createElement('span');
-      was.className = 'proposal-was';
-      was.textContent = p.original.slice(0, 160);
-      diff.append(was, document.createElement('br'), document.createTextNode(p.proposed.slice(0, 200)));
+      const round = document.createElement('a');
+      round.className = 'queue-round';
+      round.href = `/recordings/${p.slug}`;
+      round.textContent = p.slug.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ');
+      const who = document.createElement('span');
+      who.textContent = `${p.kind}   ${p.author}   score ${p.score}`;
+      head.append(round, who);
+
+      // A timing correction is a pair of times; a transcript correction is a
+      // passage. Both read as a diff, but only one of them is prose.
+      const span = p.kind === 'boundary' ? readSpans(p) : null;
+      li.append(head, span
+        ? renderTimingDiff(`${p.anchor}  ${describeSpan(span.from)}`, `${p.anchor}  ${describeSpan(span.to)}`)
+        : renderDiff(p.original ?? '', p.proposed ?? ''));
 
       const actions = document.createElement('div');
       actions.className = 'queue-actions';
+
+      // Reviewing means hearing it. The clip is the speech's opening for a
+      // timing, and the moment around the passage for a transcript edit.
+      const at = span ? span.to.start : (p.start_s ?? null);
+      if (at !== null) {
+        const listen = document.createElement('button');
+        listen.className = 'chip clip-btn';
+        listen.dataset.clip = p.id;
+        listen.dataset.label = `Listen at ${formatTime(at)}`;
+        listen.setAttribute('aria-pressed', 'false');
+        listen.textContent = listen.dataset.label;
+        listen.addEventListener('click', () => playClip(p.id, p.slug, Math.max(0, at - 2), {
+          seconds: p.kind === 'boundary' ? 10 : 14,
+        }));
+        actions.appendChild(listen);
+      }
+
       for (const action of ['accept', 'reject'] as const) {
         const b = document.createElement('button');
         b.className = 'chip';
@@ -325,6 +360,7 @@ const PANELS = [
         b.addEventListener('click', async () => {
           b.disabled = true;
           try {
+            stop();
             await adminResolve(p.id, action);
             li.remove();
             void loadQueue();
@@ -333,16 +369,35 @@ const PANELS = [
         actions.appendChild(b);
       }
 
-      li.append(head, diff, actions);
+      li.append(actions);
       if (p.note) {
         const n = document.createElement('div');
-        n.className = 'queue-head';
+        n.className = 'queue-note';
         n.textContent = p.note;
         li.appendChild(n);
       }
       list.appendChild(li);
     }
   }
+
+  function readSpans(p: any): { from: Span; to: Span } | null {
+    const to = parseSpan(p.proposed ?? '');
+    const from = parseSpan(p.original ?? '', to ?? undefined);
+    return from && to ? { from, to } : null;
+  }
+
+  function describeSpan(s: Span): string {
+    return `${formatTime(s.start)} to ${formatTime(s.end)}`;
+  }
+
+  // One clip plays at a time, so every button reads the same signal.
+  onClipChange(id => {
+    document.querySelectorAll<HTMLElement>('[data-clip]').forEach(b => {
+      const on = b.dataset.clip === id;
+      b.setAttribute('aria-pressed', String(on));
+      b.textContent = on ? 'Stop' : b.dataset.label!;
+    });
+  });
 
   document.getElementById('stream-toggle')?.addEventListener('click', e => {
     live = !live;
