@@ -775,10 +775,14 @@
     align-items: center;
     gap: 0.4rem;
     flex-wrap: wrap;
-    padding: 0.35rem 0;
+    padding: 0.45rem 0;
     font-size: 0.8125rem;
     border-bottom: 1px solid var(--rule-soft);
     cursor: default;
+  }
+
+  .timing-row:last-child {
+    border-bottom: none;
   }
 
   .timing-row:hover {

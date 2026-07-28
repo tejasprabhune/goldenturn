@@ -84,9 +84,12 @@ if (entry.neg) facts.push(['neg', entry.neg]);
         {meta && <p class="page-lede">{meta}</p>}
       </div>
 
-      <button class="chip rec-layout-toggle" id="rec-layout-toggle" aria-pressed="false">
-        Compact layout
-      </button>
+      <div class="rec-head-actions">
+        <button class="chip" id="account-fav" aria-pressed="false" hidden>Save round</button>
+        <button class="chip rec-layout-toggle" id="rec-layout-toggle" aria-pressed="false">
+          Compact layout
+        </button>
+      </div>
     </div>
 
     <div class="shell page-body rec-grid">
@@ -192,9 +195,16 @@ if (entry.neg) facts.push(['neg', entry.neg]);
     gap: 1.5rem;
   }
 
-  .rec-layout-toggle {
+  .rec-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     flex: none;
     margin-top: 0.35rem;
+  }
+
+  .rec-head-actions [hidden] {
+    display: none;
   }
 
   /* One grid for the whole round, so the two layouts are the same content in
@@ -290,7 +300,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
        note forms are taller and do scroll. Crosses into the component, hence
        :global. */
     :root[data-rec-layout='compact'] :global(.transcript) {
-      --tx-height: calc(100vh - 25rem);
+      --tx-height: calc(100vh - 31rem);
       margin-top: 0;
       border-top: none;
       padding-top: 0;

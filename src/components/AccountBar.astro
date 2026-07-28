@@ -11,11 +11,10 @@ const { slug = '' } = Astro.props;
 ---
 
 <div class="account" data-slug={slug}>
+  <!-- The save control lives beside the layout toggle in the page head: it acts
+       on the round, not on the notes, and #account-fav is still wired here. -->
   <div class="account-row">
     <p class="label label-muted">Notes</p>
-    <div class="account-actions">
-      {slug && <button class="chip" id="account-fav" hidden>Save this round</button>}
-    </div>
   </div>
 
   <p class="account-state" id="account-state">
@@ -207,7 +206,10 @@ const { slug = '' } = Astro.props;
           listFavorites(), listTags(), listNotes(slug),
         ]);
         favourited = favorites.some(f => f.kind === 'recording' && f.ref === slug);
-        if (favBtn) favBtn.textContent = favourited ? 'Saved' : 'Save';
+        if (favBtn) {
+          favBtn.textContent = favourited ? 'Saved' : 'Save round';
+          favBtn.setAttribute('aria-pressed', String(favourited));
+        }
 
         const tagBox = document.getElementById('my-tags')!;
         tagBox.innerHTML = '';

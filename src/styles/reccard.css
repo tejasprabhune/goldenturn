@@ -1,0 +1,393 @@
+/*
+ * The recording card: the row shape used by the recordings list and by search
+ * results, so a round looks and behaves the same wherever it is found.
+ *
+ * Cards are built in the browser, so none of this can live in a component's
+ * scoped block.
+ */
+
+.rec-results {
+  border-top: 1px solid var(--rule);
+}
+
+.rec-card {
+  border-bottom: 1px solid var(--rule-soft);
+  padding-inline: 0.75rem;
+  margin-inline: -0.75rem;
+  transition: background-color 60ms linear;
+}
+.rec-card:hover {
+  background: var(--sky-wash);
+}
+.rec-card[data-expanded="true"] {
+  background: var(--paper-raised);
+  border-bottom-color: var(--rule);
+}
+
+.rec-card__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(4.5rem, max-content);
+  gap: 1rem;
+  padding: 1.125rem 0;
+  cursor: pointer;
+}
+
+.rec-card__title {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-style: normal;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink);
+  margin: 0 0 0.25rem;
+  line-height: 1.3;
+}
+
+.rec-card__resolution {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  margin: 0 0 0.625rem;
+}
+
+.rec-card__strategies {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.625rem;
+}
+
+/* The label is its own column so a strategy that wraps hangs under its first
+   word rather than under the label. */
+.rec-card__strategy {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.4;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.rec-card__label {
+  flex: none;
+  width: 1.7rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(23, 21, 15, 0.4);
+}
+
+.rec-card__strategy-text {
+  min-width: 0;
+}
+
+.rec-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.375rem;
+}
+
+.rec-card__tag {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  background: transparent;
+  border: 1px solid var(--rule);
+  padding: 0.15rem 0.55rem;
+  color: rgba(23, 21, 15, 0.6);
+  cursor: pointer;
+  transition: background 60ms linear, color 60ms linear, border-color 60ms linear;
+}
+.rec-card__tag:hover,
+.rec-card__tag[data-active="true"] {
+  background: var(--gold);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.rec-card__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
+  max-width: 9rem;
+  flex-shrink: 0;
+}
+
+.rec-card__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.rec-card__link:hover {
+  box-shadow: inset 0 -0.1em 0 var(--gold);
+}
+
+/* Hovering the title lights the arrow too, so it reads as one target. */
+.rec-card__title:hover .rec-card__open {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.cardplayer-wave {
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+  background: var(--paper);
+}
+
+.cardplayer-wave canvas {
+  display: block;
+  width: 100%;
+  height: 84px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.cardplayer-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.7rem;
+}
+
+.cardplayer-play {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  background: var(--gold);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  min-width: 5rem;
+  transition: background-color 60ms linear;
+}
+
+.cardplayer-play:hover {
+  background: var(--sky);
+}
+
+.cardplayer-time,
+.cardplayer-total {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardplayer-total,
+.cardplayer-sep {
+  color: rgba(23, 21, 15, 0.45);
+}
+
+.cardplayer-speed {
+  margin-left: auto;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.cardplayer audio {
+  display: none;
+}
+
+.rec-card__open {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1;
+  color: rgba(23, 21, 15, 0.35);
+  text-decoration: none;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.2rem;
+  transition: background-color 60ms linear, color 60ms linear;
+}
+
+.rec-card__open:hover {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.rec-card__decision {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background: var(--gold);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  padding: 0.2rem 0.5rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-card__meta {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: rgba(23, 21, 15, 0.4);
+  text-align: right;
+  line-height: 1.4;
+}
+
+/* Narrow screens cannot spare a whole column for the decision, so it drops
+   to a row under the card with the year and tournament. */
+@media (max-width: 720px) {
+  .rec-card__header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .rec-card__aside {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    max-width: none;
+    margin-top: 0.75rem;
+  }
+
+  .rec-card__meta {
+    text-align: left;
+  }
+}
+
+.rec-card__body {
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 90ms linear;
+}
+.rec-card__body:not([hidden]) {
+  grid-template-rows: 1fr;
+}
+.rec-card__body > * {
+  overflow: hidden;
+}
+
+.rec-card__body[hidden] {
+  display: grid !important;
+}
+
+.rec-card__body-inner {
+  padding: 0 0 1.25rem;
+}
+
+/* Only draw the divider when open; a collapsed body is zero height but its
+   border would still paint as a second rule under the card. */
+.rec-card[data-expanded='true'] .rec-card__body-inner {
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rec-card__player {
+  margin: 1rem 0;
+}
+
+.rec-card__player iframe,
+.rec-card__player video,
+.rec-card__player audio {
+  width: 100%;
+  display: block;
+}
+
+.rec-card__player iframe {
+  aspect-ratio: 16/9;
+  border: none;
+}
+
+.player-fallback {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: rgba(23, 21, 15, 0.5);
+  padding: 0.75rem 0;
+  margin: 0;
+}
+
+.player-fallback a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin-left: 0.375rem;
+}
+
+.rec-card__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.25rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--rule-soft);
+  margin-top: 0.875rem;
+}
+
+.rec-card__action {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: rgba(23, 21, 15, 0.5);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  transition: color 60ms linear;
+}
+.rec-card__action:hover {
+  color: var(--ink);
+}
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  align-items: center;
+}
+.active-filter-chip {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.75rem;
+  background: var(--gold);
+  border: 1px solid var(--ink);
+  padding: 0.2rem 0.55rem;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.active-filter-chip:hover {
+  background: var(--sky);
+}
+.clear-filters {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: rgba(23, 21, 15, 0.45);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.25rem;
+  transition: color 60ms linear;
+}
+.clear-filters:hover {
+  color: var(--ink);
+}
+
+.blur-toggle[aria-pressed="true"] {
+  background: var(--sky);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.decisions-blurred .rec-card__decision {
+  filter: blur(9px);
+  cursor: pointer;
+}
+.decisions-blurred .rec-card__decision[data-revealed="true"] {
+  filter: none;
+}
+.rec-card__decision {
+  transition: filter 80ms linear;
+}

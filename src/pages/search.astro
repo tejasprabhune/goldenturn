@@ -1,13 +1,14 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import '../styles/reccard.css';
 ---
 
 <BaseLayout title="Search | the golden turn">
-  <div class="shell-prose page-head">
+  <div class="shell page-head">
     <h1 class="page-title">search</h1>
   </div>
 
-  <div class="shell-prose page-body">
+  <div class="shell page-body search-page">
     <input
       id="search-input"
       type="search"
@@ -29,6 +30,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <script>
   import { algoliasearch } from 'algoliasearch';
+  import { renderRecordingCard, createCardList, escapeHtml } from '../lib/reccard';
 
   const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
   const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
@@ -52,13 +54,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     lecture: 'lectures',
   };
 
-  function escapeHtml(str: string): string {
-    return (str ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  /**
+   * Rounds found here are the same cards as on the recordings list, wired the
+   * same way. A tag leads to the list already filtered by it, since filtering
+   * a mixed result set by a recordings-only facet would be strange.
+   */
+  const cards = createCardList(resultsEl, {
+    onTag(tag) { window.location.href = `/recordings?tag=${encodeURIComponent(tag)}`; },
+  });
 
   interface Hit {
     objectID: string;
@@ -131,27 +134,29 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       section.className = 'result-group';
       section.innerHTML = `<p class="section-head">${escapeHtml(label)}</p>`;
 
-      for (const hit of hits) {
-        const isRecording = hit._isRecording;
-        const title = (hit.title ?? hit.name ?? '') as string;
-        const url = isRecording ? (hit.link ?? '#') : (hit.url ?? '#');
-        const desc = isRecording ? (hit.resolution ?? '') : (hit.description ?? '');
-        const external = isRecording;
-
-        const a = document.createElement('a');
-        a.href = escapeHtml(url);
-        if (external) {
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
+      // Rounds get the recordings list's card; everything else is a plain link.
+      if (type === 'recording') {
+        const list = document.createElement('div');
+        list.className = 'rec-results';
+        list.innerHTML = hits.map(h => renderRecordingCard(h as Record<string, unknown>)).join('');
+        section.appendChild(list);
+        list.querySelectorAll<HTMLAnchorElement>('.rec-card__link').forEach(a => {
+          a.setAttribute('data-index', String(allLinks.length));
+          allLinks.push(a);
+        });
+      } else {
+        for (const hit of hits) {
+          const a = document.createElement('a');
+          a.href = escapeHtml(hit.url ?? '#');
+          a.className = 'result-link';
+          a.setAttribute('data-index', String(allLinks.length));
+          a.innerHTML = `
+            <span class="result-title">${escapeHtml((hit.title ?? hit.name ?? '') as string)}</span>
+            ${hit.description ? `<span class="result-desc">${escapeHtml(hit.description)}</span>` : ''}
+          `;
+          section.appendChild(a);
+          allLinks.push(a);
         }
-        a.className = 'result-link';
-        a.setAttribute('data-index', String(allLinks.length));
-        a.innerHTML = `
-          <span class="result-title">${escapeHtml(title)}</span>
-          ${desc ? `<span class="result-desc">${escapeHtml(desc)}</span>` : ''}
-        `;
-        section.appendChild(a);
-        allLinks.push(a);
       }
 
       resultsEl.appendChild(section);
