@@ -40,7 +40,7 @@ const PANELS = [
         <section class="admin-panel">
           <p class="section-head">{p.title}</p>
           <div class="chart-wrap"><canvas class="admin-canvas" id={`chart-${p.id}`} data-accent={p.accent}></canvas></div>
-          <p class="page-lede admin-empty" id={`empty-${p.id}`} hidden>Nothing recorded yet.</p>
+          <p class="admin-empty" id={`empty-${p.id}`} hidden>none</p>
         </section>
       ))}
     </div>
@@ -51,7 +51,7 @@ const PANELS = [
         <span class="label label-muted" id="queue-count"></span>
       </div>
       <ul class="queue" id="admin-queue"></ul>
-      <p class="page-lede admin-empty" id="queue-empty" hidden>Nothing waiting.</p>
+      <p class="admin-empty" id="queue-empty" hidden>none</p>
     </section>
 
     <section class="admin-panel">
@@ -59,13 +59,8 @@ const PANELS = [
         <p class="section-head">Submitted rounds</p>
         <span class="label label-muted" id="pending-count"></span>
       </div>
-      <p class="panel-note">
-        Rounds go live on their own. Confirming one stops it asking to be
-        looked at; removing takes it out of search and deletes its audio,
-        transcript and timings.
-      </p>
       <ul class="queue" id="admin-pending"></ul>
-      <p class="page-lede admin-empty" id="pending-empty" hidden>Nothing submitted yet.</p>
+      <p class="admin-empty" id="pending-empty" hidden>none</p>
     </section>
 
     <section class="admin-panel">
@@ -125,9 +120,14 @@ const PANELS = [
   }
 
   /* The grid already spaces its cells; the panel's own margin doubled it, which
-     showed up as a long gap under a short chart on a phone. */
+     showed up as a long gap under a short chart on a phone. The grid then owes
+     the section after it the same space its cells get. */
   .admin-grid .admin-panel {
     margin-bottom: 0;
+  }
+
+  .admin-grid {
+    margin-bottom: 2.5rem;
   }
 
   @media (min-width: 900px) {
@@ -144,21 +144,27 @@ const PANELS = [
     margin-top: 0.75rem;
   }
 
+  /* display:block outranks the [hidden] default, so an empty panel kept its
+     full canvas height and left a long blank between the heading and the
+     line saying there was nothing to show. */
+  .admin-canvas[hidden] {
+    display: none;
+  }
+
   .admin-canvas--tall {
     height: 11rem;
   }
 
+  /* Sits directly under its heading, quiet enough to read as an absence
+     rather than a message. */
   .admin-empty {
-    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+    margin: 0.5rem 0 0;
   }
 
-  /* What a panel does, said once at the top of it. */
-  .panel-note {
-    font-size: 0.8125rem;
-    line-height: 1.5;
-    color: var(--ink-muted);
-    max-width: 60ch;
-    margin: 0.6rem 0 0;
+  .admin-empty[hidden] {
+    display: none;
   }
 
   .admin-table {

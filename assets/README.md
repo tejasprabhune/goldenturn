@@ -9,8 +9,8 @@ embedded as paths, which is why none of these files need a font to render.
 
 | File | What it is | Where it is used |
 | --- | --- | --- |
-| `mark.svg` | the `g`, gold on ink, rounded square | shipped as `public/favicon.svg` |
-| `mark-light.svg` | the same mark on paper, gold with an ink border | for placing against a dark ground |
+| `mark.svg` | the `g`, gold with an ink border on sky, square | shipped as `public/favicon.svg` |
+| `mark-ink.svg` | the same mark on ink | for placing against a light ground |
 | `mark-512.png` | `mark.svg` at 512px | app icons, anywhere SVG is not accepted |
 | `wordmark.svg` | "the golden turn", gold with an ink border, transparent | headers, slides, print |
 | `wordmark-sky.svg` | the wordmark on a sky panel | matches the home page masthead |
