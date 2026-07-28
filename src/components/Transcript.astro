@@ -213,8 +213,9 @@ const { slug } = Astro.props;
 <script>
   import { formatTime } from '../lib/waveform';
   import {
-    listProposals, listRevisions, propose, vote, getUser, NotSignedIn,
-    addNote, track, updateProposal, deleteProposal, type Proposal, type Revision,
+    listProposals, listRevisions, propose, vote, getUser, isAdmin, NotSignedIn,
+    addNote, track, updateProposal, deleteProposal, adminResolve,
+    type Proposal, type Revision,
   } from '../lib/api';
   import { AFF, usable, applyBoundaries, type Speech } from '../lib/speeches';
   import { windowAround } from '../lib/textdiff';
@@ -814,6 +815,32 @@ const { slug } = Astro.props;
         down.addEventListener('click', () => cast(-1));
         meta.append(up, score, down, who);
         li.append(meta);
+
+        // An admin settles an edit where it is read rather than having to find
+        // it again in the dashboard. Accepting applies it to the transcript at
+        // once, which is the point of doing it here.
+        if (isAdmin() && p.status === 'open') {
+          const resolve = document.createElement('div');
+          resolve.className = 'proposal-own';
+
+          for (const action of ['accept', 'reject'] as const) {
+            const b = document.createElement('button');
+            b.className = 'chip';
+            b.textContent = action === 'accept' ? 'Accept' : 'Reject';
+            b.addEventListener('click', async e => {
+              e.stopPropagation();
+              b.disabled = true;
+              try {
+                await adminResolve(p.id, action);
+                if (action === 'accept') await refreshRevisions();
+                else target()?.classList.remove('has-proposal');
+                void loadProposals();
+              } catch { b.disabled = false; }
+            });
+            resolve.appendChild(b);
+          }
+          li.appendChild(resolve);
+        }
 
         // An author can revise or withdraw their own edit while it is open.
         if (me && p.author_id === me.id && p.status === 'open') {
