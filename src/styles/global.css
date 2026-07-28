@@ -734,6 +734,17 @@
     min-width: 2.6rem;
   }
 
+  /* A speech the fitter never found: the row is the only place it can be
+     given a time, so it says so rather than showing 0:00 to 0:00. */
+  .fixer-row[data-unset='1'] .fixer-label {
+    color: var(--gold-deep);
+  }
+
+  .fixer-row[data-unset='1'] .fixer-at {
+    font-style: italic;
+    color: var(--gold-deep);
+  }
+
   /* The column min-widths line the rows up next to each other. On one narrow
      column they only open gaps and push "End here" onto its own line. */
   @media (max-width: 560px) {

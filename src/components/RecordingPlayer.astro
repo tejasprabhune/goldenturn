@@ -87,6 +87,8 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         <button class="chip" id="toggle-proposed" aria-expanded="false" hidden></button>
       </div>
 
+      <p class="label label-muted speech-missing" id="speech-missing" hidden></p>
+
       <div class="timing-votes" id="timing-votes" hidden>
         <ul class="timing-list" id="timing-list"></ul>
         <p class="label label-muted timing-conflict" id="timing-conflict" hidden></p>
@@ -414,6 +416,15 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     display: none;
   }
 
+  .speech-missing {
+    margin: 0.6rem 0 0;
+    color: var(--gold-deep);
+  }
+
+  .speech-missing[hidden] {
+    display: none;
+  }
+
   .speeches[hidden] {
     display: none;
   }
@@ -442,8 +453,8 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     adminResolve, NotSignedIn, type Proposal,
   } from '../lib/api';
   import {
-    sideOf, usable, applyBoundaries, parseSpan, withSpans, conflicts,
-    type Speech, type Span,
+    sideOf, usable, placed, byTime, applyBoundaries, parseSpan, withSpans,
+    conflicts, SPEECH_ORDER, type Speech, type Span,
   } from '../lib/speeches';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
@@ -684,7 +695,11 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // Speech regions shade the waveform and give keyboard jumps 1-6.
     let speechStarts: number[] = [];
-    function applyFitted(found: Speech[], trying = false) {
+    function applyFitted(all: Speech[], trying = false) {
+      // The list carries every speech so an unplaced one can still be given a
+      // time in the fixer; only the ones with a time are drawn or jumped to.
+      const found = all.filter(placed);
+
       wave.setSegments(found.map(s => ({
         label: s.label, start: s.start, end: s.end, confidence: s.confidence,
         side: sideOf(s.label),
@@ -696,6 +711,14 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       document.dispatchEvent(new CustomEvent('gt:speeches', {
         detail: { slug, speeches: found },
       }));
+
+      const missing = all.filter(s => !placed(s)).map(s => s.label);
+      const note = document.getElementById('speech-missing')!;
+      note.hidden = missing.length === 0;
+      if (missing.length) {
+        note.textContent = `${missing.join(', ')} ${missing.length === 1 ? 'was' : 'were'} `
+          + `not found. Use Fix timings to place ${missing.length === 1 ? 'it' : 'them'}.`;
+      }
 
       const box = document.getElementById('speeches')!;
       box.innerHTML = '';
@@ -782,10 +805,17 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     function renderFixerRows() {
       const rows = document.getElementById('fixer-rows')!;
       rows.innerHTML = '';
-      for (const s of fitted) {
+      // Canonical order, not time order, so an unplaced speech sits where it
+      // belongs in the round rather than being pushed to the end.
+      const inOrder = [...fitted].sort(
+        (a, b) => SPEECH_ORDER.indexOf(a.label as any) - SPEECH_ORDER.indexOf(b.label as any));
+
+      for (const s of inOrder) {
         const d = draft[s.label];
+        const set = d.end > d.start;
         const row = document.createElement('div');
         row.className = 'fixer-row';
+        if (!set) row.dataset.unset = '1';
 
         const label = document.createElement('span');
         label.className = 'fixer-label';
@@ -793,17 +823,21 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
         const times = document.createElement('span');
         times.className = 'fixer-at';
-        times.textContent = `${formatTime(d.start)} to ${formatTime(d.end)}`;
+        times.textContent = set
+          ? `${formatTime(d.start)} to ${formatTime(d.end)}`
+          : d.start > 0 ? `${formatTime(d.start)} to ?` : 'not found';
 
         const len = document.createElement('span');
         len.className = 'fixer-len';
-        len.textContent = `${((d.end - d.start) / 60).toFixed(1)}m`;
+        len.textContent = set ? `${((d.end - d.start) / 60).toFixed(1)}m` : '';
 
         const setStart = document.createElement('button');
         setStart.className = 'chip';
         setStart.textContent = 'Start here';
         setStart.addEventListener('click', () => {
           draft[s.label].start = Math.round(audio.currentTime);
+          // Any edit answers whatever the last submit complained about.
+          document.getElementById('fixer-status')!.textContent = '';
           renderFixerRows();
           previewDraft();
         });
@@ -813,6 +847,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         setEnd.textContent = 'End here';
         setEnd.addEventListener('click', () => {
           draft[s.label].end = Math.round(audio.currentTime);
+          document.getElementById('fixer-status')!.textContent = '';
           renderFixerRows();
           previewDraft();
         });
@@ -826,13 +861,15 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     // timings, not an in-progress draft, so it is left alone until cancel or
     // the next load.
     function previewDraft() {
-      wave.setSegments(fitted.map(s => ({
-        label: s.label,
-        start: draft[s.label]?.start ?? s.start,
-        end: draft[s.label]?.end ?? s.end,
-        confidence: s.confidence,
-        side: sideOf(s.label),
-      })));
+      wave.setSegments(fitted
+        .map(s => ({
+          label: s.label,
+          start: draft[s.label]?.start ?? s.start,
+          end: draft[s.label]?.end ?? s.end,
+          confidence: s.confidence,
+          side: sideOf(s.label),
+        }))
+        .filter(s => s.end > s.start));
     }
 
     /**
@@ -878,9 +915,20 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       const status = document.getElementById('fixer-status')!;
       const changed = fitted.filter(s => {
         const d = draft[s.label];
-        return d && (Math.abs(d.start - s.start) > 2 || Math.abs(d.end - s.end) > 2);
+        if (!d) return false;
+        // A speech that was never found counts once it has both ends; a
+        // half-set one is not a proposal yet.
+        if (!placed(s)) return d.end > d.start;
+        return Math.abs(d.start - s.start) > 2 || Math.abs(d.end - s.end) > 2;
       });
-      if (!changed.length) { status.textContent = 'No changes to propose'; return; }
+      if (!changed.length) {
+        const halfSet = fitted.filter(s => !placed(s) && draft[s.label]
+          && draft[s.label].end <= draft[s.label].start && draft[s.label].start > 0);
+        status.textContent = halfSet.length
+          ? `${halfSet.map(s => s.label).join(', ')} still needs an end`
+          : 'No changes to propose';
+        return;
+      }
       btn.disabled = true;
       try {
         let allAccepted = true;
@@ -903,10 +951,10 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         // A pending one shows up in the proposals panel instead.
         if (allAccepted) {
           fitted = fitted
-            .map(s => (draft[s.label]
+            .map(s => (changed.some(c => c.label === s.label)
               ? { ...s, start: draft[s.label].start, end: draft[s.label].end, confidence: 1 }
               : s))
-            .sort((a, b) => a.start - b.start);
+            .sort(byTime);
         }
         applyFitted(fitted);
         status.textContent = '';

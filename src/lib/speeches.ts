@@ -27,9 +27,37 @@ export function sideOf(label: string): 'aff' | 'neg' {
   return AFF.has(label) ? 'aff' : 'neg';
 }
 
-/** Drop the speeches the fitter could not place. */
+/** The six speeches of a parli round, in the order they are given. */
+export const SPEECH_ORDER = ['PMC', 'LOC', 'MG', 'MO', 'LOR', 'PMR'] as const;
+
+/** Whether the fitter actually found this speech. */
+export function placed(s: Speech): boolean {
+  return s.confidence > 0 && s.end > s.start;
+}
+
+/**
+ * Every speech the fitter reported, placed or not.
+ *
+ * Unplaced ones are kept rather than dropped: a speech the fitter could not
+ * find is the case most in need of a person, and one that has been filtered
+ * out cannot be offered for correction or carry an accepted one. Anything that
+ * draws or jumps filters with `placed` at the point of use instead.
+ */
 export function usable(speeches: Speech[]): Speech[] {
-  return speeches.filter(s => s.confidence > 0 && s.end > s.start);
+  const known = new Map(speeches.map(s => [s.label, s]));
+  const extra = speeches.filter(s => !(SPEECH_ORDER as readonly string[]).includes(s.label));
+  return [
+    ...SPEECH_ORDER.map(label => known.get(label) ?? { label, start: 0, end: 0, confidence: 0 }),
+    ...extra,
+  ];
+}
+
+/** Time order for the ones that have a time; the rest keep to the end. */
+export function byTime(a: Speech, b: Speech): number {
+  if (!placed(a) && !placed(b)) return 0;
+  if (!placed(a)) return 1;
+  if (!placed(b)) return -1;
+  return a.start - b.start;
 }
 
 /** A proposed span for one speech, as stored in a boundary proposal. */
@@ -59,9 +87,9 @@ export function withSpans(speeches: Speech[], moves: Map<string, Span>): Speech[
   return speeches
     .map(s => {
       const m = moves.get(s.label);
-      return m ? { ...s, start: m.start, end: m.end } : s;
+      return m ? { ...s, start: m.start, end: m.end, confidence: Math.max(s.confidence, 1) } : s;
     })
-    .sort((a, b) => a.start - b.start);
+    .sort(byTime);
 }
 
 /**
@@ -72,7 +100,9 @@ export function withSpans(speeches: Speech[], moves: Map<string, Span>): Speech[
  */
 export function conflicts(speeches: Speech[], moves: Map<string, Span>): Set<string> {
   const bad = new Set<string>();
-  const merged = withSpans(speeches, moves);
+  // A speech the fitter never placed sits at zero and would appear to overlap
+  // everything; it constrains nothing until someone gives it a time.
+  const merged = withSpans(speeches, moves).filter(placed);
 
   for (const s of merged) {
     if (s.end <= s.start && moves.has(s.label)) bad.add(s.label);
@@ -112,5 +142,5 @@ export function applyBoundaries(speeches: Speech[], revisions: Revision[]): Spee
       const m = moves.get(s.label);
       return m ? { ...s, start: m.start, end: m.end, confidence: 1 } : s;
     })
-    .sort((a, b) => a.start - b.start);
+    .sort(byTime);
 }
