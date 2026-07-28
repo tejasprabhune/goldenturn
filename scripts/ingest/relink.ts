@@ -107,9 +107,13 @@ async function ingest(t: Target, client: S3Client) {
 }
 
 async function main() {
-  const targets: Target[] = JSON.parse(readFileSync('scripts/ingest/relink.json', 'utf8'))
+  // Pathed by env so the same script runs in the container, where the list
+  // sits beside it rather than under scripts/ingest.
+  const listPath = process.env.RELINK ?? 'scripts/ingest/relink.json';
+  const targets: Target[] = JSON.parse(readFileSync(listPath, 'utf8'))
     .filter((t: Target) => t.alive);
-  const only = process.argv.slice(2);
+  const only = [...process.argv.slice(2), ...(process.env.SLUGS ?? '').split(/[\s,]+/)]
+    .filter(Boolean);
   const work = only.length ? targets.filter(t => only.includes(t.slug)) : targets;
 
   console.log(`ingesting ${work.length} rounds from their own share links\n`);
@@ -128,8 +132,11 @@ async function main() {
     console.log();
   }
 
-  writeFileSync('scripts/ingest/relinked.json', JSON.stringify(done, null, 2));
-  console.log(`${done.length} of ${work.length} ingested; wrote scripts/ingest/relinked.json`);
+  // The container has nowhere useful to write, and the slugs are in the log.
+  if (process.env.RELINK_OUT !== '0') {
+    writeFileSync('scripts/ingest/relinked.json', JSON.stringify(done, null, 2));
+  }
+  console.log(`ingested ${done.length} of ${work.length}: ${done.join(' ')}`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

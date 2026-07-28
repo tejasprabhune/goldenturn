@@ -20,6 +20,10 @@ async function main() {
   const c = client();
   const dryRun = process.env.DRY_RUN === '1';
 
+  // SLUGS narrows the run to a few rounds; without it every transcript is
+  // refitted, which is what a change to the fitter itself wants.
+  const only = new Set((process.env.SLUGS ?? '').split(/[\s,]+/).filter(Boolean));
+
   const keys: string[] = [];
   let token: string | undefined;
   do {
@@ -27,6 +31,12 @@ async function main() {
     for (const o of r.Contents ?? []) if (o.Key?.endsWith('.json')) keys.push(o.Key);
     token = r.NextContinuationToken;
   } while (token);
+
+  if (only.size) {
+    const wanted = keys.filter(k => only.has(k.slice('transcripts/'.length, -'.json'.length)));
+    keys.length = 0;
+    keys.push(...wanted);
+  }
 
   console.log(`fitting ${keys.length} transcribed rounds${dryRun ? ' (dry run)' : ''}\n`);
 
