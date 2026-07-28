@@ -814,6 +814,12 @@
     color: rgba(23, 21, 15, 0.5);
   }
 
+  .timing-resolve {
+    display: inline-flex;
+    gap: 0.35rem;
+    margin-left: 0.5rem;
+  }
+
   /* Note rows are built in the browser as notes are added. */
 
   .note-list li {

@@ -47,7 +47,7 @@ const hasRelated =
   <div class="shell article-grid">
     <aside class="article-aside">
       <div class="article-aside-inner">
-        <a href="/curriculum" class="label label-muted aside-home">curriculum index</a>
+        <a href="/learn" class="label label-muted aside-home">all articles</a>
         <nav aria-label="Article navigation">
           {SECTION_ORDER.map(section => {
             const articles = grouped[section];
@@ -81,7 +81,7 @@ const hasRelated =
 
     <main class="article-main">
       <nav aria-label="Breadcrumb" class="crumbs">
-        <a href="/curriculum">curriculum</a>
+        <a href="/learn">learn</a>
         <span aria-hidden="true">/</span>
         <a href={`/curriculum#${article.data.section}`}>{sectionLabel}</a>
         <span aria-hidden="true">/</span>

@@ -22,14 +22,15 @@ const pathname = Astro.url.pathname;
 const isHome = variant === 'home';
 
 const navLinks = [
-  { href: '/curriculum', label: 'curriculum' },
+  { href: '/learn', label: 'learn' },
   { href: '/recordings', label: 'recordings' },
-  { href: '/lectures', label: 'lectures' },
   { href: '/search', label: 'search' },
 ];
 
 function isActive(href: string) {
-  return pathname === href || pathname.startsWith(href + '/');
+  if (pathname === href || pathname.startsWith(href + '/')) return true;
+  // Articles keep their /curriculum addresses; learn is where they are listed.
+  return href === '/learn' && pathname.startsWith('/curriculum');
 }
 ---
 

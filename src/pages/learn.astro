@@ -1,5 +1,12 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
+/**
+ * Curriculum and lectures on one page.
+ *
+ * They were two nav entries for one thing: written explanations of how the
+ * event works, and recorded ones. Splitting them made the nav longer and left
+ * lectures as an entry that only ever said "coming soon".
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 
@@ -10,6 +17,7 @@ const SECTION_LABELS: Record<string, string> = {
 };
 
 const articles = await getCollection('curriculum', ({ data }) => !data.draft);
+const lectures = await getCollection('lectures').catch(() => []);
 
 const grouped = SECTION_ORDER.reduce<Record<string, CollectionEntry<'curriculum'>[]>>((acc, section) => {
   acc[section] = articles
@@ -20,20 +28,19 @@ const grouped = SECTION_ORDER.reduce<Record<string, CollectionEntry<'curriculum'
 
 function articleHref(entry: CollectionEntry<'curriculum'>) {
   const parts = entry.id.replace(/\.(mdx?|typ)$/, '').split('/');
-  const section = parts[0];
-  const slug = parts.slice(1).join('/');
-  return `/curriculum/${section}/${slug}`;
+  return `/curriculum/${parts[0]}/${parts.slice(1).join('/')}`;
 }
 ---
 
 <BaseLayout
-  title="Curriculum | the golden turn"
+  title="Learn | the golden turn"
   description="A complete guide to college parliamentary debate, from first principles to advanced theory."
 >
   <div class="shell page-head">
-    <h1 class="page-title">curriculum</h1>
+    <h1 class="page-title">learn</h1>
     <p class="page-lede">
-      A complete guide to college parliamentary debate, from first principles to advanced theory.
+      A complete guide to college parliamentary debate, from first principles to
+      advanced theory.
     </p>
   </div>
 
@@ -57,5 +64,33 @@ function articleHref(entry: CollectionEntry<'curriculum'>) {
         </section>
       );
     })}
+
+    <section id="lectures">
+      <p class="section-head">lectures</p>
+      {lectures.length > 0 ? (
+        <ul class="row-list">
+          {lectures.map((entry, i) => (
+            <li>
+              <a href={entry.data.video_url ?? '#'} class="row"
+                 target="_blank" rel="noopener noreferrer">
+                <span class="row-index">{String(i + 1).padStart(2, '0')}</span>
+                <span class="row-title">{entry.data.title}</span>
+                <span class="row-meta">{entry.data.speaker}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="learn-empty">Recorded talks and workshops. Coming soon.</p>
+      )}
+    </section>
   </div>
 </BaseLayout>
+
+<style>
+  .learn-empty {
+    font-size: 0.9375rem;
+    color: var(--ink-muted);
+    margin: 0.75rem 0 3rem;
+  }
+</style>

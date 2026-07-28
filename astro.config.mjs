@@ -14,4 +14,10 @@ export default defineConfig({
     }),
   ],
   output: 'static',
+  // Curriculum and lectures are one page now. The old addresses are in search
+  // results and in people's history, so they point at it rather than 404.
+  redirects: {
+    '/curriculum': '/learn',
+    '/lectures': '/learn',
+  },
 });

@@ -7,7 +7,7 @@
   related_ks: (),
   related_recordings_tags: (),
   related_files: (),
-  draft: false,
+  draft: true,
 ))<frontmatter>
 
 #import "@preview/showybox:2.0.4": showybox

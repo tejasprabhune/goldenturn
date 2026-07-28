@@ -438,8 +438,8 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 <script>
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
   import {
-    track, propose, listRevisions, listProposals, vote, getUser, NotSignedIn,
-    type Proposal,
+    track, propose, listRevisions, listProposals, vote, getUser, isAdmin,
+    adminResolve, NotSignedIn, type Proposal,
   } from '../lib/api';
   import {
     sideOf, usable, applyBoundaries, parseSpan, withSpans, conflicts,
@@ -1061,6 +1061,32 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         }
 
         li.append(tick, label, move, up, score, down, who);
+
+        // An admin settles a timing where it can be heard and seen, rather
+        // than from the dashboard. Accepting adopts it immediately, which
+        // moves the waveform, the jump buttons and the transcript together.
+        if (isAdmin()) {
+          const actions = document.createElement('span');
+          actions.className = 'timing-resolve';
+          for (const action of ['accept', 'reject'] as const) {
+            const b = document.createElement('button');
+            b.className = 'chip';
+            b.textContent = action === 'accept' ? 'Accept' : 'Reject';
+            b.addEventListener('click', async e => {
+              e.stopPropagation();
+              b.disabled = true;
+              try {
+                await adminResolve(p.id, action);
+                tried.delete(p.id);
+                wave.setPreview(null);
+                await adoptRevisions();
+              } catch { b.disabled = false; }
+            });
+            actions.appendChild(b);
+          }
+          li.append(actions);
+        }
+
         list.appendChild(li);
       }
     }
