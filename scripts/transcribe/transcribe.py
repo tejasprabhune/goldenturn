@@ -7,6 +7,7 @@ required rather than nice-to-have.
 """
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -49,6 +50,19 @@ def already_done(client, key):
 
 
 def load_shard():
+    """Which rounds this replica should consider.
+
+    SLUGS names them outright. Without it the list comes from the manifest
+    baked into the image, which is fixed at build time and so cannot contain a
+    round submitted since: those would never be transcribed however often the
+    job ran. Anything named here that already has a transcript is skipped
+    below, so passing a slug twice costs nothing.
+    """
+    explicit = [s for s in re.split(r"[\s,]+", os.environ.get("SLUGS", "")) if s]
+    if explicit:
+        print(f"SLUGS given: {len(explicit)} round(s), manifest ignored", flush=True)
+        return explicit[:LIMIT]
+
     with open(os.environ.get("MANIFEST", "manifest.json")) as f:
         manifest = json.load(f)
     slugs = [m["slug"] for m in manifest]

@@ -7,7 +7,8 @@
     "start": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "onboard": "tsx scripts/ingest/onboard.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.0",
