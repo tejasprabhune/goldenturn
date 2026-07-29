@@ -268,8 +268,20 @@
   overflow: hidden;
 }
 
+/*
+ * A collapsed card keeps its display so the open and close can animate the
+ * grid row from 0fr, which means the attribute alone does not take its
+ * contents out of the page: every collapsed card's copy link, close and open
+ * stayed in the tab order, clipped but reachable. visibility does remove them,
+ * and still animates.
+ */
 .rec-card__body[hidden] {
   display: grid !important;
+  visibility: hidden;
+}
+
+.rec-card__body:not([hidden]) {
+  visibility: visible;
 }
 
 .rec-card__body-inner {
@@ -315,11 +327,32 @@
 
 .rec-card__footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 1.25rem;
   padding-top: 0.875rem;
   border-top: 1px solid var(--rule-soft);
   margin-top: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.rec-card__footer-rest {
+  display: flex;
+  gap: 1.25rem;
+  margin-left: auto;
+}
+
+/* The one action worth taking from here, so it carries weight the rest do
+   not: the others are about this card, this one leaves it. */
+.rec-card__action--open {
+  font-weight: 500;
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--rule);
+}
+
+.rec-card__action--open:hover {
+  background: var(--gold);
+  box-shadow: inset 0 -1px 0 var(--ink);
 }
 
 .rec-card__action {

@@ -74,9 +74,20 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
         <div class="rec-card__body-inner">
           <div class="rec-card__player"></div>
           <div class="rec-card__footer">
-            <button class="rec-card__action" data-action="copy">copy link</button>
-            <a class="rec-card__action" href="${link}" target="_blank" rel="noopener noreferrer">open original</a>
-            <button class="rec-card__action" data-action="close">close</button>
+            <!--
+              The round's own page carries the transcript, the notes and the
+              speech markers. Clicking the title gets there, but a title is a
+              pair of team codes and does not read as a way in, so the way in
+              says so once the card is open.
+            -->
+            <a class="rec-card__action rec-card__action--open" href="${href}">
+              open round<span aria-hidden="true"> &#8599;</span>
+            </a>
+            <span class="rec-card__footer-rest">
+              <button class="rec-card__action" data-action="copy">copy link</button>
+              <a class="rec-card__action" href="${link}" target="_blank" rel="noopener noreferrer">open original</a>
+              <button class="rec-card__action" data-action="close">close</button>
+            </span>
           </div>
         </div>
       </div>
