@@ -107,13 +107,18 @@ async function ingest(round: PolicyRound, slug: string, client: S3Client) {
     // setting rather than something baked in here, and cookies can be handed
     // in the same way when no client is enough.
     const extra = (process.env.YTDLP_ARGS ?? '').split(' ').filter(Boolean);
+    // yt-dlp needs a JavaScript runtime and only looks for deno. Without one it
+    // prints a warning as the first line of its complaint and then fails for
+    // whatever the real reason was, which is what the caller sees. This script
+    // is already running under a JavaScript runtime, so hand it that one.
+    const js = ['--js-runtimes', `node:${process.execPath}`];
     // Everything here ends up as 64k mono AAC, and whisper hears it at 16kHz
     // mono, so YouTube's 160kbps stereo stream is three times the bytes for no
     // difference anyone or anything downstream can detect. Over four hundred
     // two-hour rounds that is the difference between a morning and a day.
     await run('yt-dlp', ['-f', 'bestaudio[abr<=80]/bestaudio/best',
       '-o', join(dir, 'src.%(ext)s'),
-      '--no-playlist', '--no-progress', '--quiet', ...extra, round.link],
+      '--no-playlist', '--no-progress', '--quiet', ...js, ...extra, round.link],
       { maxBuffer: 1024 * 1024 * 32 });
     const downloaded = readdirSync(dir).find(f => f.startsWith('src.'));
     if (!downloaded) throw new Error('yt-dlp produced no file');

@@ -20,8 +20,19 @@ const c = new S3Client({
   },
 });
 
-/** Loud enough to be someone talking into a microphone rather than room tone. */
-const LOUD = 40;
+/**
+ * Where to draw the line between speech and room tone, for this recording.
+ *
+ * A fixed level does not survive contact with an archive recorded over thirty
+ * years on whatever equipment was to hand: the same threshold called one round
+ * 52% transcribed and another 87%, mostly because one was quieter. Half the
+ * loudest bucket is a threshold each recording sets for itself.
+ */
+function loudEnough(peaks: number[]): number {
+  const sorted = [...peaks].sort((a, b) => a - b);
+  const top = sorted[Math.floor(sorted.length * 0.95)] ?? 255;
+  return Math.max(8, top * 0.35);
+}
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
@@ -41,6 +52,7 @@ async function report(slug: string) {
     for (let i = from; i <= to; i++) covered[i] = 1;
   }
 
+  const LOUD = loudEnough(pk.peaks);
   let loud = 0, loudCovered = 0;
   for (let i = 0; i < pk.buckets; i++) {
     if (pk.peaks[i] < LOUD) continue;
