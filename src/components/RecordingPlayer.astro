@@ -48,19 +48,18 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
   {videoFile && !videoEmbed && (
     <!--
-      Hidden until the file proves it can be played. These are share links
-      recorded years ago and a good share of them now answer 403, most likely
-      because the file was renamed and the link carries its old name. A pane
-      that appears only once the video has reported a duration means a dead
-      link costs nothing rather than showing a broken player.
+      Only rendered for links already known to answer, which is settled at
+      ingest rather than discovered here: finding out in the browser meant
+      loading metadata from a file of several hundred megabytes on every visit,
+      whether or not anybody wanted to watch it.
     -->
-    <div class="player-video" id="player-video" hidden>
+    <div class="player-video" id="player-video">
       <!-- Muted and following the audio: the sound comes from R2, which is the
            copy that cannot be moved or deleted out from under the page. -->
       <video
         id="player-file"
         src={videoFile}
-        preload="metadata"
+        preload="none"
         playsinline
         muted
         controls
@@ -96,11 +95,8 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         <span class="transport-time transport-total" id="total">0:00</span>
 
         <div class="transport-right">
-          {videoEmbed && (
+          {(videoEmbed || videoFile) && (
             <button id="toggle-video" class="chip" aria-pressed="true">video on</button>
-          )}
-          {videoFile && !videoEmbed && (
-            <button id="toggle-video" class="chip" aria-pressed="true" hidden>video on</button>
           )}
           <label class="speed">
             <span class="label label-muted">speed</span>
@@ -701,12 +697,8 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       sync = syncYouTube(iframe, audio, () => Number(speed?.value ?? 1));
     } else if (videoFileEl) {
       sync = syncVideoElement(videoFileEl, audio);
-      // Shown only once it has a duration, which is the first moment we know
-      // the link is still good. Until then the round is audio, as before.
-      videoFileEl.addEventListener('loadedmetadata', () => {
-        if (videoWrap) videoWrap.hidden = false;
-        toggleVideo?.removeAttribute('hidden');
-      });
+      // A link checked at ingest can still have gone since; losing the picture
+      // is better than a broken player sitting above the waveform.
       videoFileEl.addEventListener('error', () => {
         if (videoWrap) videoWrap.hidden = true;
         toggleVideo?.setAttribute('hidden', '');

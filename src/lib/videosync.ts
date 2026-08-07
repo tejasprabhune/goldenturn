@@ -28,11 +28,21 @@ export interface VideoSync {
   reattach(): void;
 }
 
-/** How far apart the two may drift before the video is pulled back into line. */
-const DRIFT = 0.4;
+/**
+ * How far apart the two may drift before the video is pulled back into line.
+ *
+ * Generous on purpose. A seek is not instant, so a threshold tight enough to
+ * be woken by ordinary jitter is a threshold that spends its life correcting
+ * the drift its last correction caused.
+ */
+const DRIFT = 1.2;
 
-/** A jump larger than this in the video, unprompted, is a person scrubbing it. */
-const SCRUB = 1.2;
+/**
+ * A jump larger than this in the video, unprompted, is a person scrubbing it.
+ * Comfortably above the drift threshold, so ordinary slippage is never
+ * mistaken for somebody dragging the video somewhere else.
+ */
+const SCRUB = 2.5;
 
 /** How long after our own seek to disregard what the video reports. */
 const SETTLE_MS = 900;
@@ -94,6 +104,7 @@ interface YouTubePlayer {
   getPlayerState(): number;
   setPlaybackRate(rate: number): void;
   mute(): void;
+  unMute(): void;
   destroy(): void;
 }
 
@@ -133,8 +144,21 @@ export function syncYouTube(
   let player: YouTubePlayer | null = null;
   let attached = true;
   let settleUntil = 0;
+  let nextFix = 0;
   let lastSeen = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Set when the video is playing and the audio could not be started to go
+   * with it.
+   *
+   * A click inside a cross-origin iframe is a gesture the parent page never
+   * sees, so pressing YouTube's own play button can leave the browser
+   * refusing to start our audio. Rather than a muted video playing in silence,
+   * the video is unmuted and becomes the sound for as long as that lasts, and
+   * the audio element is walked along behind it so the waveform, the
+   * transcript and everything else still know where the round is.
+   */
+  let videoLeads = false;
 
   const now = () => performance.now();
   const ours = () => { settleUntil = now() + SETTLE_MS; };
@@ -143,6 +167,13 @@ export function syncYouTube(
     if (!player || !attached) return;
     ours();
     player.seekTo(seconds, true);
+  }
+
+  /** The audio takes the round back, and the video goes quiet and follows. */
+  function audioLeads() {
+    if (!videoLeads) return;
+    videoLeads = false;
+    try { player?.mute(); } catch { /* gone */ }
   }
 
   void loadApi().then(() => {
@@ -160,16 +191,31 @@ export function syncYouTube(
           if (!attached || now() < settleUntil) return;
           // 1 is playing, 2 is paused. Somebody pressed the video itself, so
           // the audio does the same rather than the two coming apart.
-          if (e.data === 1 && audio.paused) void audio.play().catch(() => {});
+          if (e.data === 1 && audio.paused) {
+            audio.play().then(audioLeads).catch(() => {
+              // Refused, because the click was inside the iframe and this page
+              // never saw a gesture. Let the video be heard instead of leaving
+              // it playing to nobody.
+              videoLeads = true;
+              try { player!.unMute(); } catch { /* gone */ }
+            });
+          }
           if (e.data === 2 && !audio.paused) audio.pause();
         },
       },
     }) as YouTubePlayer;
   });
 
-  audio.addEventListener('play', () => { if (attached) { ours(); player?.playVideo(); } });
-  audio.addEventListener('pause', () => { if (attached) { ours(); player?.pauseVideo(); } });
-  audio.addEventListener('seeking', () => place(audio.currentTime));
+  audio.addEventListener('play', () => {
+    if (!attached) return;
+    audioLeads();
+    ours();
+    player?.playVideo();
+  });
+  audio.addEventListener('pause', () => {
+    if (attached && !videoLeads) { ours(); player?.pauseVideo(); }
+  });
+  audio.addEventListener('seeking', () => { if (!videoLeads) place(audio.currentTime); });
   audio.addEventListener('ratechange', () => {
     // YouTube accepts only the rates it lists, and rejects the rest silently.
     try { player?.setPlaybackRate(audio.playbackRate); } catch { /* rate not offered */ }
@@ -192,8 +238,30 @@ export function syncYouTube(
       return;
     }
 
-    if (Math.abs(at - audio.currentTime) > DRIFT) place(audio.currentTime);
-  }, 400);
+    // While the video is the one being heard, it is the clock, and the audio
+    // element is walked along behind it.
+    if (videoLeads) {
+      if (Math.abs(at - audio.currentTime) > DRIFT) audio.currentTime = at;
+      return;
+    }
+
+    /*
+     * Only ever correct against a running audio, and never faster than a seek
+     * can finish.
+     *
+     * Both of those were the same bug, and it made the video play the same
+     * second over and over. A paused audio is not a clock, so correcting
+     * against one drags the video back to where it started every time round.
+     * And a seek takes a moment to settle during which the video is not
+     * advancing while the audio is, so a tight threshold checked often finds
+     * drift it has just caused and seeks again, forever.
+     */
+    if (audio.paused || now() < nextFix) return;
+    if (Math.abs(at - audio.currentTime) > DRIFT) {
+      nextFix = now() + 3000;
+      place(audio.currentTime);
+    }
+  }, 500);
 
   return {
     get active() { return attached; },

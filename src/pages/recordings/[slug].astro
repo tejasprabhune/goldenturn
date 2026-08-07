@@ -47,8 +47,9 @@ const videoEmbed = ytId
     : null;
 
 // A third of the parli rounds were recorded as video and only ever had their
-// audio pulled, so the picture is sitting at the original link unwatched.
-const videoFile = kind === 'video' ? directMediaUrl(entry.link) : null;
+// audio pulled, so the picture is sitting at the original link unwatched. Half
+// those links are dead, which is known already rather than discovered here.
+const videoFile = kind === 'video' && entry.video_ok ? directMediaUrl(entry.link) : null;
 
 const meta = [entry.year, entry.tournament].filter(Boolean).join(', ');
 const tags = (entry._tags ?? []).filter(t => t.startsWith('#'));

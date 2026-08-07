@@ -12,6 +12,12 @@ export interface Recording {
   tournament?: string;
   teams?: string[];
   aff_type?: string;
+  /**
+   * Whether the linked video file still answers. Settled at ingest by
+   * scripts/ingest/video-check.ts, because finding out in the browser would
+   * cost every visitor a range request into a very large file.
+   */
+  video_ok?: boolean;
   neg_strategy_count?: number;
   _tags?: string[];
 }
