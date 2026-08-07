@@ -25,7 +25,10 @@ const API = process.env.GT_API ?? 'https://goldenturn-api.tejas-prabhune.workers
 const BUCKET = 'goldenturn-media';
 const RG = process.env.AZ_RESOURCE_GROUP ?? 'thava';
 const TX_JOBS = (process.env.TX_JOBS ?? 'gt-rx-2,gt-rx-4,gt-rx-6,gt-rx-8,gt-rx-10').split(',');
-/** One round takes a few minutes on a T4; this bounds a single run's spend. */
+/**
+ * How many rounds a single run may hand out, across all jobs. Bounds what one
+ * run can spend; TX_PER_JOB bounds how long any one job is asked to work for.
+ */
 const TX_LIMIT = Number(process.env.TX_LIMIT ?? '20');
 
 function sh(cmd: string, args: string[]): string {
@@ -122,7 +125,12 @@ async function main() {
     if (!idle.length) {
       console.log('  every job is busy; the rest wait for the next run');
     }
-    const perJob = Math.ceil(untranscribed.length / Math.max(idle.length, 1));
+    // Capped per job rather than shared out, because a job is killed at its
+    // replica timeout: dividing the backlog between however many happen to be
+    // free means that when few are free each gets a stint longer than it is
+    // allowed to run, and the tail of every one of them is cut off and done
+    // again from scratch on the next run.
+    const perJob = Math.max(1, Number(process.env.TX_PER_JOB ?? '6'));
     for (let i = 0; i < idle.length && i * perJob < untranscribed.length; i++) {
       const batch = untranscribed.slice(i * perJob, (i + 1) * perJob);
       const job = idle[i];
