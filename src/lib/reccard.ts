@@ -10,6 +10,9 @@
 
 import { recordingHref, recordingSlug } from './recordings';
 import { Waveform, formatTime, type PeaksFile } from './waveform';
+import { getRatings, listRevisions } from './api';
+import { ratingHtml } from './stars';
+import { applyBoundaries, placed, sideOf, usable, type Speech } from './speeches';
 
 const MEDIA = 'https://media.goldenturn.org';
 
@@ -57,7 +60,16 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
     <article class="rec-card" data-objectid="${objectID}" data-link="${link}">
       <div class="rec-card__header" role="button" tabindex="0" aria-expanded="false">
         <div class="rec-card__main">
-          <h2 class="rec-card__title"><a class="rec-card__link" href="${href}">${title}</a><a class="rec-card__open" href="${href}" tabindex="-1" aria-hidden="true">&#8599;</a></h2>
+          <!--
+            The title and the arrow leave for somewhere else while the reader is
+            part way down a list they may have filtered and scrolled, so they
+            open alongside it rather than over it. The footer's way in is the
+            deliberate one and keeps the tab.
+          -->
+          <h2 class="rec-card__title"><a class="rec-card__link" href="${href}" target="_blank" rel="noopener">${title}</a><a class="rec-card__open" href="${href}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">&#8599;</a></h2>
+          <!-- Stays empty, and hidden, until hydrateRatings finds this round
+               has been rated. An unrated round says nothing rather than 0.0. -->
+          <p class="rec-card__rating" hidden></p>
           <p class="rec-card__resolution">${resolution}</p>
           <div class="rec-card__strategies">
             <p class="rec-card__strategy"><span class="rec-card__label">Aff</span><span class="rec-card__strategy-text">${aff}</span></p>
@@ -80,9 +92,7 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
               pair of team codes and does not read as a way in, so the way in
               says so once the card is open.
             -->
-            <a class="rec-card__action rec-card__action--open" href="${href}">
-              open round<span aria-hidden="true"> &#8599;</span>
-            </a>
+            <a class="rec-card__action rec-card__action--open" href="${href}">open round</a>
             <span class="rec-card__footer-rest">
               <button class="rec-card__action" data-action="copy">copy link</button>
               <a class="rec-card__action" href="${link}" target="_blank" rel="noopener noreferrer">open original</a>
@@ -93,6 +103,31 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
       </div>
     </article>
   `;
+}
+
+/**
+ * Draws the speech divisions over a card's waveform.
+ *
+ * The same merge the round page does, for the same reason: a boundary that a
+ * reader corrected has to be the one they see wherever the round is drawn, so
+ * accepted revisions go over the machine fit rather than beside it. Speeches
+ * the fitter never found have no span to draw and are left out.
+ */
+async function drawSpeeches(wave: Waveform, slug: string) {
+  const [fit, revisions] = await Promise.all([
+    fetch(`${MEDIA}/speeches/${slug}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    listRevisions(slug).then(r => r.revisions).catch(() => []),
+  ]);
+  if (!fit?.speeches) return;
+
+  const found = applyBoundaries(usable(fit.speeches as Speech[]), revisions);
+  wave.setSegments(found.filter(placed).map(s => ({
+    label: s.label,
+    start: s.start,
+    end: s.end,
+    confidence: s.confidence,
+    side: sideOf(s.label),
+  })));
 }
 
 /**
@@ -137,6 +172,8 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
       totalEl.textContent = formatTime(file.duration);
     })
     .catch(() => { host.querySelector('.cardplayer-wave')!.textContent = ''; });
+
+  void drawSpeeches(wave, slug);
 
   playBtn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
   audio.addEventListener('play', () => { playBtn.textContent = 'pause'; });
@@ -188,6 +225,48 @@ function showFallback(playerEl: HTMLElement, originalLink: string) {
     playback unavailable.
     <a href="${escapeHtml(originalLink)}" target="_blank" rel="noopener noreferrer">open original</a>
   </p>`;
+}
+
+/**
+ * Puts the rating under the title of every card that has one, in a single
+ * request for the whole page of results.
+ *
+ * Cards are only ever added to the end of a list, so a card already carrying
+ * its rating is skipped and a page loaded by "load more" costs one request
+ * rather than another for everything already on screen.
+ */
+export async function hydrateRatings(container: HTMLElement) {
+  const cards = [...container.querySelectorAll('.rec-card')]
+    .filter(c => !(c as HTMLElement).dataset.rated) as HTMLElement[];
+  if (cards.length === 0) return;
+
+  const bySlug = new Map<string, HTMLElement[]>();
+  for (const card of cards) {
+    card.dataset.rated = 'pending';
+    const slug = recordingSlug({
+      title: card.querySelector('.rec-card__link')?.textContent ?? '',
+      objectID: card.dataset.objectid ?? '',
+    });
+    bySlug.set(slug, [...(bySlug.get(slug) ?? []), card]);
+  }
+
+  const res = await getRatings([...bySlug.keys()]).catch(() => null);
+  if (!res) {
+    // Leave them askable again rather than permanently blank.
+    for (const card of cards) delete card.dataset.rated;
+    return;
+  }
+
+  for (const [slug, matches] of bySlug) {
+    const r = res.ratings[slug];
+    if (!r || r.count === 0) continue;
+    for (const card of matches) {
+      const host = card.querySelector('.rec-card__rating') as HTMLElement | null;
+      if (!host) continue;
+      host.innerHTML = ratingHtml(r.average, r.count);
+      host.hidden = false;
+    }
+  }
 }
 
 export interface CardListOptions {

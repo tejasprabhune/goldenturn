@@ -30,7 +30,7 @@ import '../styles/reccard.css';
 
 <script>
   import { algoliasearch } from 'algoliasearch';
-  import { renderRecordingCard, createCardList, escapeHtml } from '../lib/reccard';
+  import { renderRecordingCard, createCardList, hydrateRatings, escapeHtml } from '../lib/reccard';
 
   const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
   const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
@@ -140,6 +140,7 @@ import '../styles/reccard.css';
         list.className = 'rec-results';
         list.innerHTML = hits.map(h => renderRecordingCard(h as Record<string, unknown>)).join('');
         section.appendChild(list);
+        void hydrateRatings(list);
         list.querySelectorAll<HTMLAnchorElement>('.rec-card__link').forEach(a => {
           a.setAttribute('data-index', String(allLinks.length));
           allLinks.push(a);

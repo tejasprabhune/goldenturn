@@ -216,6 +216,42 @@ export function deleteProposal(proposalId: string) {
     { method: 'POST' }, true);
 }
 
+export interface Rating {
+  average: number;
+  count: number;
+  /** The signed-in reader's own rating, or null if they have not given one. */
+  mine: number | null;
+}
+
+/** Sends the session when there is one, so `mine` comes back filled in. */
+export function getRating(slug: string) {
+  const token = getToken();
+  return call<Rating>(`/rounds/${encodeURIComponent(slug)}/rating`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
+
+/** Five stars down to one; zero withdraws a rating already given. */
+export function setRating(slug: string, stars: number) {
+  return call<Rating>(`/rounds/${encodeURIComponent(slug)}/rating`,
+    { method: 'POST', body: JSON.stringify({ stars }) }, true);
+}
+
+/** One request for a whole page of cards rather than one per card. */
+export function getRatings(slugs: string[]) {
+  return call<{ ratings: Record<string, { average: number; count: number }> }>('/ratings',
+    { method: 'POST', body: JSON.stringify({ slugs }) });
+}
+
+export function getPrefs() {
+  return call<{ prefs: Record<string, unknown> }>('/me/prefs', {}, true);
+}
+
+export function setPrefs(prefs: Record<string, unknown>) {
+  return call<{ prefs: Record<string, unknown> }>('/me/prefs',
+    { method: 'POST', body: JSON.stringify({ prefs }) }, true);
+}
+
 export function listFavorites() {
   return call<{ favorites: Array<{ kind: string; ref: string }> }>('/me/favorites', {}, true);
 }

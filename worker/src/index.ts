@@ -223,7 +223,19 @@ async function probeMedia(link: string): Promise<{ ok: true; info: string } | { 
 }
 
 /** Kinds accepted from the browser, so the events table cannot be filled with junk. */
-const PUBLIC_EVENTS = new Set(['search', 'round.view', 'tag.add', 'transcript.search', 'speech.jump']);
+/**
+ * The events a page may record. Anything else is refused, so a stray or forged
+ * kind cannot fill the table.
+ *
+ * Every kind the site actually sends has to be in here. Three were not, and a
+ * client that never looks at the reply had no way to say so: sorting, changing
+ * format or level, and proposing a boundary were all being dropped at the
+ * door, which is why the dashboard has never shown them.
+ */
+const PUBLIC_EVENTS = new Set([
+  'search', 'round.view', 'tag.add', 'transcript.search', 'speech.jump',
+  'recordings.sort', 'recordings.kinds', 'boundary.propose',
+]);
 
 const routes: Record<string, (req: Request, env: Env, url: URL, user: User | null) => Promise<Response>> = {
   'GET /health': async (_req, env) => {
@@ -618,6 +630,124 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     await logEvent(env, 'recording.removed', user!.id, row.slug, { objectID, removed: removed.length });
 
     return json({ ok: true, review: 'removed', removed });
+  },
+
+  /**
+   * A round's rating, and the reader's own if they have one.
+   *
+   * Anonymous, so the page can draw the stars before anyone signs in; `mine`
+   * is simply null for a reader without a session.
+   */
+  'GET /rounds/:slug/rating': async (_req, env, url, user) => {
+    const slug = url.pathname.split('/')[2];
+    const agg = await env.DB.prepare(
+      `SELECT AVG(stars) AS average, COUNT(*) AS count FROM ratings WHERE slug = ?1`
+    ).bind(slug).first<{ average: number | null; count: number }>();
+
+    const mine = user
+      ? await env.DB.prepare(`SELECT stars FROM ratings WHERE slug = ?1 AND user_id = ?2`)
+          .bind(slug, user.id).first<{ stars: number }>()
+      : null;
+
+    return json({
+      average: agg?.average ? Number(agg.average.toFixed(2)) : 0,
+      count: agg?.count ?? 0,
+      mine: mine?.stars ?? null,
+    });
+  },
+
+  /** Rates a round one to five. Zero withdraws a rating already given. */
+  'POST /rounds/:slug/rating': async (req, env, url, user) => {
+    if (!user) return json({ error: 'sign in to rate a round' }, { status: 401 });
+    const slug = url.pathname.split('/')[2];
+    const { stars } = await req.json<{ stars?: number }>().catch(() => ({}));
+    const value = Math.round(Number(stars));
+
+    if (!Number.isFinite(value) || value < 0 || value > 5) {
+      return json({ error: 'stars must be 0 to 5' }, { status: 400 });
+    }
+
+    if (value === 0) {
+      await env.DB.prepare(`DELETE FROM ratings WHERE slug = ?1 AND user_id = ?2`)
+        .bind(slug, user.id).run();
+    } else {
+      await env.DB.prepare(
+        `INSERT INTO ratings (slug, user_id, stars, created_at, updated_at) VALUES (?1,?2,?3,?4,?4)
+         ON CONFLICT(slug, user_id) DO UPDATE SET stars = ?3, updated_at = ?4`
+      ).bind(slug, user.id, value, now()).run();
+    }
+
+    const agg = await env.DB.prepare(
+      `SELECT AVG(stars) AS average, COUNT(*) AS count FROM ratings WHERE slug = ?1`
+    ).bind(slug).first<{ average: number | null; count: number }>();
+
+    await logEvent(env, 'round.rated', user.id, slug, { stars: value });
+    return json({
+      average: agg?.average ? Number(agg.average.toFixed(2)) : 0,
+      count: agg?.count ?? 0,
+      mine: value === 0 ? null : value,
+    });
+  },
+
+  /**
+   * Ratings for a page of results in one request.
+   *
+   * A list draws twenty cards at a time and a request each would be twenty
+   * round trips to put a number under twenty titles.
+   */
+  'POST /ratings': async (req, env) => {
+    const body = await req.json<{ slugs?: unknown }>().catch(() => ({}));
+    const slugs = Array.isArray(body.slugs)
+      ? body.slugs.filter((s): s is string => typeof s === 'string' && s.length > 0).slice(0, 100)
+      : [];
+    if (slugs.length === 0) return json({ ratings: {} });
+
+    const placeholders = slugs.map((_, i) => `?${i + 1}`).join(',');
+    const { results } = await env.DB.prepare(
+      `SELECT slug, AVG(stars) AS average, COUNT(*) AS count
+         FROM ratings WHERE slug IN (${placeholders}) GROUP BY slug`
+    ).bind(...slugs).all<{ slug: string; average: number; count: number }>();
+
+    const ratings: Record<string, { average: number; count: number }> = {};
+    for (const r of results) {
+      ratings[r.slug] = { average: Number(r.average.toFixed(2)), count: r.count };
+    }
+    return json({ ratings });
+  },
+
+  /**
+   * Standing preferences, so a choice made once follows the person rather than
+   * the browser they made it in.
+   */
+  'GET /me/prefs': async (_req, env, _url, user) => {
+    if (!user) return json({ error: 'not signed in' }, { status: 401 });
+    const row = await env.DB.prepare(`SELECT prefs FROM users WHERE id = ?1`)
+      .bind(user.id).first<{ prefs: string | null }>();
+    let prefs: Record<string, unknown> = {};
+    try { prefs = row?.prefs ? JSON.parse(row.prefs) : {}; } catch { prefs = {}; }
+    return json({ prefs });
+  },
+
+  /** Merges into what is stored, so one page saving one key clears none. */
+  'POST /me/prefs': async (req, env, _url, user) => {
+    if (!user) return json({ error: 'sign in required' }, { status: 401 });
+    const body = await req.json<{ prefs?: unknown }>().catch(() => ({}));
+    if (!body.prefs || typeof body.prefs !== 'object' || Array.isArray(body.prefs)) {
+      return json({ error: 'prefs must be an object' }, { status: 400 });
+    }
+
+    const row = await env.DB.prepare(`SELECT prefs FROM users WHERE id = ?1`)
+      .bind(user.id).first<{ prefs: string | null }>();
+    let current: Record<string, unknown> = {};
+    try { current = row?.prefs ? JSON.parse(row.prefs) : {}; } catch { current = {}; }
+
+    const merged = { ...current, ...(body.prefs as Record<string, unknown>) };
+    const encoded = JSON.stringify(merged);
+    if (encoded.length > 4000) return json({ error: 'prefs too large' }, { status: 400 });
+
+    await env.DB.prepare(`UPDATE users SET prefs = ?1 WHERE id = ?2`)
+      .bind(encoded, user.id).run();
+    return json({ prefs: merged });
   },
 
   'GET /rounds/:slug/revisions': async (_req, env, url) => {

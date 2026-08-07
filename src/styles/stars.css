@@ -1,0 +1,137 @@
+/*
+ * A round's rating.
+ *
+ * Two rows of the same five glyphs, one over the other, with the top one
+ * clipped to a percentage: that is what lets 4.2 read as four and a fifth
+ * rather than being rounded to something nobody voted for.
+ *
+ * Cards are built in the browser, so none of this can live in a component's
+ * scoped block, and interpolated widths would be invisible to Tailwind's
+ * scanner anyway.
+ */
+
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1;
+  color: var(--ink-muted);
+}
+
+.stars__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.stars__glyphs {
+  position: relative;
+  display: inline-block;
+  /* The glyphs are a font, so the box is whatever the font makes it. Letting
+     the track size the box keeps the clipped copy exactly on top of it. */
+  white-space: nowrap;
+  letter-spacing: 0.05em;
+  font-size: 0.9375rem;
+}
+
+.stars__track {
+  color: rgba(23, 21, 15, 0.22);
+}
+
+.stars__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--gold-deep);
+  transition: width 80ms linear;
+}
+
+.stars__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The interactive version. The picker sits over the same glyphs rather than
+ * beside them, so there is one set of stars on the page and no question about
+ * which one a click lands on. While a star is under the pointer the fill shows
+ * what that click would give, in ink rather than gold, so a preview is never
+ * mistaken for the average it is covering.
+ */
+.stars--live .stars__glyphs {
+  cursor: pointer;
+}
+
+.stars--live[data-previewing='true'] .stars__fill {
+  color: var(--ink);
+  transition: none;
+}
+
+.stars__pick {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.stars__star {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  /* Transparent: the glyphs underneath are the thing being pointed at. */
+  color: transparent;
+  font: inherit;
+}
+
+.stars__star:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.stars__note {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 60ms linear;
+}
+
+.stars__note:hover {
+  color: var(--ink);
+}
+
+.stars__sep {
+  color: rgba(23, 21, 15, 0.3);
+}
+
+/* A round nobody has rated yet says so, rather than showing a confident 0.0. */
+.stars[data-empty='true'] .stars__value,
+.stars[data-empty='true'] .stars__count {
+  display: none;
+}
+
+/* On a card the rating is one more fact about the round, at the size of the
+   other facts, and it stays out of the way entirely until someone has rated. */
+.rec-card__rating {
+  margin: 0 0 0.5rem;
+}
+
+.rec-card__rating[hidden] {
+  display: none;
+}
+
+/* On the round page it sits under the title with the year and tournament. */
+.rec-rating {
+  margin: 0.35rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

@@ -14,6 +14,28 @@ import '../../styles/reccard.css';
       placeholder="Search rounds, teams, resolutions"
       class="field" style="width: 100%; margin-bottom: 1rem;" />
 
+    <!--
+      Format and level come before the rest because they decide what kind of
+      thing the list is, and the others only narrow within it. Both groups keep
+      at least one choice: an empty group would mean a list of nothing, which
+      is never what anyone meant by unticking a box.
+    -->
+    <div class="toolbar toolbar-kinds">
+      <div class="seg" role="group" aria-label="Debate format" id="filter-format">
+        <button type="button" class="chip" data-value="parli" aria-pressed="true">parli</button>
+        <button type="button" class="chip" data-value="policy" aria-pressed="false">policy</button>
+      </div>
+      <div class="seg" role="group" aria-label="Level" id="filter-level">
+        <button type="button" class="chip" data-value="college" aria-pressed="true">college</button>
+        <button type="button" class="chip" data-value="hs" aria-pressed="true">high school</button>
+      </div>
+      <p class="kinds-tip" id="kinds-tip" hidden>
+        <button class="link account-link" id="kinds-tip-signin">Sign in</button>
+        to keep this choice on any device.
+        <button class="kinds-tip-close" id="kinds-tip-close" aria-label="Dismiss">&times;</button>
+      </p>
+    </div>
+
     <div class="toolbar">
       <select id="filter-year" class="field" aria-label="Filter by year">
         <option value="">All years</option>
@@ -54,7 +76,11 @@ import '../../styles/reccard.css';
 <script>
   import { algoliasearch } from 'algoliasearch';
   import { track } from '../../lib/api';
-  import { renderRecordingCard, createCardList, escapeHtml } from '../../lib/reccard';
+  import { renderRecordingCard, createCardList, hydrateRatings, escapeHtml } from '../../lib/reccard';
+  import {
+    DEFAULT_PREFS, FORMATS, LEVELS, clean, loadPrefs, prefsFilter, readLocal,
+    savePrefs, shouldOfferToRemember, type ViewPrefs,
+  } from '../../lib/prefs';
 
   const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
   const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
@@ -72,6 +98,9 @@ import '../../styles/reccard.css';
   const loadMoreBtn = document.getElementById('load-more') as HTMLButtonElement;
   const activeFiltersEl = document.getElementById('active-filters') as HTMLDivElement;
   const toggleBlurBtn = document.getElementById('toggle-blur') as HTMLButtonElement;
+  const formatGroup = document.getElementById('filter-format') as HTMLDivElement;
+  const levelGroup = document.getElementById('filter-level') as HTMLDivElement;
+  const kindsTip = document.getElementById('kinds-tip') as HTMLParagraphElement;
 
   const PAGE_SIZE = 20;
 
@@ -84,6 +113,7 @@ import '../../styles/reccard.css';
   let totalPages = 0;
   let facetsPopulated = false;
   let activeTags: string[] = [];
+  let prefs: ViewPrefs = { ...DEFAULT_PREFS };
   /** The whole sorted result set, held only while a sort is active. */
   let sorted: Record<string, unknown>[] = [];
 
@@ -109,7 +139,7 @@ import '../../styles/reccard.css';
   });
 
   function buildFilters(year: string, affType: string, tournament: string, tags: string[]): string {
-    const parts: string[] = [];
+    const parts: string[] = [...prefsFilter(prefs)];
     if (year) parts.push(`year:"${year}"`);
     if (affType) parts.push(`aff_type:"${affType}"`);
     if (tournament) parts.push(`tournament:"${tournament}"`);
@@ -150,8 +180,51 @@ import '../../styles/reccard.css';
     return a;
   }
 
+  /**
+   * Draws a group from the preference. A group is never empty, so the pressed
+   * state is always readable as "these, and not the others".
+   */
+  function paintKinds() {
+    for (const [group, chosen] of [[formatGroup, prefs.formats], [levelGroup, prefs.levels]] as const) {
+      group.querySelectorAll<HTMLButtonElement>('[data-value]').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(chosen.includes(btn.dataset.value!)));
+      });
+    }
+  }
+
+  /**
+   * Ticking the last remaining choice in a group would ask for a list of
+   * nothing, which nobody means by narrowing, so the group keeps it.
+   */
+  function onKindClick(group: HTMLElement, key: 'formats' | 'levels', e: Event) {
+    const btn = (e.target as Element).closest('[data-value]') as HTMLElement | null;
+    if (!btn || !group.contains(btn)) return;
+    const value = btn.dataset.value!;
+    const chosen = prefs[key];
+    const next = chosen.includes(value) ? chosen.filter(v => v !== value) : [...chosen, value];
+    if (next.length === 0) return;
+
+    prefs = clean({ ...prefs, [key]: next });
+    paintKinds();
+    savePrefs(prefs);
+    if (shouldOfferToRemember()) kindsTip.hidden = false;
+    track('recordings.kinds', undefined, { formats: prefs.formats, levels: prefs.levels });
+    updateURL();
+    search(0, false);
+  }
+
+  formatGroup.addEventListener('click', e => onKindClick(formatGroup, 'formats', e));
+  levelGroup.addEventListener('click', e => onKindClick(levelGroup, 'levels', e));
+  document.getElementById('kinds-tip-close')?.addEventListener('click', () => { kindsTip.hidden = true; });
+  document.getElementById('kinds-tip-signin')?.addEventListener('click', () =>
+    document.dispatchEvent(new CustomEvent('gt:open-signin')));
+
   function updateURL() {
     const params = new URLSearchParams();
+    // Only when they say something the reader's own preference would not, so
+    // an ordinary browse keeps a clean address and a shared one is explicit.
+    if (prefs.formats.length !== FORMATS.length) prefs.formats.forEach(f => params.append('format', f));
+    if (prefs.levels.length !== LEVELS.length) prefs.levels.forEach(l => params.append('level', l));
     if (currentQuery) params.set('q', currentQuery);
     if (currentYear) params.set('year', currentYear);
     if (currentAffType) params.set('affType', currentAffType);
@@ -257,12 +330,18 @@ import '../../styles/reccard.css';
 
       let effectivePage = page;
       if (isBrowse) {
+        // Asking for no hits returns no page count either, so this asked for a
+        // random page out of zero and opened on the first one every time; the
+        // shuffle below was doing all the work. It also has to see the same
+        // rounds the real request will, or it counts pages of an archive
+        // including formats this reader has switched off and lands past the
+        // end of what they can see.
         const probe = await client.searchSingleIndex({
           indexName: INDEX_NAME,
-          searchParams: { query: '', hitsPerPage: 0, page: 0 },
+          searchParams: { query: '', hitsPerPage: PAGE_SIZE, page: 0, ...(filters ? { filters } : {}) },
         });
         const nbPages = probe.nbPages ?? 1;
-        effectivePage = Math.floor(Math.random() * nbPages);
+        effectivePage = nbPages > 0 ? Math.floor(Math.random() * nbPages) : 0;
       }
 
       const result = await client.searchSingleIndex({
@@ -307,6 +386,7 @@ import '../../styles/reccard.css';
     for (const hit of hits) {
       resultsEl.insertAdjacentHTML('beforeend', renderRecordingCard(hit, activeTags));
     }
+    void hydrateRatings(resultsEl);
     if (initExpandID && !append) {
       const card = resultsEl.querySelector(`[data-objectid="${CSS.escape(initExpandID)}"]`) as HTMLElement | null;
       if (card) {
@@ -357,6 +437,18 @@ import '../../styles/reccard.css';
   });
 
   function readParams(p: URLSearchParams) {
+    // A link that names formats is an explicit request from whoever shared it
+    // and outranks the reader's standing preference for as long as they are on
+    // it. A link that names none leaves the preference alone.
+    const urlFormats = p.getAll('format');
+    const urlLevels = p.getAll('level');
+    if (urlFormats.length || urlLevels.length) {
+      prefs = clean({
+        formats: urlFormats.length ? urlFormats : [...FORMATS],
+        levels: urlLevels.length ? urlLevels : [...LEVELS],
+      });
+      paintKinds();
+    }
     currentQuery = p.get('q') || '';
     currentYear = p.get('year') || '';
     currentAffType = p.get('affType') || '';
@@ -378,12 +470,29 @@ import '../../styles/reccard.css';
   });
 
   const initParams = new URLSearchParams(window.location.search);
+  // The browser's copy is available now; the account's may take a request, and
+  // waiting on it would leave the list blank for anyone signed in.
+  prefs = readLocal();
+  paintKinds();
   readParams(initParams);
   const initExpandID = initParams.get('expand') || '';
   renderActiveFilters();
 
   void loadFilterOptions();
   search(0, false);
+
+  /** Reconciles with the account, and only redraws if it disagrees. */
+  async function syncPrefs() {
+    if (initParams.getAll('format').length || initParams.getAll('level').length) return;
+    const stored = await loadPrefs();
+    if (JSON.stringify(stored) === JSON.stringify(prefs)) return;
+    prefs = stored;
+    paintKinds();
+    search(0, false);
+  }
+
+  void syncPrefs();
+  document.addEventListener('gt:signed-in', () => { void syncPrefs(); });
 </script>
 
 <style is:global>
@@ -403,4 +512,51 @@ import '../../styles/reccard.css';
     color: var(--ink);
   }
 
+  /* Its own row: these two decide what the list is, the rest narrow it. */
+  .toolbar-kinds {
+    padding-bottom: 1rem;
+    gap: 0.75rem 1.25rem;
+  }
+
+  /* Butted together with the shared border collapsed, so a pair of choices
+     reads as one control rather than two unrelated chips. */
+  .seg {
+    display: flex;
+  }
+
+  .seg .chip + .chip {
+    margin-left: -1px;
+  }
+
+  .seg .chip[aria-pressed='true'] {
+    position: relative;
+  }
+
+  .kinds-tip {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+  }
+
+  .kinds-tip[hidden] {
+    display: none;
+  }
+
+  .kinds-tip-close {
+    background: none;
+    border: none;
+    padding: 0 0 0 0.25rem;
+    cursor: pointer;
+    color: rgba(23, 21, 15, 0.35);
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .kinds-tip-close:hover {
+    color: var(--ink);
+  }
 </style>

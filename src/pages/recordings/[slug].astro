@@ -83,6 +83,9 @@ if (entry.neg) facts.push(['neg', entry.neg]);
         </nav>
 
         <h1 class="page-title rec-title">{entry.title}</h1>
+        <!-- Filled in by the client: the average is a live number, and this
+             page is built once and served to everyone. -->
+        <div class="rec-rating" id="rec-rating" data-slug={slug}></div>
         {meta && <p class="page-lede">{meta}</p>}
       </div>
 
@@ -423,6 +426,11 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 </style>
 
 <script>
+  import { mountRating } from '../../lib/stars';
+
+  const ratingHost = document.getElementById('rec-rating');
+  if (ratingHost?.dataset.slug) mountRating(ratingHost, ratingHost.dataset.slug);
+
   // Reveal and re-blur, matching the decisions on the recordings list. Reading
   // a result and hiding it again is the normal way to use this.
   const decision = document.getElementById('decision');
