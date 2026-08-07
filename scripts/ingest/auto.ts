@@ -157,19 +157,35 @@ async function main() {
   }
 }
 
-/** The R2 domain caches by URL, including 404s from before a file existed. */
+/**
+ * The R2 domain caches by URL, including 404s from before a file existed.
+ *
+ * It also caches by Origin, because the responses carry `vary: Origin` for
+ * CORS. That means there are two cached copies of every file: the one a plain
+ * request gets, and the one the site itself gets. Purging the plain URL clears
+ * only the first, so for a long time the index could be republished, verified
+ * by hand with curl, and still be the old one as far as every actual visitor
+ * was concerned. Both variants have to be named.
+ */
 async function purge(slugs: string[]) {
   const key = process.env.CLOUDFLARE_API_TOKEN;
   const zone = process.env.CLOUDFLARE_ZONE_ID ?? '7627240c9688e6514a397b9509758a2a';
   const email = process.env.CLOUDFLARE_EMAIL ?? 'tejas.prabhune@gmail.com';
   if (!key) return;
 
-  const files = ['https://media.goldenturn.org/index.json'];
+  const urls = ['https://media.goldenturn.org/index.json'];
   for (const s of new Set(slugs)) {
     for (const p of ['audio', 'peaks', 'transcripts', 'speeches']) {
-      files.push(`https://media.goldenturn.org/${p}/${s}.${p === 'audio' ? 'm4a' : 'json'}`);
+      urls.push(`https://media.goldenturn.org/${p}/${s}.${p === 'audio' ? 'm4a' : 'json'}`);
     }
   }
+
+  const files: Array<string | { url: string; headers: Record<string, string> }> = [];
+  for (const url of urls) {
+    files.push(url);
+    files.push({ url, headers: { Origin: 'https://goldenturn.org' } });
+  }
+
   for (let i = 0; i < files.length; i += 30) {
     await fetch(`https://api.cloudflare.com/client/v4/zones/${zone}/purge_cache`, {
       method: 'POST',
@@ -177,7 +193,7 @@ async function purge(slugs: string[]) {
       body: JSON.stringify({ files: files.slice(i, i + 30) }),
     }).catch(() => {});
   }
-  console.log('purged the edge copies');
+  console.log(`purged ${urls.length} file(s), both cache variants`);
 }
 
 /**

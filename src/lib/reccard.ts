@@ -70,15 +70,23 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
           <!-- Stays empty, and hidden, until hydrateRatings finds this round
                has been rated. An unrated round says nothing rather than 0.0. -->
           <p class="rec-card__rating" hidden></p>
-          <p class="rec-card__resolution">${resolution}</p>
+          ${resolution ? `<p class="rec-card__resolution">${resolution}</p>` : ''}
+          <!--
+            A round nobody has written up yet has no aff, no neg and no
+            decision, which is every one of the policy rounds on the day they
+            arrived. An empty label reads as a missing value rather than as an
+            absent field, and a blurred decision chip with nothing behind it
+            invites a click that reveals nothing.
+          -->
+          ${aff || neg ? `
           <div class="rec-card__strategies">
-            <p class="rec-card__strategy"><span class="rec-card__label">Aff</span><span class="rec-card__strategy-text">${aff}</span></p>
-            <p class="rec-card__strategy"><span class="rec-card__label">Neg</span><span class="rec-card__strategy-text">${neg}</span></p>
-          </div>
+            ${aff ? `<p class="rec-card__strategy"><span class="rec-card__label">Aff</span><span class="rec-card__strategy-text">${aff}</span></p>` : ''}
+            ${neg ? `<p class="rec-card__strategy"><span class="rec-card__label">Neg</span><span class="rec-card__strategy-text">${neg}</span></p>` : ''}
+          </div>` : ''}
           <div class="rec-card__tags">${tagPills}</div>
         </div>
         <div class="rec-card__aside">
-          <span class="rec-card__decision" role="button" tabindex="0" aria-label="Reveal decision">${decision}</span>
+          ${decision ? `<span class="rec-card__decision" role="button" tabindex="0" aria-label="Reveal decision">${decision}</span>` : ''}
           <span class="rec-card__meta">${meta}</span>
         </div>
       </div>

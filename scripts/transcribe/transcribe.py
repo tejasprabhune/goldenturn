@@ -8,6 +8,7 @@ required rather than nice-to-have.
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import time
@@ -44,6 +45,16 @@ def _speakers(name):
 
 MIN_SPEAKERS = _speakers("MIN_SPEAKERS")
 MAX_SPEAKERS = _speakers("MAX_SPEAKERS")
+# Slow the audio before transcribing it.
+#
+# Policy debaters read at three hundred words a minute and more, which is well
+# outside what whisper was trained on, and it responds by dropping words rather
+# than by getting them wrong: on a measured round it returned about six words
+# in ten even where the audio is clean and dense. Playing the round at 0.75
+# brings the rate back into range at the cost of a third more GPU time. Pitch
+# is preserved, and every timestamp is scaled back afterwards so the transcript
+# still lines up with the audio a reader is listening to.
+TEMPO = float(os.environ.get("TEMPO", "1") or "1")
 # Cloudflare blocks urllib's default user agent with a 403, so every fetch
 # against media.goldenturn.org must identify itself as something else.
 USER_AGENT = "goldenturn-transcribe/1.0"
@@ -134,6 +145,18 @@ def main():
                 audio = whisperx.load_audio(path)
                 duration = len(audio) / 16000
 
+                if TEMPO != 1:
+                    slowed = os.path.join(tmp, "slow.wav")
+                    subprocess.run(
+                        ["ffmpeg", "-v", "error", "-y", "-i", path,
+                         "-filter:a", f"atempo={TEMPO}", "-ac", "1", "-ar", "16000",
+                         slowed],
+                        check=True,
+                    )
+                    audio = whisperx.load_audio(slowed)
+                    print(f"  slowed to {TEMPO}x: {duration:.0f}s -> "
+                          f"{len(audio) / 16000:.0f}s", flush=True)
+
                 result = model.transcribe(audio, batch_size=BATCH, language="en")
                 result = whisperx.align(
                     result["segments"], align_model, align_meta, audio, device,
@@ -149,11 +172,29 @@ def main():
                         diarize(audio, **bounds), result
                     )
 
+                # Every time in the result is a time in the slowed audio. The
+                # reader is listening to the original, so put them back before
+                # anything downstream sees them. Missed here, a transcript would
+                # run a third behind the round and every speech boundary the
+                # fitter found would be wrong.
+                if TEMPO != 1:
+                    for s in result["segments"]:
+                        for field in ("start", "end"):
+                            if s.get(field) is not None:
+                                s[field] = s[field] * TEMPO
+                        for w in s.get("words", []):
+                            for field in ("start", "end"):
+                                if w.get(field) is not None:
+                                    w[field] = w[field] * TEMPO
+
                 payload = {
                     "slug": slug,
                     "model": MODEL,
                     "duration": duration,
                     "diarized": diarize is not None,
+                    # Recorded so a transcript can say how it was made, and two
+                    # runs of the same round can be told apart.
+                    "tempo": TEMPO,
                     "segments": [
                         {
                             "start": s.get("start"),
