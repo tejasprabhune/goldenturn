@@ -88,6 +88,26 @@ export function filenameFromLink(link: string): string {
   return decodeURIComponent(link.split('?')[0].split('/').pop() ?? '');
 }
 
+/**
+ * A round's permalink and media key. Mirrors recordingSlug in
+ * src/lib/recordings.ts, and the two must not drift: the site looks for audio
+ * at the slug it builds, so a mismatch is a round with a silent player.
+ *
+ * It lives here rather than beside the script that first needed it because
+ * every ingest script needs it, and importing it from one that runs on import
+ * starts a download nobody asked for.
+ */
+export function slugFor(title: string, objectID: string): string {
+  const base = (title ?? 'round')
+    .toLowerCase()
+    .replace(/['']/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 70)
+    .replace(/-+$/g, '');
+  return `${base}-${objectID.replace(/[^a-z0-9]/gi, '').slice(0, 6).toLowerCase()}`;
+}
+
 export function loadEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing ${name} in .env`);

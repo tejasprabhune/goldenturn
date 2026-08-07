@@ -22,23 +22,12 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import type { PolicyRound } from './policy-source';
+import { slugFor } from './lib';
 
 const run = promisify(execFile);
 const BUCKET = 'goldenturn-media';
 const SOURCE = join('scripts', 'ingest', 'policy-rounds.json');
 const PEAK_BUCKETS = 3000;
-
-/** Mirrors recordingSlug in src/lib/recordings.ts; the two must not drift. */
-export function slugFor(title: string, objectID: string): string {
-  const base = title
-    .toLowerCase()
-    .replace(/['']/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 70)
-    .replace(/-+$/g, '');
-  return `${base}-${objectID.replace(/[^a-z0-9]/gi, '').slice(0, 6).toLowerCase()}`;
-}
 
 /**
  * Which shard owns a round.
