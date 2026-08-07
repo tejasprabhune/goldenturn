@@ -11,6 +11,7 @@ import {
   mediaKind,
   youtubeId,
   vimeoId,
+  directMediaUrl,
   type Recording,
 } from '../../lib/recordings';
 
@@ -44,6 +45,10 @@ const videoEmbed = ytId
   : vimId
     ? { kind: 'vimeo' as const, id: vimId }
     : null;
+
+// A third of the parli rounds were recorded as video and only ever had their
+// audio pulled, so the picture is sitting at the original link unwatched.
+const videoFile = kind === 'video' ? directMediaUrl(entry.link) : null;
 
 const meta = [entry.year, entry.tournament].filter(Boolean).join(', ');
 const tags = (entry._tags ?? []).filter(t => t.startsWith('#'));
@@ -120,6 +125,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
               title={entry.title}
               hasMedia={hasMedia}
               videoEmbed={videoEmbed}
+              videoFile={videoFile}
               sourceLink={entry.link}
             />
             <p class="rec-original">
