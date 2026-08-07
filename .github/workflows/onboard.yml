@@ -80,6 +80,9 @@ jobs:
           # run that takes two rounds spends a tenth of itself starting up. With
           # hundreds outstanding it is worth handing each job a longer stint.
           TX_LIMIT: '60'
+          # Every GPU job, not the five the script defaults to. They are only
+          # paid for while they run, and there are four hundred rounds waiting.
+          TX_JOBS: 'gt-rx-2,gt-rx-3,gt-rx-4,gt-rx-5,gt-rx-6,gt-rx-7,gt-rx-8,gt-rx-9,gt-rx-10,gt-rx-11'
         run: pnpm exec tsx scripts/ingest/auto.ts
 
       # Only when a round actually changed: a rebuild every twenty minutes
