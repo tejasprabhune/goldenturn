@@ -1,10 +1,14 @@
 /**
- * The six parli speeches, shared by the player and the transcript.
+ * A round's speeches, shared by the player and the transcript.
  *
  * Both read the machine fit from R2 and both have to lay the same accepted
  * timing corrections over it, so the merge lives here rather than in each
  * component. A boundary that moved in the player has to move the transcript's
  * dividers, tinting and minimap with it.
+ *
+ * Two formats, and which one a round is can always be told from the labels it
+ * carries: no parli speech is called 1AC and no policy speech is called PMC.
+ * That means nothing that draws a round has to be told what kind it is.
  */
 
 export interface Speech {
@@ -21,14 +25,33 @@ export interface Revision {
 }
 
 /** Aff speeches read gold, neg read sky. */
-export const AFF = new Set(['PMC', 'MG', 'PMR']);
+export const AFF = new Set(['PMC', 'MG', 'PMR', '1AC', '2AC', '1AR', '2AR']);
 
 export function sideOf(label: string): 'aff' | 'neg' {
   return AFF.has(label) ? 'aff' : 'neg';
 }
 
+export type RoundFormat = 'parli' | 'policy';
+
+/** The speeches of each format, in the order they are given. */
+export const SPEECH_SETS: Record<RoundFormat, readonly string[]> = {
+  parli: ['PMC', 'LOC', 'MG', 'MO', 'LOR', 'PMR'],
+  policy: ['1AC', '1NC', '2AC', '2NC', '1NR', '1AR', '2NR', '2AR'],
+};
+
 /** The six speeches of a parli round, in the order they are given. */
-export const SPEECH_ORDER = ['PMC', 'LOC', 'MG', 'MO', 'LOR', 'PMR'] as const;
+export const SPEECH_ORDER = SPEECH_SETS.parli;
+
+/**
+ * Which format a set of speech labels belongs to.
+ *
+ * The two vocabularies do not overlap, so one policy label anywhere settles
+ * it, and a round with nothing recognisable is parli, which is what the
+ * archive was before it was anything else.
+ */
+export function formatOf(labels: string[]): RoundFormat {
+  return labels.some(l => SPEECH_SETS.policy.includes(l)) ? 'policy' : 'parli';
+}
 
 /** Whether the fitter actually found this speech. */
 export function placed(s: Speech): boolean {
@@ -43,11 +66,12 @@ export function placed(s: Speech): boolean {
  * out cannot be offered for correction or carry an accepted one. Anything that
  * draws or jumps filters with `placed` at the point of use instead.
  */
-export function usable(speeches: Speech[]): Speech[] {
+export function usable(speeches: Speech[], format?: RoundFormat): Speech[] {
+  const order = SPEECH_SETS[format ?? formatOf(speeches.map(s => s.label))];
   const known = new Map(speeches.map(s => [s.label, s]));
-  const extra = speeches.filter(s => !(SPEECH_ORDER as readonly string[]).includes(s.label));
+  const extra = speeches.filter(s => !order.includes(s.label));
   return [
-    ...SPEECH_ORDER.map(label => known.get(label) ?? { label, start: 0, end: 0, confidence: 0 }),
+    ...order.map(label => known.get(label) ?? { label, start: 0, end: 0, confidence: 0 }),
     ...extra,
   ];
 }

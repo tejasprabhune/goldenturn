@@ -26,6 +26,16 @@ SHARD = int(os.environ.get("SHARD", "0"))
 SHARD_COUNT = int(os.environ.get("SHARD_COUNT", "1"))
 LIMIT = int(os.environ.get("LIMIT", "100000"))
 HF_TOKEN = os.environ.get("HF_TOKEN")
+# How many voices to expect.
+#
+# Left to itself pyannote decides, and on a recorded round it decides badly:
+# on a policy round it gave one label twenty three minutes and spread the rest
+# over nine more, which is four debaters merged into one and a lot of noise
+# promoted to people. A round has four debaters and a judge, and saying so is
+# the difference between speaker labels the fitter can use and labels it
+# cannot.
+MIN_SPEAKERS = int(os.environ.get("MIN_SPEAKERS", "3"))
+MAX_SPEAKERS = int(os.environ.get("MAX_SPEAKERS", "6"))
 # Cloudflare blocks urllib's default user agent with a 403, so every fetch
 # against media.goldenturn.org must identify itself as something else.
 USER_AGENT = "goldenturn-transcribe/1.0"
@@ -95,7 +105,10 @@ def main():
     done = failed = skipped = 0
     for slug in todo:
         key = f"transcripts/{slug}.json"
-        if already_done(client, key):
+        # FORCE is for changing how transcription is done: without it a round
+        # keeps whatever it got the first time, and a fix to the settings could
+        # never be applied to anything already processed.
+        if not os.environ.get("FORCE") and already_done(client, key):
             skipped += 1
             continue
 
@@ -119,7 +132,12 @@ def main():
                     return_char_alignments=False,
                 )
                 if diarize:
-                    result = whisperx.assign_word_speakers(diarize(audio), result)
+                    turns = diarize(
+                        audio,
+                        min_speakers=MIN_SPEAKERS,
+                        max_speakers=MAX_SPEAKERS,
+                    )
+                    result = whisperx.assign_word_speakers(turns, result)
 
                 payload = {
                     "slug": slug,

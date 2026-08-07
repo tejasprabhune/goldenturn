@@ -454,7 +454,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   } from '../lib/api';
   import {
     sideOf, usable, placed, byTime, applyBoundaries, parseSpan, withSpans,
-    conflicts, SPEECH_ORDER, type Speech, type Span,
+    conflicts, SPEECH_SETS, formatOf, type Speech, type Span,
   } from '../lib/speeches';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
@@ -807,8 +807,9 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       rows.innerHTML = '';
       // Canonical order, not time order, so an unplaced speech sits where it
       // belongs in the round rather than being pushed to the end.
+      const order = SPEECH_SETS[formatOf(fitted.map(s => s.label))];
       const inOrder = [...fitted].sort(
-        (a, b) => SPEECH_ORDER.indexOf(a.label as any) - SPEECH_ORDER.indexOf(b.label as any));
+        (a, b) => order.indexOf(a.label) - order.indexOf(b.label));
 
       for (const s of inOrder) {
         const d = draft[s.label];
