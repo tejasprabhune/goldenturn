@@ -10,10 +10,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   <div class="shell page-body" id="me-body" hidden>
     <div class="me-grid">
-      <section class="me-block">
+      <section class="me-block me-block--wide">
         <p class="section-head">Saved rounds</p>
         <ul class="row-list" id="me-favorites"></ul>
         <p class="me-empty" id="me-favorites-empty" hidden>Nothing saved yet.</p>
+      </section>
+
+      <section class="me-block me-block--wide">
+        <p class="section-head">Rounds you rated</p>
+        <ul class="row-list" id="me-ratings"></ul>
+        <p class="me-empty" id="me-ratings-empty" hidden>Nothing rated yet.</p>
       </section>
 
       <section class="me-block">
@@ -57,7 +63,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       gap: 3rem;
     }
 
-    .me-block:first-child {
+    /* Lists of rounds run the full width; the short lists sit side by side. */
+    .me-block--wide {
       grid-column: 1 / -1;
     }
   }
@@ -106,8 +113,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 </style>
 
 <script>
-  import { getUser, signOut, listFavorites, listNotes, listTags, isAdmin, NotSignedIn } from '../lib/api';
+  import {
+    getUser, signOut, listFavorites, listNotes, listTags, listMyRatings,
+    isAdmin, NotSignedIn,
+  } from '../lib/api';
   import { formatTime } from '../lib/waveform';
+  import { ownStarsHtml } from '../lib/stars';
 
   const title = document.getElementById('me-title')!;
   const lede = document.getElementById('me-lede')!;
@@ -136,8 +147,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     if (adminLink) adminLink.hidden = !isAdmin();
 
     try {
-      const [{ favorites }, { notes }, { tags }] = await Promise.all([
-        listFavorites(), listNotes(), listTags(),
+      const [{ favorites }, { notes }, { tags }, { ratings }] = await Promise.all([
+        listFavorites(), listNotes(), listTags(), listMyRatings(),
       ]);
 
       const favList = document.getElementById('me-favorites')!;
@@ -160,6 +171,30 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         a.append(idx, t, meta);
         li.appendChild(a);
         favList.appendChild(li);
+      });
+
+      // Already ranked by the server, best first, because that is the question
+      // this list answers.
+      const ratedList = document.getElementById('me-ratings')!;
+      ratedList.innerHTML = '';
+      document.getElementById('me-ratings-empty')!.hidden = ratings.length > 0;
+      ratings.forEach((r, i) => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.className = 'row';
+        a.href = `/recordings/${r.slug}`;
+        const idx = document.createElement('span');
+        idx.className = 'row-index';
+        idx.textContent = String(i + 1).padStart(2, '0');
+        const t = document.createElement('span');
+        t.className = 'row-title';
+        t.textContent = titleCase(r.slug);
+        const meta = document.createElement('span');
+        meta.className = 'row-meta';
+        meta.innerHTML = ownStarsHtml(r.stars);
+        a.append(idx, t, meta);
+        li.appendChild(a);
+        ratedList.appendChild(li);
       });
 
       const tagBox = document.getElementById('me-tags')!;

@@ -34,6 +34,23 @@ export function ratingHtml(average: number, count: number): string {
     </span>`;
 }
 
+/**
+ * One person's own rating, with no average and no count beside it.
+ *
+ * Used where the number is already known to be theirs, so saying "4.0 (1)"
+ * would be answering a question nobody asked.
+ */
+export function ownStarsHtml(stars: number): string {
+  const pct = Math.max(0, Math.min(100, (stars / 5) * 100));
+  return `
+    <span class="stars" role="img" aria-label="${stars} out of 5">
+      <span class="stars__glyphs" aria-hidden="true"
+        ><span class="stars__track">${GLYPHS}</span
+        ><span class="stars__fill" style="width: ${pct}%">${GLYPHS}</span
+      ></span>
+    </span>`;
+}
+
 /** Repaints an existing block in place, so a rating never remounts its own DOM. */
 function paint(el: HTMLElement, average: number, count: number) {
   const fill = el.querySelector('.stars__fill') as HTMLElement | null;

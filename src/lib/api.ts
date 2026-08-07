@@ -243,6 +243,12 @@ export function getRatings(slugs: string[]) {
     { method: 'POST', body: JSON.stringify({ slugs }) });
 }
 
+/** Every round this reader has rated, their own highest first. */
+export function listMyRatings() {
+  return call<{ ratings: Array<{ slug: string; stars: number; updated_at: number }> }>(
+    '/me/ratings', {}, true);
+}
+
 export function getPrefs() {
   return call<{ prefs: Record<string, unknown> }>('/me/prefs', {}, true);
 }

@@ -719,6 +719,21 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
    * Standing preferences, so a choice made once follows the person rather than
    * the browser they made it in.
    */
+  /**
+   * The rounds this reader has rated, their own best first.
+   *
+   * Ordered here rather than in the page, because "which rounds did I think
+   * were worth it" is the question being asked and the answer is a ranking.
+   */
+  'GET /me/ratings': async (_req, env, _url, user) => {
+    if (!user) return json({ error: 'not signed in' }, { status: 401 });
+    const { results } = await env.DB.prepare(
+      `SELECT slug, stars, updated_at FROM ratings
+        WHERE user_id = ?1 ORDER BY stars DESC, updated_at DESC`
+    ).bind(user.id).all();
+    return json({ ratings: results });
+  },
+
   'GET /me/prefs': async (_req, env, _url, user) => {
     if (!user) return json({ error: 'not signed in' }, { status: 401 });
     const row = await env.DB.prepare(`SELECT prefs FROM users WHERE id = ?1`)
