@@ -107,7 +107,12 @@ async function ingest(round: PolicyRound, slug: string, client: S3Client) {
     // setting rather than something baked in here, and cookies can be handed
     // in the same way when no client is enough.
     const extra = (process.env.YTDLP_ARGS ?? '').split(' ').filter(Boolean);
-    await run('yt-dlp', ['-f', 'bestaudio/best', '-o', join(dir, 'src.%(ext)s'),
+    // Everything here ends up as 64k mono AAC, and whisper hears it at 16kHz
+    // mono, so YouTube's 160kbps stereo stream is three times the bytes for no
+    // difference anyone or anything downstream can detect. Over four hundred
+    // two-hour rounds that is the difference between a morning and a day.
+    await run('yt-dlp', ['-f', 'bestaudio[abr<=80]/bestaudio/best',
+      '-o', join(dir, 'src.%(ext)s'),
       '--no-playlist', '--no-progress', '--quiet', ...extra, round.link],
       { maxBuffer: 1024 * 1024 * 32 });
     const downloaded = readdirSync(dir).find(f => f.startsWith('src.'));
@@ -178,21 +183,31 @@ async function main() {
   if (shardCount > 1) console.log(`shard ${shard} of ${shardCount}: ${queue.length} outstanding here`);
   console.log(`pulling ${batch.length}\n`);
 
+  // A round is a download, a transcode and an upload, and only the middle one
+  // wants the CPU, so several at once finish far sooner than several in a row.
+  // Kept modest: this is somebody's own connection and somebody else's server.
+  const concurrency = Math.max(1, Number(arg('--concurrency') ?? process.env.CONCURRENCY ?? '5'));
   let done = 0;
-  for (const r of batch) {
-    const slug = slugFor(r.title, r.objectID);
-    process.stdout.write(`${r.title} (${r.tournament} ${r.year})\n`);
-    try {
-      const res = await ingest(r, slug, client);
-      console.log(`  ${Math.round(res.duration / 60)}min  ${res.audioMB}MB  -> ${slug}\n`);
-      done += 1;
-    } catch (err) {
-      // The whole message: yt-dlp puts the reason a video would not download
-      // well past the first two hundred characters of its complaint.
-      const e = err as Error & { stderr?: string };
-      console.log(`  FAILED ${(e.stderr || e.message).trim().slice(0, 900)}\n`);
+  let next = 0;
+
+  async function worker() {
+    while (next < batch.length) {
+      const r = batch[next++];
+      const slug = slugFor(r.title, r.objectID);
+      try {
+        const res = await ingest(r, slug, client);
+        console.log(`  ${Math.round(res.duration / 60)}min  ${res.audioMB}MB  -> ${slug}`);
+        done += 1;
+      } catch (err) {
+        // The whole message: yt-dlp puts the reason a video would not download
+        // well past the first two hundred characters of its complaint.
+        const e = err as Error & { stderr?: string };
+        console.log(`  FAILED ${r.title}: ${(e.stderr || e.message).trim().slice(0, 300)}`);
+      }
     }
   }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, batch.length) }, worker));
 
   console.log(`${done} of ${batch.length} pulled; ${Math.max(0, queue.length - done)} left in this queue`);
   if (done) console.log('next: a transcription run picks these up, then segment/run.ts fits them');

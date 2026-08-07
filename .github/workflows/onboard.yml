@@ -70,6 +70,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           GT_ADMIN_TOKEN: ${{ secrets.GT_ADMIN_TOKEN }}
+          # The fitter asks the index what format each round is, because
+          # fitting a policy round as parli would look for six speeches that
+          # are not there. Without these it would quietly assume parli.
+          PUBLIC_ALGOLIA_APP_ID: CS1MDMNJTO
+          PUBLIC_ALGOLIA_SEARCH_KEY: ${{ secrets.ALGOLIA_SEARCH_KEY }}
+          PUBLIC_ALGOLIA_INDEX_NAME: all_rounds
+          # Each execution loads the model before it transcribes anything, so a
+          # run that takes two rounds spends a tenth of itself starting up. With
+          # hundreds outstanding it is worth handing each job a longer stint.
+          TX_LIMIT: '60'
         run: pnpm exec tsx scripts/ingest/auto.ts
 
       # Only when a round actually changed: a rebuild every twenty minutes
