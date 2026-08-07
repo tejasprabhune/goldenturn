@@ -196,10 +196,65 @@ async function main() {
     console.log(`  ${seasonLabel(best.y)}  ${String(best.n).padStart(4)} vs ${second?.n ?? 0}  ${round.title.slice(0, 50)}`);
   }
 
-  console.log(`\n${updates.length} round(s) matched to a topic`);
+  console.log(`\n${updates.length} round(s) matched to a topic from their own transcript`);
   console.log(`  not transcribed yet : ${notTranscribed}`);
   console.log(`  no usable year      : ${noYear}`);
   console.log(`  too close to call   : ${tooClose}`);
+
+  /**
+   * What the matched rounds imply about the rest.
+   *
+   * A tournament runs at the same time of year every year, so once enough of
+   * its rounds have been matched from their own transcripts, the gap between
+   * its calendar year and its season is a fact about the tournament rather
+   * than about any one round: an autumn tournament in 2016 is the 2016-17
+   * topic, a spring one is 2015-16. That settles every round of that
+   * tournament, including the ones with no transcript and the ones whose own
+   * transcript was too thin to call.
+   *
+   * Only where its own rounds agree. One sample is a coincidence and a
+   * tournament that has moved between autumn and spring over thirty years has
+   * no single answer, so both are left to be matched one at a time.
+   */
+  const byTournament = new Map<string, Map<number, number>>();
+  const matched = new Map(updates.map(u => [u.objectID, u]));
+  for (const round of rounds) {
+    const u = matched.get(round.objectID);
+    if (!u || !round.tournament) continue;
+    const offset = Number(u.year.slice(0, 4)) - Number(round.year);
+    const seen = byTournament.get(round.tournament) ?? new Map<number, number>();
+    seen.set(offset, (seen.get(offset) ?? 0) + 1);
+    byTournament.set(round.tournament, seen);
+  }
+
+  const MIN_AGREEING = 3;
+  const offsets = new Map<string, number>();
+  for (const [tournament, seen] of byTournament) {
+    if (seen.size !== 1) continue;
+    const [[offset, n]] = [...seen];
+    if (n >= MIN_AGREEING) offsets.set(tournament, offset);
+  }
+
+  let spread = 0;
+  for (const round of rounds) {
+    if (matched.has(round.objectID)) continue;
+    const offset = offsets.get(round.tournament);
+    if (offset === undefined) continue;
+    const season = Number(round.year) + offset;
+    if (!TOPICS[season]) continue;
+    updates.push({ objectID: round.objectID, resolution: TOPICS[season], year: seasonLabel(season) });
+    spread += 1;
+  }
+
+  if (offsets.size) {
+    console.log(`\nseasons settled for ${offsets.size} tournament(s): `
+      + [...offsets].map(([t, o]) => `${t} ${o === 0 ? 'autumn' : 'spring'}`).join(', '));
+    console.log(`  which gives ${spread} more round(s) their topic`);
+  }
+  const undecided = [...byTournament].filter(([, seen]) => seen.size > 1);
+  if (undecided.length) {
+    console.log(`  disagreeing, left per-round: ${undecided.map(([t]) => t).join(', ')}`);
+  }
 
   if (!updates.length || dry) {
     if (dry) console.log('\n--dry, nothing written');
