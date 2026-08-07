@@ -401,6 +401,16 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     min-height: 46px;
     cursor: pointer;
     padding: 0;
+    /*
+     * Two taps in quick succession on the same spot is a double-tap, and a
+     * browser reads that as zoom. But moving thirty seconds twice is the
+     * ordinary way to use these, so the gesture has to go. Only here, and only
+     * the double-tap: taking zoom off the page altogether would leave anyone
+     * who needs to magnify the transcript unable to.
+     */
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .nowbar-btn:first-child {
