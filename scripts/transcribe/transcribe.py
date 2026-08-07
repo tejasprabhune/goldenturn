@@ -34,8 +34,16 @@ HF_TOKEN = os.environ.get("HF_TOKEN")
 # promoted to people. A round has four debaters and a judge, and saying so is
 # the difference between speaker labels the fitter can use and labels it
 # cannot.
-MIN_SPEAKERS = int(os.environ.get("MIN_SPEAKERS", "3"))
-MAX_SPEAKERS = int(os.environ.get("MAX_SPEAKERS", "6"))
+# Blank means unset, not zero. The CLI has no way to remove an environment
+# variable from a job, only to set it to nothing, so a job that has once been
+# given a bound has to be able to give it back.
+def _speakers(name):
+    raw = (os.environ.get(name) or "").strip()
+    return int(raw) if raw else None
+
+
+MIN_SPEAKERS = _speakers("MIN_SPEAKERS")
+MAX_SPEAKERS = _speakers("MAX_SPEAKERS")
 # Cloudflare blocks urllib's default user agent with a 403, so every fetch
 # against media.goldenturn.org must identify itself as something else.
 USER_AGENT = "goldenturn-transcribe/1.0"
@@ -132,12 +140,14 @@ def main():
                     return_char_alignments=False,
                 )
                 if diarize:
-                    turns = diarize(
-                        audio,
-                        min_speakers=MIN_SPEAKERS,
-                        max_speakers=MAX_SPEAKERS,
+                    bounds = {}
+                    if MIN_SPEAKERS:
+                        bounds["min_speakers"] = MIN_SPEAKERS
+                    if MAX_SPEAKERS:
+                        bounds["max_speakers"] = MAX_SPEAKERS
+                    result = whisperx.assign_word_speakers(
+                        diarize(audio, **bounds), result
                     )
-                    result = whisperx.assign_word_speakers(turns, result)
 
                 payload = {
                     "slug": slug,
