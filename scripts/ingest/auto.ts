@@ -154,7 +154,20 @@ async function main() {
     changed = true;
   }
 
-  // 4. The index decides what the site treats as playable.
+  // 4. Give newly transcribed policy rounds their topic. A round's resolution
+  //    is worked out from what was said in it, so it can only be settled once
+  //    there is a transcript, and each one settled teaches the pass more about
+  //    which season its tournament belongs to.
+  if (unfitted.length && process.env.ALGOLIA_ADMIN_KEY) {
+    console.log('\nassigning topics to policy rounds');
+    try {
+      console.log(sh('npx', ['tsx', 'scripts/ingest/policy-topics.ts']).slice(-700));
+    } catch (err) {
+      console.log(`  could not assign topics (${(err as Error).message.slice(0, 120)})`);
+    }
+  }
+
+  // 5. The index decides what the site treats as playable.
   if (changed) {
     console.log('\nrepublishing the media index');
     console.log(sh('npx', ['tsx', 'scripts/ingest/publish-index.ts']));

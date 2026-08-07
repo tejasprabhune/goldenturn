@@ -76,6 +76,8 @@ jobs:
           PUBLIC_ALGOLIA_APP_ID: CS1MDMNJTO
           PUBLIC_ALGOLIA_SEARCH_KEY: ${{ secrets.ALGOLIA_SEARCH_KEY }}
           PUBLIC_ALGOLIA_INDEX_NAME: all_rounds
+          # Writing a round's topic back to the index is part of onboarding it.
+          ALGOLIA_ADMIN_KEY: ${{ secrets.ALGOLIA_ADMIN_KEY }}
           # Each execution loads the model before it transcribes anything, so a
           # run that takes two rounds spends a tenth of itself starting up. With
           # hundreds outstanding it is worth handing each job a longer stint.
