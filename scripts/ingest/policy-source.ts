@@ -53,11 +53,64 @@ function youtubeId(url: string): string | null {
   return m ? m[1] : null;
 }
 
-/** "Semifinals" plus "Kansas RS vs Emory GH", matching how the archive titles rounds. */
-function titleFor(round: string, teams: string): string {
-  // Some rows repeat the stage inside the teams field.
-  const cleaned = teams.replace(/^\s*[\w ]+:\s*/, '').trim();
-  return round ? `${round} - ${cleaned}` : cleaned;
+/**
+ * The stage of the tournament, however this row happens to spell it.
+ *
+ * The database was filled in by hand over years, so the stage turns up in its
+ * own column, or glued to the front of the teams, or both, and spelled Octas,
+ * Octafinals or once Ocats. Everything maps onto the vocabulary the rest of
+ * the archive already uses.
+ */
+// Longest spelling first in every alternation. "Octa" placed before "Octas"
+// matches the shorter one and leaves the s behind, turning a team name into
+// "s CSU Long Beach FO".
+const STAGES: Array<[RegExp, string]> = [
+  [/^round\s*(\d+)/i, 'Round $1'],
+  [/^(double-?octafinals|double-?octas|doubles)/i, 'Doubles'],
+  [/^(triple-?octafinals|triple-?octas|triples)/i, 'Triples'],
+  [/^(octafinals|ocats|octas|octa)/i, 'Octafinals'],
+  [/^(quarterfinals|quarters|quarter)/i, 'Quarterfinals'],
+  [/^(semifinals|semis|semi)/i, 'Semifinals'],
+  [/^(finals|final)/i, 'Finals'],
+  [/^(prelims|prelim)/i, 'Prelim'],
+  [/^fyb/i, 'FYB'],
+];
+
+function canonicalStage(raw: string): string {
+  const t = raw.trim();
+  for (const [re, name] of STAGES) {
+    if (re.test(t)) return t.replace(re, name).split(/\s{2,}|:/)[0].trim();
+  }
+  return t;
+}
+
+/** Pulls a stage off the front of a team string, returning both parts. */
+function splitStage(teams: string): { stage: string; rest: string } {
+  const t = teams.replace(/^\s*[\w ]+:\s*/, '').trim();
+  for (const [re, name] of STAGES) {
+    const m = t.match(re);
+    if (!m) continue;
+    const rest = t.slice(m[0].length).replace(/^[\s:.-]+/, '').trim();
+    // Only a prefix, never the whole thing: "Finals" alone is not two teams.
+    if (rest) return { stage: name.replace('$1', m[1] ?? ''), rest };
+  }
+  return { stage: '', rest: t };
+}
+
+/**
+ * "Semifinals - Kansas RS vs Emory GH", matching how the archive titles rounds.
+ *
+ * A round whose stage nobody recorded says so rather than quietly dropping the
+ * field, so every policy round reads the same way in a list and a reader can
+ * tell "we do not know" from "this was a prelim".
+ */
+function titleFor(round: string, teams: string, fallback: string): string {
+  const source = teams.trim() || fallback.replace(/^[^:]*:\s*/, '');
+  const { stage, rest } = splitStage(source);
+  const named = round.trim() ? canonicalStage(round) : stage;
+  const who = rest || source;
+  if (!who) return named || 'Round UNK';
+  return `${named || 'Round UNK'} - ${who}`;
 }
 
 async function main() {
@@ -107,7 +160,7 @@ async function main() {
 
     rounds.push({
       objectID: id,
-      title: titleFor(round, teams || get('Title')),
+      title: titleFor(round, teams, get('Title')),
       link,
       teams,
       tournament: get('Tournament'),
