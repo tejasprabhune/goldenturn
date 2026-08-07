@@ -32,6 +32,23 @@ function sh(cmd: string, args: string[]): string {
   return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 });
 }
 
+/**
+ * Whether a transcription job still has work in flight.
+ *
+ * Treated as busy when the answer cannot be got: refusing to start a job that
+ * might already be running costs a delay, and starting one that is costs a
+ * second GPU for as long as it takes.
+ */
+function isRunning(job: string): boolean {
+  try {
+    const out = sh('az', ['containerapp', 'job', 'execution', 'list', '-n', job,
+      '-g', RG, '--query', "[?properties.status=='Running'] | length(@)", '-o', 'tsv']);
+    return Number(out.trim()) > 0;
+  } catch {
+    return true;
+  }
+}
+
 function s3(): S3Client {
   return new S3Client({
     region: 'auto',
@@ -93,11 +110,22 @@ async function main() {
   const untranscribed = playable.filter(s => !transcripts.has(s)).slice(0, TX_LIMIT);
 
   if (untranscribed.length) {
+    // A job that is still working is not asked to take more on. Starting it
+    // again does not queue behind the first, it runs a second replica on a
+    // second GPU, and this runs on a schedule: with a backlog and no check,
+    // every run would stack more paid GPUs on top of the ones already going.
+    const idle = TX_JOBS.filter(job => !isRunning(job));
     console.log(`\nstarting transcription for ${untranscribed.length} round(s)`);
-    const perJob = Math.ceil(untranscribed.length / TX_JOBS.length);
-    for (let i = 0; i < TX_JOBS.length && i * perJob < untranscribed.length; i++) {
+    if (idle.length < TX_JOBS.length) {
+      console.log(`  ${TX_JOBS.length - idle.length} job(s) still busy from a previous run`);
+    }
+    if (!idle.length) {
+      console.log('  every job is busy; the rest wait for the next run');
+    }
+    const perJob = Math.ceil(untranscribed.length / Math.max(idle.length, 1));
+    for (let i = 0; i < idle.length && i * perJob < untranscribed.length; i++) {
       const batch = untranscribed.slice(i * perJob, (i + 1) * perJob);
-      const job = TX_JOBS[i];
+      const job = idle[i];
       try {
         sh('az', ['containerapp', 'job', 'update', '-n', job, '-g', RG,
           '--set-env-vars', `SLUGS=${batch.join(' ')}`, '-o', 'none']);
