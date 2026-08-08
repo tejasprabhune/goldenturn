@@ -74,6 +74,42 @@ export const TOPICS: Record<number, string> = {
   2025: 'The United States Federal Government should substantially strengthen collective bargaining rights for workers in the United States.',
 };
 
+/**
+ * Which half of the season each tournament's rounds belong to.
+ *
+ * The source records a calendar year, and the topic belongs to a season, so
+ * the only missing fact is whether a tournament runs before the new year or
+ * after it. That is a fixed property of each tournament, so it is written down
+ * here rather than worked out from statistics every run.
+ *
+ * These are not guesses. Each was read off the rounds whose own transcripts
+ * settle them, and the counts were lopsided: the NDT ninety four to one, the
+ * Shirley fifty three to one, the Kentucky Round Robin twenty six to nothing.
+ * The odd round that disagrees is either mislabelled in the source or a year
+ * out; it keeps whatever its own transcript says, because a round that speaks
+ * for itself is never overruled by its tournament.
+ *
+ * Northwestern is deliberately absent. It reads five to four, which is not an
+ * outlier but a tournament whose rows mean two different things by "year", so
+ * no single answer would be right and each round is left to its transcript.
+ */
+const SEASON_HALF: Record<string, 'autumn' | 'spring'> = {
+  NDT: 'spring',
+  CEDA: 'spring',
+  ADA: 'spring',
+  DartmouthRR: 'spring',
+  Fullerton: 'spring',
+  Texas: 'spring',
+  USC: 'spring',
+  CalSwing: 'spring',
+  Shirley: 'autumn',
+  KYRR: 'autumn',
+  Harvard: 'autumn',
+  GSU: 'autumn',
+  Gonzaga: 'autumn',
+  Emporia: 'autumn',
+};
+
 /** How a season is written for a reader, matching the parli rounds. */
 export function seasonLabel(autumnYear: number): string {
   return `${autumnYear}-${String((autumnYear + 1) % 100).padStart(2, '0')}`;
@@ -201,60 +237,33 @@ async function main() {
   console.log(`  no usable year      : ${noYear}`);
   console.log(`  too close to call   : ${tooClose}`);
 
-  /**
-   * What the matched rounds imply about the rest.
-   *
-   * A tournament runs at the same time of year every year, so once enough of
-   * its rounds have been matched from their own transcripts, the gap between
-   * its calendar year and its season is a fact about the tournament rather
-   * than about any one round: an autumn tournament in 2016 is the 2016-17
-   * topic, a spring one is 2015-16. That settles every round of that
-   * tournament, including the ones with no transcript and the ones whose own
-   * transcript was too thin to call.
-   *
-   * Only where its own rounds agree. One sample is a coincidence and a
-   * tournament that has moved between autumn and spring over thirty years has
-   * no single answer, so both are left to be matched one at a time.
+  /*
+   * Everything the transcripts could not settle, from the tournament's own
+   * half of the season. A round matched above keeps its own answer.
    */
-  const byTournament = new Map<string, Map<number, number>>();
-  const matched = new Map(updates.map(u => [u.objectID, u]));
-  for (const round of rounds) {
-    const u = matched.get(round.objectID);
-    if (!u || !round.tournament) continue;
-    const offset = Number(u.year.slice(0, 4)) - Number(round.year);
-    const seen = byTournament.get(round.tournament) ?? new Map<number, number>();
-    seen.set(offset, (seen.get(offset) ?? 0) + 1);
-    byTournament.set(round.tournament, seen);
-  }
-
-  const MIN_AGREEING = 3;
-  const offsets = new Map<string, number>();
-  for (const [tournament, seen] of byTournament) {
-    if (seen.size !== 1) continue;
-    const [[offset, n]] = [...seen];
-    if (n >= MIN_AGREEING) offsets.set(tournament, offset);
-  }
-
-  let spread = 0;
+  const matched = new Set(updates.map(u => u.objectID));
+  let filled = 0;
+  const unknownTournaments = new Set<string>();
   for (const round of rounds) {
     if (matched.has(round.objectID)) continue;
-    const offset = offsets.get(round.tournament);
-    if (offset === undefined) continue;
-    const season = Number(round.year) + offset;
+    const half = SEASON_HALF[round.tournament];
+    if (!half) {
+      if (round.tournament) unknownTournaments.add(round.tournament);
+      continue;
+    }
+    const calendar = Number(round.year);
+    if (!Number.isFinite(calendar) || calendar < 1990) continue;
+    const season = half === 'autumn' ? calendar : calendar - 1;
     if (!TOPICS[season]) continue;
     updates.push({ objectID: round.objectID, resolution: TOPICS[season], year: seasonLabel(season) });
-    spread += 1;
+    filled += 1;
   }
 
-  if (offsets.size) {
-    console.log(`\nseasons settled for ${offsets.size} tournament(s): `
-      + [...offsets].map(([t, o]) => `${t} ${o === 0 ? 'autumn' : 'spring'}`).join(', '));
-    console.log(`  which gives ${spread} more round(s) their topic`);
+  console.log(`${filled} more from their tournament's season`);
+  if (unknownTournaments.size) {
+    console.log(`  no season recorded for: ${[...unknownTournaments].join(', ')}`);
   }
-  const undecided = [...byTournament].filter(([, seen]) => seen.size > 1);
-  if (undecided.length) {
-    console.log(`  disagreeing, left per-round: ${undecided.map(([t]) => t).join(', ')}`);
-  }
+  console.log(`${updates.length} round(s) will carry a topic`);
 
   if (!updates.length || dry) {
     if (dry) console.log('\n--dry, nothing written');
