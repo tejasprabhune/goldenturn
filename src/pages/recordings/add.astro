@@ -46,6 +46,33 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <p class="validation-hint"></p>
       </div>
 
+      <!--
+        Format and level decide which readers ever see the round: the default
+        view is parli only, so a round that arrives without a label is filtered
+        out of the list it was submitted to. They are asked for, not guessed.
+      -->
+      <div class="mb-7">
+        <label class="form-label" for="field-format">Format <span class="form-required">required</span></label>
+        <p class="form-hint">Pick the format this round was debated in</p>
+        <select id="field-format" name="format" class="form-input" required>
+          <option value="">Choose one</option>
+          <option value="parli">parli</option>
+          <option value="policy">policy</option>
+        </select>
+        <p class="validation-hint"></p>
+      </div>
+
+      <div class="mb-7">
+        <label class="form-label" for="field-level">Level <span class="form-required">required</span></label>
+        <p class="form-hint">Pick the level the teams competed at</p>
+        <select id="field-level" name="level" class="form-input" required>
+          <option value="">Choose one</option>
+          <option value="college">college</option>
+          <option value="hs">high school</option>
+        </select>
+        <p class="validation-hint"></p>
+      </div>
+
       <div class="mb-7">
         <label class="form-label" for="field-resolution">Resolution</label>
         <input type="text" id="field-resolution" name="resolution" placeholder="The USFG should..."
@@ -149,6 +176,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .form-input::placeholder {
     color: rgba(23, 21, 15, 0.3);
   }
+  /* An unchosen select reads like an empty field, not like an answer. */
+  select.form-input:invalid {
+    color: rgba(23, 21, 15, 0.3);
+  }
+
   .form-input:focus {
     border-color: var(--sky-deep);
     box-shadow: inset 0 0 0 1px var(--sky-deep);
@@ -206,13 +238,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const submitError = document.getElementById('submit-error') as HTMLParagraphElement;
   const successState = document.getElementById('success-state') as HTMLDivElement;
 
-  function getField(name: string): HTMLInputElement {
-    return form.querySelector(`[name="${name}"]`) as HTMLInputElement;
+  type Field = HTMLInputElement | HTMLSelectElement;
+
+  function getField(name: string): Field {
+    return form.querySelector(`[name="${name}"]`) as Field;
   }
 
   function getHint(name: string): HTMLParagraphElement {
     return getField(name).nextElementSibling as HTMLParagraphElement;
   }
+
+  // Nothing is submitted without these, on the page or at the server.
+  const REQUIRED = ['title', 'link', 'format', 'level'];
 
   const validators: Record<string, (v: string) => string | null> = {
     title: (v) => (v.trim() ? null : 'A round title is required'),
@@ -223,6 +260,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if (/dropbox\.com\/(home|scl\/fo)\//i.test(v)) return 'That is a folder; link the file itself';
       return null;
     },
+    format: (v) => (v ? null : 'Choose parli or policy'),
+    level: (v) => (v ? null : 'Choose college or high school'),
     tags: (v) => {
       if (!v.trim()) return null;
       const bad = v.split(',').map(t => t.trim()).filter(t => t && !t.startsWith('#'));
@@ -269,7 +308,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   function showFieldErrors(fields: Record<string, string>) {
     for (const [name, message] of Object.entries(fields)) {
-      const field = form.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
+      const field = form.querySelector(`[name="${name}"]`) as Field | null;
       if (!field) continue;
       getHint(name).textContent = message;
       getHint(name).dataset.error = '1';
@@ -294,6 +333,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const payload = {
       title: value('title'),
       link: value('link'),
+      format: value('format'),
+      level: value('level'),
       resolution: value('resolution'),
       aff: value('aff'),
       neg: value('neg'),
@@ -307,7 +348,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const local: Record<string, string> = {};
     for (const [name, validate] of Object.entries(validators)) {
       const message = validate(getField(name).value);
-      if (message && (name === 'title' || name === 'link')) local[name] = message;
+      if (message && REQUIRED.includes(name)) local[name] = message;
     }
     if (Object.keys(local).length) { showFieldErrors(local); return; }
 

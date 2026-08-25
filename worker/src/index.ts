@@ -21,6 +21,9 @@ export interface Env {
 }
 
 const ACCEPT_THRESHOLD = 5;
+// The two labels a round is filtered by. Kept in step with src/lib/prefs.ts.
+const FORMATS = ['parli', 'policy'];
+const LEVELS = ['college', 'hs'];
 // Workers cap PBKDF2 at 100k iterations; requesting more throws at runtime.
 const PBKDF2_ITERATIONS = 100_000;
 
@@ -437,6 +440,8 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     const link = str(body.link);
     const year = str(body.year);
     const decision = str(body.decision);
+    const format = str(body.format);
+    const level = str(body.level);
     const tags: string[] = Array.isArray(body.tags)
       ? body.tags.map(str).filter((t: string) => t.startsWith('#'))
       : [];
@@ -447,6 +452,10 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     if (!link) errors.link = 'A link to the recording is required';
     else if (!/^https?:\/\//i.test(link)) errors.link = 'That does not look like a URL';
     if (year && !/^\d{4}-\d{2}$/.test(year)) errors.year = 'Expected a season like 2020-21';
+    // The default view is parli only, so an unlabelled round would land in the
+    // index and show up in nobody's list. Ask rather than guess a label.
+    if (!FORMATS.includes(format)) errors.format = 'Choose parli or policy';
+    if (!LEVELS.includes(level)) errors.level = 'Choose college or high school';
     if (decision && !/^(\d+-\d+\s+(aff|neg)|aff|neg|\d+-\d+\s+split)$/i.test(decision)) {
       errors.decision = 'Expected Aff, Neg, 3-0 Aff, or 1-1 Split';
     }
@@ -475,7 +484,7 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
       neg: str(body.neg),
       _tags: tags,
       searchable_tags: tags,
-      decision, year,
+      decision, year, format, level,
       tournament: str(body.tournament),
       teams: [],
       aff_type: tags.includes('#k-aff') ? 'k-aff'
