@@ -1,5 +1,15 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { fetchAllRecordings } from '../../lib/recordings';
+
+// The vocabularies the form suggests from, read at build time from the index
+// itself. A submission should join a tag and a tournament the archive already
+// uses rather than open a near-duplicate nobody browsing will ever find.
+const rounds = await fetchAllRecordings();
+const tagVocab = [...new Set(rounds.flatMap(r => r._tags ?? []).map(t => t.trim()).filter(Boolean))].sort();
+const tournamentVocab = [...new Set(
+  rounds.map(r => (r.tournament ?? '').trim()).filter(Boolean),
+)].sort((a, b) => a.localeCompare(b));
 ---
 
 <BaseLayout title="Submit a Recording | the golden turn">
@@ -11,10 +21,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </nav>
     <h1 class="page-title">submit a recording</h1>
     <p class="page-lede">
-      Please try to follow the format as described for maintainability. Your
-      round will be available to search immediately. The audio, transcript, and
-      speech markers are processed after and will be visible within an hour.
-      Email me: <a href="mailto:prabhune@berkeley.edu" class="link">prabhune@berkeley.edu</a>
+      Fill in the pieces and the form writes the entry for you, so every round
+      is filed the same way. Your round will be available to search
+      immediately. The audio, transcript, and speech markers are processed
+      after and will be visible within an hour. Email me:
+      <a href="mailto:prabhune@berkeley.edu" class="link">prabhune@berkeley.edu</a>
       if you're having issues.
     </p>
   </div>
@@ -28,11 +39,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <form id="submission-form" novalidate hidden>
 
       <div class="mb-7">
-        <label class="form-label" for="field-title">Round title <span class="form-required">required</span></label>
-        <p class="form-hint">Stage, then both teams, e.g. Finals - Cal MR vs Rice AL</p>
-        <input type="text" id="field-title" name="title" placeholder="Finals - Cal MR vs Rice AL"
-          class="form-input" required />
-        <p class="validation-hint"></p>
+        <span class="form-label">Round title <span class="form-required">required</span></span>
+        <p class="form-hint">The stage, then the two teams</p>
+        <div class="subfields">
+          <div class="subfield">
+            <label class="form-sublabel" for="field-stage">Stage</label>
+            <input type="text" id="field-stage" class="form-input" placeholder="Finals" />
+          </div>
+          <div class="subfield">
+            <label class="form-sublabel" for="field-aff-team">Aff team</label>
+            <input type="text" id="field-aff-team" class="form-input" placeholder="Cal MR" />
+          </div>
+          <div class="subfield">
+            <label class="form-sublabel" for="field-neg-team">Neg team</label>
+            <input type="text" id="field-neg-team" class="form-input" placeholder="Rice AL" />
+          </div>
+        </div>
+        <p class="build-preview" data-preview="title"></p>
+        <p class="validation-hint" data-hint="title"></p>
       </div>
 
       <div class="mb-7">
@@ -41,9 +65,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           A Dropbox, YouTube or Vimeo link to the recording itself, not to a
           folder.
         </p>
-        <input type="text" id="field-link" name="link" placeholder="https://..."
-          class="form-input" required />
-        <p class="validation-hint"></p>
+        <input type="text" id="field-link" class="form-input" placeholder="https://..." />
+        <p class="validation-hint" data-hint="link"></p>
       </div>
 
       <!--
@@ -52,79 +75,136 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         out of the list it was submitted to. They are asked for, not guessed.
       -->
       <div class="mb-7">
-        <label class="form-label" for="field-format">Format <span class="form-required">required</span></label>
+        <span class="form-label">Format <span class="form-required">required</span></span>
         <p class="form-hint">Pick the format this round was debated in</p>
-        <select id="field-format" name="format" class="form-input" required>
-          <option value="">Choose one</option>
-          <option value="parli">parli</option>
-          <option value="policy">policy</option>
-        </select>
-        <p class="validation-hint"></p>
+        <div class="seg" role="group" aria-label="Format" id="pick-format">
+          <button type="button" class="chip" data-value="parli" aria-pressed="false">parli</button>
+          <button type="button" class="chip" data-value="policy" aria-pressed="false">policy</button>
+        </div>
+        <p class="validation-hint" data-hint="format"></p>
       </div>
 
       <div class="mb-7">
-        <label class="form-label" for="field-level">Level <span class="form-required">required</span></label>
+        <span class="form-label">Level <span class="form-required">required</span></span>
         <p class="form-hint">Pick the level the teams competed at</p>
-        <select id="field-level" name="level" class="form-input" required>
-          <option value="">Choose one</option>
-          <option value="college">college</option>
-          <option value="hs">high school</option>
-        </select>
-        <p class="validation-hint"></p>
+        <div class="seg" role="group" aria-label="Level" id="pick-level">
+          <button type="button" class="chip" data-value="college" aria-pressed="false">college</button>
+          <button type="button" class="chip" data-value="hs" aria-pressed="false">high school</button>
+        </div>
+        <p class="validation-hint" data-hint="level"></p>
       </div>
 
       <div class="mb-7">
         <label class="form-label" for="field-resolution">Resolution</label>
-        <input type="text" id="field-resolution" name="resolution" placeholder="The USFG should..."
-          class="form-input" />
-        <p class="validation-hint"></p>
+        <input type="text" id="field-resolution" class="form-input" placeholder="The USFG should..." />
+        <p class="validation-hint" data-hint="resolution"></p>
       </div>
 
       <div class="mb-7">
-        <label class="form-label" for="field-aff">Aff</label>
-        <p class="form-hint">Describe aff strategy</p>
-        <input type="text" id="field-aff" name="aff" placeholder="topical (war, econ)"
-          class="form-input" />
-        <p class="validation-hint"></p>
+        <span class="form-label">Aff</span>
+        <p class="form-hint">What the aff was, and what it did with it</p>
+        <div class="seg" role="group" aria-label="Aff type" id="pick-aff-type">
+          <button type="button" class="chip" data-value="topical" aria-pressed="true">topical</button>
+          <button type="button" class="chip" data-value="nontopical" aria-pressed="false">nontopical</button>
+        </div>
+
+        <div class="build-body" id="aff-topical">
+          <div class="subfields" id="aff-advantages"></div>
+          <button type="button" class="add-row" id="aff-add-advantage">Add an advantage</button>
+          <div class="subfield">
+            <label class="form-sublabel" for="field-mg">New MG args</label>
+            <input type="text" id="field-mg" class="form-input" placeholder="pics bad" />
+          </div>
+          <div class="subfield">
+            <label class="form-sublabel" for="field-pmr">PMR goes for</label>
+            <input type="text" id="field-pmr" class="form-input" placeholder="case" />
+          </div>
+          <div class="subfield">
+            <label class="form-sublabel" for="field-aff-other">Other</label>
+            <input type="text" id="field-aff-other" class="form-input" placeholder="anything else" />
+          </div>
+        </div>
+
+        <div class="build-body" id="aff-nontopical" hidden>
+          <div class="subfield">
+            <label class="form-sublabel" for="field-aff-free">What the aff read</label>
+            <input type="text" id="field-aff-free" class="form-input" placeholder="neoliberalism" />
+          </div>
+        </div>
+
+        <p class="build-preview" data-preview="aff"></p>
+        <p class="validation-hint" data-hint="aff"></p>
       </div>
 
       <div class="mb-7">
-        <label class="form-label" for="field-neg">Neg</label>
-        <p class="form-hint">Lead with N-off, e.g. 2-off</p>
-        <input type="text" id="field-neg" name="neg" placeholder="2-off (framework-t, orientalism)"
-          class="form-input" />
-        <p class="validation-hint"></p>
+        <span class="form-label">Neg</span>
+        <p class="form-hint">How many off the neg read, then what they were</p>
+        <div class="subfields">
+          <div class="subfield subfield-narrow">
+            <label class="form-sublabel" for="field-off-count">Number of off</label>
+            <input type="number" id="field-off-count" class="form-input" min="0" max="12" placeholder="3" />
+          </div>
+        </div>
+        <div class="subfields" id="neg-positions"></div>
+        <p class="build-preview" data-preview="neg"></p>
+        <p class="validation-hint" data-hint="neg"></p>
       </div>
 
       <div class="mb-7">
         <label class="form-label" for="field-tags">Tags</label>
         <p class="form-hint">Comma-separated, each starting with #</p>
-        <input type="text" id="field-tags" name="tags" placeholder="#topicality, #mlm"
-          class="form-input" />
-        <p class="validation-hint"></p>
+        <div class="ac-wrap">
+          <input type="text" id="field-tags" class="form-input" placeholder="#topicality, #mlm" />
+        </div>
+        <p class="validation-hint" data-hint="tags"></p>
       </div>
 
       <div class="mb-7">
-        <label class="form-label" for="field-decision">Decision</label>
-        <p class="form-hint">Aff or Neg for prelims, 3-0 Aff for panels</p>
-        <input type="text" id="field-decision" name="decision" placeholder="3-0 Aff"
-          class="form-input" />
-        <p class="validation-hint"></p>
+        <span class="form-label">Decision</span>
+        <p class="form-hint">One judge for a prelim, a panel for an elim</p>
+        <div class="seg-row">
+          <div>
+            <span class="form-sublabel">Judges</span>
+            <div class="seg" role="group" aria-label="Prelim or panel" id="pick-decision-kind">
+              <button type="button" class="chip" data-value="prelim" aria-pressed="false">prelim</button>
+              <button type="button" class="chip" data-value="panel" aria-pressed="false">panel</button>
+            </div>
+          </div>
+          <div>
+            <span class="form-sublabel">Winner</span>
+            <div class="seg" role="group" aria-label="Winner" id="pick-winner">
+              <button type="button" class="chip" data-value="Aff" aria-pressed="false">aff</button>
+              <button type="button" class="chip" data-value="Neg" aria-pressed="false">neg</button>
+            </div>
+          </div>
+        </div>
+        <div class="subfields" id="decision-ballots" hidden>
+          <div class="subfield subfield-narrow">
+            <label class="form-sublabel" for="field-win-ballots">Winner ballots</label>
+            <input type="number" id="field-win-ballots" class="form-input" min="0" max="9" placeholder="3" />
+          </div>
+          <div class="subfield subfield-narrow">
+            <label class="form-sublabel" for="field-lose-ballots">Loser ballots</label>
+            <input type="number" id="field-lose-ballots" class="form-input" min="0" max="9" placeholder="0" />
+          </div>
+        </div>
+        <p class="build-preview" data-preview="decision"></p>
+        <p class="validation-hint" data-hint="decision"></p>
       </div>
 
       <div class="mb-7">
         <label class="form-label" for="field-year">Year</label>
         <p class="form-hint">e.g. 2020-21</p>
-        <input type="text" id="field-year" name="year" placeholder="2020-21"
-          class="form-input" />
-        <p class="validation-hint"></p>
+        <input type="text" id="field-year" class="form-input" placeholder="2020-21" />
+        <p class="validation-hint" data-hint="year"></p>
       </div>
 
       <div class="mb-10">
         <label class="form-label" for="field-tournament">Tournament</label>
-        <input type="text" id="field-tournament" name="tournament" placeholder="NPDA"
-          class="form-input" />
-        <p class="validation-hint"></p>
+        <div class="ac-wrap">
+          <input type="text" id="field-tournament" class="form-input" placeholder="NPDA" />
+        </div>
+        <p class="validation-hint" data-hint="tournament"></p>
       </div>
 
       <div class="flex items-center gap-4">
@@ -148,6 +228,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       </p>
     </div>
   </div>
+
+  <script type="application/json" id="add-vocab" set:html={JSON.stringify({
+    tags: tagVocab,
+    tournaments: tournamentVocab,
+  })}></script>
 </BaseLayout>
 
 <style is:global>
@@ -159,6 +244,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     letter-spacing: 0.04em;
     color: var(--ink);
     margin-bottom: 0.4rem;
+  }
+
+  /* The name of one piece of a built field, quieter than the field's own. */
+  .form-sublabel {
+    display: block;
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    color: rgba(23, 21, 15, 0.5);
+    margin-bottom: 0.25rem;
   }
 
   .form-input {
@@ -176,14 +270,100 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .form-input::placeholder {
     color: rgba(23, 21, 15, 0.3);
   }
-  /* An unchosen select reads like an empty field, not like an answer. */
-  select.form-input:invalid {
-    color: rgba(23, 21, 15, 0.3);
-  }
-
   .form-input:focus {
     border-color: var(--sky-deep);
     box-shadow: inset 0 0 0 1px var(--sky-deep);
+  }
+
+  .subfields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  /* A class that sets display would otherwise beat the hidden attribute, and
+     the row would stay on screen after the choice that asks for it is gone. */
+  .subfields[hidden] {
+    display: none;
+  }
+
+  .subfield {
+    flex: 1 1 12rem;
+    min-width: 0;
+    margin-top: 0.5rem;
+  }
+
+  .subfield-narrow {
+    flex: 0 0 9rem;
+  }
+
+  /* A row of a list: the field, then the way to drop it. */
+  .subfield-removable {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .subfield-removable .form-input {
+    flex: 1 1 auto;
+  }
+
+  .row-remove {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1;
+    color: rgba(23, 21, 15, 0.35);
+    background: none;
+    border: none;
+    padding: 0.5rem 0.25rem;
+    cursor: pointer;
+    transition: color 60ms linear;
+  }
+
+  .row-remove:hover {
+    color: var(--ink);
+  }
+
+  .add-row {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.75rem;
+    color: rgba(23, 21, 15, 0.55);
+    background: none;
+    border: none;
+    padding: 0.5rem 0 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 60ms linear;
+  }
+
+  .add-row:hover {
+    color: var(--ink);
+  }
+
+  .build-body[hidden] {
+    display: none;
+  }
+
+  /* What the form will file, written out as it is built. */
+  .build-preview {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    color: var(--ink);
+    background: var(--paper-raised);
+    border-left: 2px solid var(--sky-deep);
+    padding: 0.4rem 0.6rem;
+    margin: 0.75rem 0 0;
+  }
+
+  .build-preview:empty {
+    display: none;
+  }
+
+  .seg-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 
   .form-hint {
@@ -215,6 +395,44 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     text-transform: none;
   }
 
+  /* The suggestion list is built in script, so its rules cannot be scoped. */
+  .ac-wrap {
+    position: relative;
+  }
+
+  .ac-list {
+    position: absolute;
+    z-index: 20;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 13rem;
+    overflow-y: auto;
+    background: var(--paper-raised);
+    border: 1px solid var(--ink);
+    border-top: none;
+  }
+
+  .ac-list[hidden] {
+    display: none;
+  }
+
+  .ac-list li {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.8125rem;
+    color: var(--ink);
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+  }
+
+  .ac-list li.is-active,
+  .ac-list li:hover {
+    background: var(--sky);
+  }
+
   .add-signin[hidden],
   #submission-form[hidden] {
     display: none;
@@ -230,70 +448,305 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // The write key used to live here, which meant anyone reading the bundle
   // could rewrite or empty the index. Submission goes through the Worker now,
   // which holds the key and validates before it writes.
+  //
+  // The fields a reader searches on (title, aff, neg, decision) are built from
+  // parts rather than typed freehand: the archive is only worth searching if
+  // every round says "3-off (framework-t, actor spec)" the same way, and that
+  // convention used to live in a placeholder nobody was obliged to follow.
   import { submitRecording, getUser, FieldErrors, NotSignedIn } from '../../lib/api';
   import { recordingHref } from '../../lib/recordings';
+  import { attachAutocomplete } from '../../lib/autocomplete';
+  import { composeAff, composeDecision, composeNeg, composeTitle } from '../../lib/entry';
 
   const form = document.getElementById('submission-form') as HTMLFormElement;
   const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
   const submitError = document.getElementById('submit-error') as HTMLParagraphElement;
   const successState = document.getElementById('success-state') as HTMLDivElement;
 
-  type Field = HTMLInputElement | HTMLSelectElement;
+  const vocab = JSON.parse(
+    document.getElementById('add-vocab')?.textContent || '{}'
+  ) as { tags?: string[]; tournaments?: string[] };
 
-  function getField(name: string): Field {
-    return form.querySelector(`[name="${name}"]`) as Field;
+  const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const input = (id: string) => el<HTMLInputElement>(id);
+  const val = (id: string) => input(id).value.trim();
+  const hint = (name: string) =>
+    form.querySelector(`[data-hint="${name}"]`) as HTMLParagraphElement | null;
+  const preview = (name: string) =>
+    form.querySelector(`[data-preview="${name}"]`) as HTMLParagraphElement;
+
+  /**
+   * One of a pair of chips, or none of them.
+   *
+   * Nothing is pressed to begin with where a blank answer is a real answer, so
+   * an untouched control files nothing rather than a default nobody chose.
+   */
+  function segment(id: string) {
+    const group = el<HTMLDivElement>(id);
+    group.addEventListener('click', e => {
+      const btn = (e.target as Element).closest<HTMLButtonElement>('[data-value]');
+      if (!btn || !group.contains(btn)) return;
+      group.querySelectorAll<HTMLButtonElement>('[data-value]').forEach(b =>
+        b.setAttribute('aria-pressed', String(b === btn)));
+      clearErrorNear(group);
+      redraw();
+    });
+    return {
+      get: () => group.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.dataset.value ?? '',
+      set: (value: string) => group.querySelectorAll<HTMLButtonElement>('[data-value]')
+        .forEach(b => b.setAttribute('aria-pressed', String(b.dataset.value === value))),
+      first: () => group.querySelector<HTMLButtonElement>('[data-value]')!,
+    };
   }
 
-  function getHint(name: string): HTMLParagraphElement {
-    return getField(name).nextElementSibling as HTMLParagraphElement;
+  const formatPick = segment('pick-format');
+  const levelPick = segment('pick-level');
+  const affTypePick = segment('pick-aff-type');
+  const decisionKindPick = segment('pick-decision-kind');
+  const winnerPick = segment('pick-winner');
+
+  const advantages = el<HTMLDivElement>('aff-advantages');
+  const negPositions = el<HTMLDivElement>('neg-positions');
+  const ballots = el<HTMLDivElement>('decision-ballots');
+
+  function listValues(box: HTMLElement): string[] {
+    return [...box.querySelectorAll<HTMLInputElement>('input')].map(i => i.value.trim());
   }
 
-  // Nothing is submitted without these, on the page or at the server.
-  const REQUIRED = ['title', 'link', 'format', 'level'];
+  /** A numbered row of a list, with a way to drop it once it is spare. */
+  function row(label: string, value: string, placeholder: string, removable: boolean): HTMLDivElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'subfield';
 
-  const validators: Record<string, (v: string) => string | null> = {
-    title: (v) => (v.trim() ? null : 'A round title is required'),
-    link: (v) => {
-      if (!v.trim()) return 'A link to the recording is required';
-      if (!/^https?:\/\//i.test(v.trim())) return 'That does not look like a URL';
-      // A folder link cannot be played, and the round would arrive empty.
-      if (/dropbox\.com\/(home|scl\/fo)\//i.test(v)) return 'That is a folder; link the file itself';
-      return null;
-    },
-    format: (v) => (v ? null : 'Choose parli or policy'),
-    level: (v) => (v ? null : 'Choose college or high school'),
-    tags: (v) => {
-      if (!v.trim()) return null;
-      const bad = v.split(',').map(t => t.trim()).filter(t => t && !t.startsWith('#'));
-      return bad.length ? 'Each tag should start with #' : null;
-    },
-    decision: (v) => {
-      if (!v.trim()) return null;
-      // Prelims are decided by one judge ("Aff"), elims by a panel ("3-0 Aff"),
-      // and two-judge panels can split ("1-1 Split"). All three are valid.
-      const ok = /^(\d+-\d+\s+(aff|neg)|aff|neg|\d+-\d+\s+split)$/i.test(v.trim());
-      return ok ? null : 'Expected: Aff, Neg, 3-0 Aff, or 1-1 Split';
-    },
-    year: (v) => {
-      if (!v.trim()) return null;
-      return /^\d{4}-\d{2}$/.test(v.trim()) ? null : 'Expected: 2020-21';
-    },
-    neg: (v) => {
-      if (!v.trim()) return null;
-      return /\d+-off|off/i.test(v) ? null : 'Consider leading with N-off, e.g. 2-off (da, cp)';
-    },
+    const name = document.createElement('label');
+    name.className = 'form-sublabel';
+    name.textContent = label;
+
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.className = 'form-input';
+    field.value = value;
+    field.placeholder = placeholder;
+
+    if (!removable) {
+      wrap.append(name, field);
+      return wrap;
+    }
+
+    const line = document.createElement('div');
+    line.className = 'subfield-removable';
+    const drop = document.createElement('button');
+    drop.type = 'button';
+    drop.className = 'row-remove';
+    drop.textContent = '×';
+    drop.setAttribute('aria-label', `Remove ${label}`);
+    drop.addEventListener('click', () => {
+      wrap.remove();
+      renumber(advantages, 'Advantage');
+      redraw();
+    });
+    line.append(field, drop);
+    wrap.append(name, line);
+    return wrap;
+  }
+
+  function renumber(box: HTMLElement, label: string) {
+    box.querySelectorAll<HTMLLabelElement>('.form-sublabel').forEach((l, i) => {
+      l.textContent = `${label} ${i + 1}`;
+    });
+  }
+
+  const ADVANTAGE_HINTS = ['war', 'econ', 'warming'];
+
+  function addAdvantage(value = '') {
+    const n = advantages.children.length;
+    advantages.appendChild(
+      row(`Advantage ${n + 1}`, value, ADVANTAGE_HINTS[n] ?? 'and another', n >= 2),
+    );
+    redraw();
+  }
+
+  el<HTMLButtonElement>('aff-add-advantage').addEventListener('click', () => addAdvantage());
+
+  /**
+   * As many named positions as the neg said it read, and no more. What has
+   * been typed survives a change to the count, so correcting 3 to 4 does not
+   * empty the three already named.
+   */
+  function paintNegPositions() {
+    const asked = Number(val('field-off-count'));
+    const count = Number.isFinite(asked) ? Math.min(Math.max(Math.floor(asked), 0), 12) : 0;
+    const kept = listValues(negPositions);
+    negPositions.innerHTML = '';
+    for (let i = 0; i < count; i++) {
+      negPositions.appendChild(
+        row(`${i + 1}`, kept[i] ?? '', i === 0 ? 'framework-t' : 'orientalism', false),
+      );
+    }
+  }
+
+  function builtTitle(): string {
+    return composeTitle({
+      stage: val('field-stage'),
+      affTeam: val('field-aff-team'),
+      negTeam: val('field-neg-team'),
+    });
+  }
+
+  function builtAff(): string {
+    return composeAff({
+      topical: affTypePick.get() !== 'nontopical',
+      advantages: listValues(advantages),
+      mg: val('field-mg'),
+      pmr: val('field-pmr'),
+      other: val('field-aff-other'),
+      free: val('field-aff-free'),
+    });
+  }
+
+  function builtNeg(): string {
+    return composeNeg(Number(val('field-off-count')), listValues(negPositions));
+  }
+
+  function builtDecision(): string {
+    return composeDecision({
+      kind: decisionKindPick.get() as 'prelim' | 'panel' | '',
+      side: winnerPick.get(),
+      won: val('field-win-ballots'),
+      lost: val('field-lose-ballots'),
+    });
+  }
+
+  function tagList(): string[] {
+    const raw = val('field-tags');
+    return raw ? raw.split(',').map(t => t.trim()).filter(Boolean) : [];
+  }
+
+  function built() {
+    return {
+      title: builtTitle(),
+      link: val('field-link'),
+      format: formatPick.get(),
+      level: levelPick.get(),
+      resolution: val('field-resolution'),
+      aff: builtAff(),
+      neg: builtNeg(),
+      decision: builtDecision(),
+      year: val('field-year'),
+      tournament: val('field-tournament'),
+      tags: tagList().filter(t => t.startsWith('#')),
+    };
+  }
+
+  /** Every preview, and the parts of the form that a choice decides. */
+  function redraw() {
+    const topical = affTypePick.get() !== 'nontopical';
+    el('aff-topical').hidden = !topical;
+    el('aff-nontopical').hidden = topical;
+    ballots.hidden = decisionKindPick.get() !== 'panel';
+
+    const b = built();
+    preview('title').textContent = b.title;
+    preview('aff').textContent = b.aff;
+    preview('neg').textContent = b.neg;
+    preview('decision').textContent = b.decision;
+  }
+
+  // One listener for the whole form, because every field feeds a preview and
+  // the rows themselves come and go.
+  form.addEventListener('input', e => {
+    if ((e.target as HTMLElement).id === 'field-off-count') paintNegPositions();
+    clearErrorNear(e.target as Element);
+    redraw();
+  });
+
+  attachAutocomplete(input('field-tags'), () => vocab.tags ?? [], { segment: true, onPick: redraw });
+  attachAutocomplete(input('field-tournament'), () => vocab.tournaments ?? []);
+
+  /**
+   * What the page can tell the submitter before spending a round trip on it.
+   * The server checks all of this again.
+   */
+  function problems(): Record<string, string> {
+    const b = built();
+    const found: Record<string, string> = {};
+
+    if (!val('field-stage') || !val('field-aff-team') || !val('field-neg-team')) {
+      found.title = 'Give the stage and both teams';
+    }
+
+    if (!b.link) found.link = 'A link to the recording is required';
+    else if (!/^https?:\/\//i.test(b.link)) found.link = 'That does not look like a URL';
+    // A folder link cannot be played, and the round would arrive empty.
+    else if (/dropbox\.com\/(home|scl\/fo)\//i.test(b.link)) {
+      found.link = 'That is a folder; link the file itself';
+    }
+
+    if (!b.format) found.format = 'Choose parli or policy';
+    if (!b.level) found.level = 'Choose college or high school';
+
+    if (tagList().some(t => !t.startsWith('#'))) found.tags = 'Each tag should start with #';
+    if (b.year && !/^\d{4}-\d{2}$/.test(b.year)) found.year = 'Expected: 2020-21';
+
+    const kind = decisionKindPick.get();
+    const won = val('field-win-ballots');
+    const lost = val('field-lose-ballots');
+    if (kind === 'panel') {
+      if (won === '' || lost === '') found.decision = 'Give both ballot counts';
+      else if (Number(won) < Number(lost)) found.decision = 'The winner cannot have fewer ballots';
+      else if (Number(won) !== Number(lost) && !winnerPick.get()) found.decision = 'Say who won';
+    } else if (kind === 'prelim' && !winnerPick.get()) {
+      found.decision = 'Say who won';
+    }
+
+    return found;
+  }
+
+  /** Where the cursor goes when a field is refused, built or not. */
+  const FOCUS: Record<string, () => HTMLElement> = {
+    title: () => input('field-stage'),
+    link: () => input('field-link'),
+    format: () => formatPick.first(),
+    level: () => levelPick.first(),
+    aff: () => input('field-mg'),
+    neg: () => input('field-off-count'),
+    decision: () => decisionKindPick.first(),
+    year: () => input('field-year'),
+    tags: () => input('field-tags'),
+    tournament: () => input('field-tournament'),
+    resolution: () => input('field-resolution'),
   };
 
-  for (const [name, validate] of Object.entries(validators)) {
-    const field = getField(name);
-    const hint = getHint(name);
-    field.addEventListener('blur', () => { hint.textContent = validate(field.value) ?? ''; });
-    field.addEventListener('input', () => { hint.textContent = validate(field.value) ?? ''; });
+  function showFieldErrors(fields: Record<string, string>) {
+    for (const [name, message] of Object.entries(fields)) {
+      const target = hint(name);
+      if (!target) continue;
+      target.textContent = message;
+      target.dataset.error = '1';
+    }
+    const first = Object.keys(fields).find(name => hint(name));
+    if (first) FOCUS[first]?.().focus();
+  }
+
+  /** A refusal answered is a refusal withdrawn, without waiting for a resend. */
+  function clearErrorNear(node: Element | null) {
+    const target = node?.closest('.mb-7, .mb-10')?.querySelector<HTMLElement>('.validation-hint');
+    if (!target?.dataset.error) return;
+    target.textContent = '';
+    delete target.dataset.error;
+  }
+
+  function clearErrors() {
+    form.querySelectorAll<HTMLElement>('.validation-hint').forEach(h => {
+      h.textContent = '';
+      delete h.dataset.error;
+    });
+    submitError.classList.add('hidden');
   }
 
   // Signed in or the form is not offered: a submission is credited to whoever
   // made it, and the server will refuse an anonymous one anyway.
-  const signinNote = document.getElementById('add-signin')!;
+  const signinNote = el('add-signin');
 
   function renderAuth() {
     const signedIn = Boolean(getUser());
@@ -301,57 +754,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     signinNote.hidden = signedIn;
   }
 
-  document.getElementById('add-signin-btn')?.addEventListener('click', () =>
+  el('add-signin-btn')?.addEventListener('click', () =>
     document.dispatchEvent(new CustomEvent('gt:open-signin')));
   document.addEventListener('gt:signed-in', renderAuth);
   renderAuth();
-
-  function showFieldErrors(fields: Record<string, string>) {
-    for (const [name, message] of Object.entries(fields)) {
-      const field = form.querySelector(`[name="${name}"]`) as Field | null;
-      if (!field) continue;
-      getHint(name).textContent = message;
-      getHint(name).dataset.error = '1';
-    }
-    const first = Object.keys(fields)[0];
-    getField(first)?.focus();
-  }
-
-  function clearErrors() {
-    form.querySelectorAll<HTMLElement>('.validation-hint').forEach(h => {
-      if (h.dataset.error) { h.textContent = ''; delete h.dataset.error; }
-    });
-    submitError.classList.add('hidden');
-  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearErrors();
 
-    const value = (name: string) => getField(name).value.trim();
-    const tagsRaw = value('tags');
-    const payload = {
-      title: value('title'),
-      link: value('link'),
-      format: value('format'),
-      level: value('level'),
-      resolution: value('resolution'),
-      aff: value('aff'),
-      neg: value('neg'),
-      decision: value('decision'),
-      year: value('year'),
-      tournament: value('tournament'),
-      tags: tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(t => t.startsWith('#')) : [],
-    };
+    const found = problems();
+    if (Object.keys(found).length) { showFieldErrors(found); return; }
 
-    // Catch what we can before the round trip; the server checks again.
-    const local: Record<string, string> = {};
-    for (const [name, validate] of Object.entries(validators)) {
-      const message = validate(getField(name).value);
-      if (message && REQUIRED.includes(name)) local[name] = message;
-    }
-    if (Object.keys(local).length) { showFieldErrors(local); return; }
-
+    const payload = built();
     submitBtn.disabled = true;
     submitBtn.textContent = 'Checking the link...';
 
@@ -381,13 +796,32 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     }
   });
 
-  document.getElementById('submit-another')?.addEventListener('click', () => {
+  /** Back to an empty form, chips and built rows included. */
+  function startOver() {
     form.reset();
     clearErrors();
+    formatPick.set('');
+    levelPick.set('');
+    decisionKindPick.set('');
+    winnerPick.set('');
+    affTypePick.set('topical');
+    advantages.innerHTML = '';
+    addAdvantage();
+    addAdvantage();
+    paintNegPositions();
+    redraw();
+  }
+
+  el('submit-another')?.addEventListener('click', () => {
+    startOver();
     submitBtn.disabled = false;
     submitBtn.textContent = 'Submit a recording';
     successState.classList.add('hidden');
     form.classList.remove('hidden');
-    getField('title').focus();
+    input('field-stage').focus();
   });
+
+  addAdvantage();
+  addAdvantage();
+  redraw();
 </script>

@@ -362,6 +362,20 @@
     color: theme('colors.ink');
   }
 
+  /* Butted together with the shared border collapsed, so a pair of choices
+     reads as one control rather than two unrelated chips. */
+  .seg {
+    display: flex;
+  }
+
+  .seg .chip + .chip {
+    margin-left: -1px;
+  }
+
+  .seg .chip[aria-pressed='true'] {
+    position: relative;
+  }
+
   /* Shared page furniture so index pages stay on one grid. */
   .page-head {
     padding-top: 3.25rem;
