@@ -26,27 +26,36 @@ export interface AffParts {
   mg: string;
   pmr: string;
   other: string;
-  /** What a nontopical aff read, which is the whole of what it says. */
+  /** What a nontopical aff read, which is what it is filed under. */
   free: string;
 }
 
-/** "topical (war, econ), mg reads pics bad, pmr goes for case". */
+/**
+ * "topical (war, econ), mg reads pics bad, pmr goes for case", or the same
+ * with what a nontopical aff read in place of the advantages.
+ *
+ * What the MG added and what the PMR went for are asked either way: a
+ * nontopical aff has both, and the rest of the round is what a reader is
+ * usually looking for the round to see.
+ */
 export function composeAff({ topical, advantages, mg, pmr, other, free }: AffParts): string {
-  if (!topical) return free.trim();
-
-  const advs = advantages.map(a => a.trim()).filter(Boolean);
   const rest = [
     mg.trim() && `mg reads ${mg.trim()}`,
     pmr.trim() && `pmr goes for ${pmr.trim()}`,
     other.trim(),
   ].filter(Boolean) as string[];
 
+  const advs = advantages.map(a => a.trim()).filter(Boolean);
   // Nothing said at all is nothing filed, rather than a bare "topical" on
   // every round whose aff nobody got round to describing.
-  if (advs.length === 0 && rest.length === 0) return '';
+  const lead = topical
+    ? (advs.length ? `topical (${advs.join(', ')})` : 'topical')
+    : free.trim();
 
-  const lead = advs.length ? `topical (${advs.join(', ')})` : 'topical';
-  return [lead, ...rest].join(', ');
+  if (topical && advs.length === 0 && rest.length === 0) return '';
+  if (!lead && rest.length === 0) return '';
+
+  return [lead, ...rest].filter(Boolean).join(', ');
 }
 
 /** "3-off (framework-t, actor spec, orientalism)". */
