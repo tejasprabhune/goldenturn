@@ -111,18 +111,6 @@ const tournamentVocab = [...new Set(
         <div class="build-body" id="aff-topical">
           <div class="subfields" id="aff-advantages"></div>
           <button type="button" class="add-row" id="aff-add-advantage">Add an advantage</button>
-          <div class="subfield">
-            <label class="form-sublabel" for="field-mg">New MG args</label>
-            <input type="text" id="field-mg" class="form-input" placeholder="pics bad" />
-          </div>
-          <div class="subfield">
-            <label class="form-sublabel" for="field-pmr">PMR goes for</label>
-            <input type="text" id="field-pmr" class="form-input" placeholder="case" />
-          </div>
-          <div class="subfield">
-            <label class="form-sublabel" for="field-aff-other">Other</label>
-            <input type="text" id="field-aff-other" class="form-input" placeholder="anything else" />
-          </div>
         </div>
 
         <div class="build-body" id="aff-nontopical" hidden>
@@ -130,6 +118,19 @@ const tournamentVocab = [...new Set(
             <label class="form-sublabel" for="field-aff-free">What the aff read</label>
             <input type="text" id="field-aff-free" class="form-input" placeholder="neoliberalism" />
           </div>
+        </div>
+
+        <div class="subfield">
+          <label class="form-sublabel" for="field-mg">New MG args</label>
+          <input type="text" id="field-mg" class="form-input" placeholder="pics bad" />
+        </div>
+        <div class="subfield">
+          <label class="form-sublabel" for="field-pmr">PMR goes for</label>
+          <input type="text" id="field-pmr" class="form-input" placeholder="case" />
+        </div>
+        <div class="subfield">
+          <label class="form-sublabel" for="field-aff-other">Other</label>
+          <input type="text" id="field-aff-other" class="form-input" placeholder="anything else" />
         </div>
 
         <p class="build-preview" data-preview="aff"></p>
