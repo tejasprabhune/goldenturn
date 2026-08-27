@@ -104,6 +104,8 @@ export class Waveform {
 
   position = 0;
   hover: number | null = null;
+  /** Drawn as loud as it is being played. See setGain. */
+  private gain = 1;
   selection: { start: number; end: number } | null = null;
   preview: Preview | null = null;
 
@@ -119,6 +121,21 @@ export class Waveform {
     this.duration = file.duration;
     this.cachedWidth = 0;
     this.resize();
+  }
+
+  /**
+   * Draws the round at the volume it is being played at.
+   *
+   * A boosted round sounds louder, and a plot that ignored that would be
+   * describing a different recording than the one coming out of the speakers.
+   * The multiplier goes in before the gamma lift, which is where it goes in
+   * the signal, so 4x reads as the two and a bit times taller it looks rather
+   * than four times, and the flat tops are the limiter doing its work.
+   */
+  setGain(gain: number) {
+    if (gain === this.gain) return;
+    this.gain = gain > 0 ? gain : 1;
+    this.draw();
   }
 
   setSegments(segments: Segment[]) {
@@ -167,7 +184,7 @@ export class Waveform {
    * shape without letting the loud ones clip.
    */
   private amplitude(v: number, scale: number): number {
-    return Math.pow(v / 255, 0.62) * scale;
+    return Math.min(Math.pow((v / 255) * this.gain, 0.62), 1) * scale;
   }
 
   /**

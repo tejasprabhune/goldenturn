@@ -708,6 +708,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     const boost = document.getElementById('boost') as HTMLSelectElement | null;
     if (boost) {
       boost.value = String(readBoost(slug));
+      wave.setGain(Number(boost.value));
       boost.addEventListener('change', () => {
         const level = Number(boost.value);
         saveBoost(slug, level);
@@ -715,6 +716,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
           boost.value = '1';
           saveBoost(slug, 1);
         }
+        wave.setGain(Number(boost.value));
       });
       audio.addEventListener('play', () => {
         const level = Number(boost.value);
