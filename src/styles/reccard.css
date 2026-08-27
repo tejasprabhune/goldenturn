@@ -189,6 +189,16 @@
   font-size: 0.8125rem;
 }
 
+/* "off" says nothing on its own next to a speed that reads "1x". */
+.cardplayer-boost-label {
+  margin-left: 0.35rem;
+}
+
+.cardplayer-boost {
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8125rem;
+}
+
 .cardplayer audio {
   display: none;
 }

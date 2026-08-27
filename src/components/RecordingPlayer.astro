@@ -1,5 +1,6 @@
 ---
 import { formatTime } from '../lib/waveform';
+import { BOOST_LEVELS, boostLabel } from '../lib/boost';
 
 interface Props {
   slug: string;
@@ -104,6 +105,12 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
               {SPEEDS.map(s => <option value={s} selected={s === 1}>{s}x</option>)}
             </select>
           </label>
+          <label class="speed">
+            <span class="label label-muted">boost</span>
+            <select id="boost" class="field speed-select" aria-label="Volume boost">
+              {BOOST_LEVELS.map(b => <option value={b}>{boostLabel(b)}</option>)}
+            </select>
+          </label>
           <a class="chip" href={`${MEDIA}/audio/${slug}.m4a`} download>download</a>
         </div>
       </div>
@@ -149,7 +156,11 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         <div class="key-row"><dt>2x</dt><dd><kbd>hold</kbd></dd></div>
       </dl>
 
-      <audio id="audio" preload="metadata" src={`${MEDIA}/audio/${slug}.m4a`}></audio>
+      <!-- crossorigin so the volume boost can route this through Web Audio;
+           R2 sends the headers, and asking after the file has loaded is too
+           late. -->
+      <audio id="audio" preload="metadata" crossorigin="anonymous"
+        src={`${MEDIA}/audio/${slug}.m4a`}></audio>
 
       <!--
         On a phone the player scrolls away the moment you start reading the
@@ -598,6 +609,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     conflicts, SPEECH_SETS, formatOf, type Speech, type Span,
   } from '../lib/speeches';
   import { syncYouTube, syncVideoElement, type VideoSync } from '../lib/videosync';
+  import { applyBoost, readBoost, saveBoost } from '../lib/boost';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
   const MEDIA = 'https://media.goldenturn.org';
@@ -685,6 +697,29 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     });
 
     speed?.addEventListener('change', () => { audio.playbackRate = Number(speed.value); });
+
+    /**
+     * Louder than the device goes, for the rounds recorded from the back of a
+     * room. The graph is built on the first play or the first change rather
+     * than on load, because a context created without a gesture behind it
+     * starts suspended, and a suspended context is silence.
+     */
+    const boost = document.getElementById('boost') as HTMLSelectElement | null;
+    if (boost) {
+      boost.value = String(readBoost());
+      boost.addEventListener('change', () => {
+        const level = Number(boost.value);
+        saveBoost(level);
+        if (!applyBoost(audio, level)) {
+          boost.value = '1';
+          saveBoost(1);
+        }
+      });
+      audio.addEventListener('play', () => {
+        const level = Number(boost.value);
+        if (level > 1) applyBoost(audio, level);
+      });
+    }
 
     /**
      * The video follows the audio, and the audio follows anyone who scrubs the
