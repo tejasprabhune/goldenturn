@@ -16,21 +16,30 @@ export const BOOST_LEVELS = [1, 1.5, 2, 3, 4];
 const KEY = 'gt:volume-boost';
 
 /**
- * How loud this reader plays things, remembered across rounds. The reason to
- * boost is the speakers, not the round, so asking once per round would be
- * asking the same question all evening.
+ * How loud a round has to be played, remembered per round.
+ *
+ * The archive was recorded on whatever was to hand, so a level that suits one
+ * round is wrong for the next: it belongs to the recording rather than to the
+ * listener. Coming back to a round that needed 3x should find it at 3x, and
+ * the round after it at its own level. The card and the round page share the
+ * key, so setting it in one is setting it in the other.
  */
-export function readBoost(): number {
+export function readBoost(slug: string): number {
   try {
-    const level = Number(localStorage.getItem(KEY));
+    const level = Number(localStorage.getItem(`${KEY}:${slug}`));
     return BOOST_LEVELS.includes(level) ? level : 1;
   } catch {
     return 1;
   }
 }
 
-export function saveBoost(level: number) {
-  try { localStorage.setItem(KEY, String(level)); } catch {}
+export function saveBoost(slug: string, level: number) {
+  try {
+    // A round played at ordinary volume is the ordinary case, and not worth a
+    // key each in a store shared with every other round.
+    if (level === 1) localStorage.removeItem(`${KEY}:${slug}`);
+    else localStorage.setItem(`${KEY}:${slug}`, String(level));
+  } catch {}
 }
 
 export function boostLabel(level: number): string {

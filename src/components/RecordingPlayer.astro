@@ -700,19 +700,20 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     /**
      * Louder than the device goes, for the rounds recorded from the back of a
-     * room. The graph is built on the first play or the first change rather
-     * than on load, because a context created without a gesture behind it
-     * starts suspended, and a suspended context is silence.
+     * room, and remembered against this round because the next one was
+     * recorded some other way. The graph is built on the first play or the
+     * first change rather than on load, because a context created without a
+     * gesture behind it starts suspended, and a suspended context is silence.
      */
     const boost = document.getElementById('boost') as HTMLSelectElement | null;
     if (boost) {
-      boost.value = String(readBoost());
+      boost.value = String(readBoost(slug));
       boost.addEventListener('change', () => {
         const level = Number(boost.value);
-        saveBoost(level);
+        saveBoost(slug, level);
         if (!applyBoost(audio, level)) {
           boost.value = '1';
-          saveBoost(1);
+          saveBoost(slug, 1);
         }
       });
       audio.addEventListener('play', () => {

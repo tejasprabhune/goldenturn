@@ -201,16 +201,16 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
   });
   speed.addEventListener('change', () => { audio.playbackRate = Number(speed.value); });
 
-  // Whatever this reader last chose, on the round page or on another card. The
-  // graph is built on the first play or change rather than here, because a
-  // context created without a gesture behind it starts suspended and silent.
-  boost.value = String(readBoost());
+  // Whatever this round was last played at, here or on its own page. The graph
+  // is built on the first play or change rather than here, because a context
+  // created without a gesture behind it starts suspended and silent.
+  boost.value = String(readBoost(slug));
   boost.addEventListener('change', () => {
     const level = Number(boost.value);
-    saveBoost(level);
+    saveBoost(slug, level);
     if (!applyBoost(audio, level)) {
       boost.value = '1';
-      saveBoost(1);
+      saveBoost(slug, 1);
     }
   });
   audio.addEventListener('play', () => {
