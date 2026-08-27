@@ -13,6 +13,7 @@ import { Waveform, formatTime, type PeaksFile } from './waveform';
 import { getRatings, listRevisions } from './api';
 import { ratingHtml } from './stars';
 import { applyBoundaries, placed, sideOf, usable, type Speech } from './speeches';
+import { BOOST_LEVELS, applyBoost, boostLabel, readBoost, saveBoost } from './boost';
 
 const MEDIA = 'https://media.goldenturn.org';
 
@@ -161,8 +162,14 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
           <option value="1.75">1.75x</option>
           <option value="2">2x</option>
         </select>
+        <span class="label label-muted cardplayer-boost-label">boost</span>
+        <select class="field cardplayer-boost" aria-label="Volume boost">
+          ${BOOST_LEVELS.map(b => `<option value="${b}">${boostLabel(b)}</option>`).join('')}
+        </select>
       </div>
-      <audio preload="metadata" src="${MEDIA}/audio/${slug}.m4a"></audio>
+      <!-- crossorigin so the boost can route this through Web Audio; R2 sends
+           the headers, and asking after the file has loaded is too late. -->
+      <audio preload="metadata" crossorigin="anonymous" src="${MEDIA}/audio/${slug}.m4a"></audio>
     </div>`;
 
   const canvas = host.querySelector('canvas') as HTMLCanvasElement;
@@ -171,6 +178,7 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
   const timeEl = host.querySelector('.cardplayer-time') as HTMLElement;
   const totalEl = host.querySelector('.cardplayer-total') as HTMLElement;
   const speed = host.querySelector('.cardplayer-speed') as HTMLSelectElement;
+  const boost = host.querySelector('.cardplayer-boost') as HTMLSelectElement;
   const wave = new Waveform(canvas);
 
   fetch(`${MEDIA}/peaks/${slug}.json`)
@@ -192,6 +200,23 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
     wave.draw();
   });
   speed.addEventListener('change', () => { audio.playbackRate = Number(speed.value); });
+
+  // Whatever this reader last chose, on the round page or on another card. The
+  // graph is built on the first play or change rather than here, because a
+  // context created without a gesture behind it starts suspended and silent.
+  boost.value = String(readBoost());
+  boost.addEventListener('change', () => {
+    const level = Number(boost.value);
+    saveBoost(level);
+    if (!applyBoost(audio, level)) {
+      boost.value = '1';
+      saveBoost(1);
+    }
+  });
+  audio.addEventListener('play', () => {
+    const level = Number(boost.value);
+    if (level > 1) applyBoost(audio, level);
+  });
 
   canvas.addEventListener('pointerdown', e => {
     const rect = canvas.getBoundingClientRect();
