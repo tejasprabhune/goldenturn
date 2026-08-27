@@ -205,6 +205,7 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
   // is built on the first play or change rather than here, because a context
   // created without a gesture behind it starts suspended and silent.
   boost.value = String(readBoost(slug));
+  wave.setGain(Number(boost.value));
   boost.addEventListener('change', () => {
     const level = Number(boost.value);
     saveBoost(slug, level);
@@ -212,6 +213,7 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
       boost.value = '1';
       saveBoost(slug, 1);
     }
+    wave.setGain(Number(boost.value));
   });
   audio.addEventListener('play', () => {
     const level = Number(boost.value);

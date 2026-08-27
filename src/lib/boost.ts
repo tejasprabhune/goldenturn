@@ -46,6 +46,20 @@ export function boostLabel(level: number): string {
   return level === 1 ? 'off' : `${level}x`;
 }
 
+const CLIP_KNEE = 0.7;
+
+function softClipCurve(points = 2048): Float32Array {
+  const curve = new Float32Array(points);
+  for (let i = 0; i < points; i++) {
+    const x = (i / (points - 1)) * 2 - 1;
+    const mag = Math.abs(x);
+    curve[i] = mag <= CLIP_KNEE
+      ? x
+      : Math.sign(x) * (CLIP_KNEE + (1 - CLIP_KNEE) * Math.tanh((mag - CLIP_KNEE) / (1 - CLIP_KNEE)));
+  }
+  return curve;
+}
+
 let ctx: AudioContext | null = null;
 const gains = new WeakMap<HTMLMediaElement, GainNode>();
 
@@ -94,9 +108,18 @@ function gainFor(media: HTMLMediaElement): GainNode | null {
   limiter.attack.value = 0.003;
   limiter.release.value = 0.25;
 
+  // A compressor still lets a transient through while its attack runs, and
+  // anything past 1 is clipped by the sound card into a tick. This curve is
+  // exactly straight below 0.7, so ordinary level is untouched, and bends to
+  // meet 1 above it, so nothing can leave louder than the rails allow.
+  const softClip = ctx.createWaveShaper();
+  softClip.curve = softClipCurve();
+  softClip.oversample = '2x';
+
   source.connect(gain);
   gain.connect(limiter);
-  limiter.connect(ctx.destination);
+  limiter.connect(softClip);
+  softClip.connect(ctx.destination);
 
   // Once an element is routed it is silent while the context is suspended, and
   // a context can be suspended by the browser between one play and the next.
