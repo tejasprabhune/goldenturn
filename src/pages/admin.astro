@@ -84,48 +84,6 @@ const PANELS = [
 </BaseLayout>
 
 <style>
-  /* The editor opens inside the row it corrects, so it is laid out as a form
-     rather than as another panel. */
-  .sub-edit {
-    margin-top: 0.6rem;
-    padding: 0.7rem;
-    background: var(--paper-raised);
-    border: 1px solid var(--rule);
-  }
-
-  .sub-edit-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-    gap: 0.6rem;
-  }
-
-  .sub-edit-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-
-  .sub-edit-field .field {
-    width: 100%;
-  }
-
-  /* The two that are sentences rather than labels get the whole row. */
-  .sub-edit-wide {
-    grid-column: 1 / -1;
-  }
-
-  .sub-edit-hint {
-    font-family: 'Neue Montreal', system-ui, sans-serif;
-    font-size: 0.75rem;
-    color: var(--diff-del);
-    min-height: 0.9rem;
-  }
-
-  .sub-edit-status {
-    align-self: center;
-  }
-
   .admin-totals {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
@@ -568,8 +526,8 @@ const PANELS = [
     { name: 'resolution', label: 'Resolution' },
     { name: 'aff', label: 'Aff' },
     { name: 'neg', label: 'Neg' },
-    { name: 'decision', label: 'Decision' },
     { name: 'tags', label: 'Tags' },
+    { name: 'decision', label: 'Decision' },
     { name: 'year', label: 'Year' },
     { name: 'tournament', label: 'Tournament' },
     { name: 'format', label: 'Format', kind: 'select', options: [['parli', 'parli'], ['policy', 'policy']] },
@@ -625,7 +583,11 @@ const PANELS = [
           : (record[f.name] ?? '');
       }
       input.name = f.name;
-      if (f.name === 'title' || f.name === 'resolution') wrap.classList.add('sub-edit-wide');
+      // The ones that hold a sentence get the whole row; a resolution or a neg
+      // in a fifth of the width is a field you have to scroll to read.
+      if (['title', 'resolution', 'aff', 'neg', 'tags'].includes(f.name)) {
+        wrap.classList.add('sub-edit-wide');
+      }
       // The two descriptions are filed in lower case, so the field shows what
       // will be filed rather than leaving the server to correct it quietly.
       if (f.name === 'aff' || f.name === 'neg') {
@@ -653,12 +615,7 @@ const PANELS = [
     status.className = 'label label-muted sub-edit-status';
     actions.append(save, cancel, status);
 
-    const note = document.createElement('p');
-    note.className = 'queue-note';
-    note.textContent = `Filed at /recordings/${record.slug ?? s.slug}, which an edit here leaves alone. `
-      + 'Search updates at once; the round\'s own page follows on the next deploy.';
-
-    form.append(grid, note, actions);
+    form.append(grid, actions);
 
     form.addEventListener('submit', async e => {
       e.preventDefault();
@@ -671,7 +628,7 @@ const PANELS = [
 
       save.disabled = true;
       try {
-        await editRecording(s.object_id, {
+        const saved = await editRecording(s.object_id, {
           title: value('title'),
           resolution: value('resolution'),
           aff: value('aff'),
@@ -683,7 +640,17 @@ const PANELS = [
           level: value('level'),
           tags,
         });
-        void loadPending();
+        // Search has it already. Whether the round's own page has it depends on
+        // a rebuild, so say which of the two happened rather than leaving the
+        // admin to wonder why the page still reads the old way.
+        status.textContent = saved.rebuilding
+          ? 'Saved. The page is rebuilding.'
+          : 'Saved. The page follows on the next deploy.';
+        setTimeout(() => {
+          form.remove();
+          edit.setAttribute('aria-expanded', 'false');
+          void loadPending();
+        }, 1400);
       } catch (err) {
         save.disabled = false;
         if (err instanceof FieldErrors) {

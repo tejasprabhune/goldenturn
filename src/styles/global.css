@@ -977,6 +977,48 @@
     word-break: break-all;
   }
 
+  /* The editor opens inside the row it corrects, so it is laid out as a form
+     rather than as another panel. */
+  .sub-edit {
+    margin-top: 0.7rem;
+    padding: 0.9rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+  }
+
+  .sub-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.9rem 0.75rem;
+  }
+
+  .sub-edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .sub-edit-field .field {
+    width: 100%;
+  }
+
+  /* The ones that hold a sentence rather than a word get the whole row. */
+  .sub-edit-wide {
+    grid-column: 1 / -1;
+  }
+
+  .sub-edit-hint {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.75rem;
+    color: var(--diff-del);
+    min-height: 0.9rem;
+  }
+
+  .sub-edit-status {
+    align-self: center;
+  }
+
   /* A submission nobody has looked at yet asks for attention; one that has
      been confirmed stops asking. */
   .queue li[data-review='unreviewed'] {

@@ -6,6 +6,8 @@ compatibility_date = "2026-07-01"
 SESSION_TTL_DAYS = "30"
 ADMIN_EMAIL = "prabhune@berkeley.edu"
 ALLOWED_ORIGINS = "https://goldenturn.org,http://localhost:4321,http://localhost:4400"
+# Where an edit asks for a rebuild. The token that authorises it is a secret.
+GITHUB_REPO = "tejasprabhune/goldenturn"
 
 [[d1_databases]]
 binding = "DB"
