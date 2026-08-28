@@ -18,6 +18,12 @@ export interface Env {
   ALGOLIA_INDEX: string;
   /** Lets the unattended onboarding run report ingest status. */
   INGEST_TOKEN: string;
+  /**
+   * Lets an edit ask GitHub to rebuild the site. Optional: without it an edit
+   * still lands, it just waits for the next deploy to reach the round's page.
+   */
+  GITHUB_DISPATCH_TOKEN?: string;
+  GITHUB_REPO?: string;
 }
 
 const ACCEPT_THRESHOLD = 5;
@@ -180,6 +186,37 @@ function slugFor(title: string, objectID: string): string {
     .replace(/-+$/g, '');
   const suffix = objectID.replace(/[^a-z0-9]/gi, '').slice(0, 6).toLowerCase();
   return `${base}-${suffix}`;
+}
+
+/**
+ * Asks GitHub to rebuild the site.
+ *
+ * The pages are static, so a correction reaches search the moment it is saved
+ * and the round's own page only when the site is next built. Waiting for a
+ * person to push is waiting for a person to remember, so the edit asks for the
+ * build itself. The workflow already listens for this event; the ingest run
+ * used to print a reminder instead.
+ *
+ * Quiet when there is no token: an edit that landed is not a failure because
+ * the rebuild could not be requested, and the next deploy will pick it up
+ * anyway. The caller is told which of the two happened.
+ */
+async function requestRebuild(env: Env, reason: string): Promise<boolean> {
+  if (!env.GITHUB_DISPATCH_TOKEN) return false;
+  const repo = env.GITHUB_REPO ?? 'tejasprabhune/goldenturn';
+  const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      // GitHub refuses a request with no agent, which reads as a network fault.
+      'User-Agent': 'goldenturn-api',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ event_type: 'rounds-changed', client_payload: { reason } }),
+  }).catch(() => null);
+  return Boolean(res && res.ok);
 }
 
 /**
@@ -729,10 +766,10 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
       now(), objectID,
     ).run();
 
-    await logEvent(env, 'recording.edited', user!.id, row.slug, {
-      objectID, fields: Object.keys(patch).filter(k => k !== 'objectID'),
-    });
-    return json({ ok: true, slug: row.slug, changed: Object.keys(patch).filter(k => k !== 'objectID') });
+    const changed = Object.keys(patch).filter(k => k !== 'objectID');
+    const rebuilding = await requestRebuild(env, `edited ${row.slug}`);
+    await logEvent(env, 'recording.edited', user!.id, row.slug, { objectID, fields: changed, rebuilding });
+    return json({ ok: true, slug: row.slug, changed, rebuilding });
   },
 
   /**
@@ -781,9 +818,12 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     await env.DB.prepare(
       `UPDATE submissions SET review = 'removed', note = ?1, updated_at = ?2 WHERE object_id = ?3`
     ).bind(note ?? null, now(), objectID).run();
-    await logEvent(env, 'recording.removed', user!.id, row.slug, { objectID, removed: removed.length });
+    // The round's page outlives its record until the site is built again.
+    const rebuilding = await requestRebuild(env, `removed ${row.slug}`);
+    await logEvent(env, 'recording.removed', user!.id, row.slug,
+      { objectID, removed: removed.length, rebuilding });
 
-    return json({ ok: true, review: 'removed', removed });
+    return json({ ok: true, review: 'removed', removed, rebuilding });
   },
 
   /**

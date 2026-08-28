@@ -230,7 +230,7 @@ export function getRoundRecord(objectID: string) {
  * is filed under.
  */
 export function editRecording(objectID: string, fields: Partial<RoundRecord> & { tags?: string[] }) {
-  return call<{ ok: true; slug: string; changed: string[] }>(
+  return call<{ ok: true; slug: string; changed: string[]; rebuilding: boolean }>(
     `/recordings/${encodeURIComponent(objectID)}`,
     { method: 'PATCH', body: JSON.stringify(fields) },
     true,
