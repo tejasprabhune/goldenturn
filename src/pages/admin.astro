@@ -444,9 +444,12 @@ const PANELS = [
       round.className = 'queue-round';
       round.href = `/recordings/${s.slug}`;
       round.textContent = s.title;
+      // Commas, and the submitter named as one. Three spaces between fields
+      // collapse to one in HTML, which read "dev audio in": a display name and
+      // an ingest stage running together as a phrase that means nothing.
       const meta = document.createElement('span');
-      meta.textContent = [s.year, s.tournament, s.author, STAGE[s.status] ?? s.status]
-        .filter(Boolean).join('   ');
+      meta.textContent = [s.year, s.tournament, s.author && `submitted by ${s.author}`]
+        .filter(Boolean).join(', ');
       head.append(round, meta);
 
       const src = document.createElement('div');
@@ -457,6 +460,12 @@ const PANELS = [
 
       const actions = document.createElement('div');
       actions.className = 'queue-actions';
+
+      const stage = document.createElement('span');
+      stage.className = 'queue-stage';
+      stage.dataset.status = s.status;
+      stage.textContent = STAGE[s.status] ?? s.status;
+      actions.append(stage);
 
       if (s.review === 'confirmed') {
         const kept = document.createElement('span');
