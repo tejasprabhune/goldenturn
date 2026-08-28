@@ -169,13 +169,28 @@ function isAdmin(user: User | null, env: Env): boolean {
 function slugFor(title: string, objectID: string): string {
   const base = (title || 'round')
     .toLowerCase()
-    .replace(/['‘’]/g, '')
+    // Only the ASCII apostrophe, matching the site exactly. Stripping the
+    // curly ones here as well looked like tidying and was a divergence: the
+    // site turns them into a dash, so a title with one was filed under a slug
+    // whose page does not exist, and its audio would never be found.
+    .replace(/[']/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 70)
     .replace(/-+$/g, '');
   const suffix = objectID.replace(/[^a-z0-9]/gi, '').slice(0, 6).toLowerCase();
   return `${base}-${suffix}`;
+}
+
+/**
+ * How the archive files a description of a side.
+ *
+ * Lower case throughout, because "T-Framework", "t-framework" and "T-framework"
+ * are one argument written three ways, and a reader scanning a list of rounds
+ * should not have to notice which was typed.
+ */
+function described(v: string): string {
+  return v.trim().toLowerCase();
 }
 
 /** The direct-download form; a share page is HTML and streams nothing. */
@@ -479,9 +494,13 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
 
     const record = {
       objectID, title, link,
+      // The slug travels with the round rather than being derived from its
+      // title on the way out, so the title can be corrected later without
+      // moving the page or orphaning the audio filed under the old name.
+      slug,
       resolution: str(body.resolution),
-      aff: str(body.aff),
-      neg: str(body.neg),
+      aff: described(str(body.aff)),
+      neg: described(str(body.neg)),
       _tags: tags,
       searchable_tags: tags,
       decision, year, format, level,
@@ -588,6 +607,132 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     ).bind(now(), objectID).run();
     await logEvent(env, 'recording.confirmed', user!.id, row.slug, { objectID });
     return json({ ok: true, review: 'confirmed' });
+  },
+
+  /** The round as search holds it, so the admin editor starts from the truth. */
+  'GET /recordings/:id': async (_req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const objectID = url.pathname.split('/')[2];
+    const res = await fetch(
+      `https://${env.ALGOLIA_APP_ID}.algolia.net/1/indexes/${env.ALGOLIA_INDEX}/${objectID}`,
+      {
+        headers: {
+          'X-Algolia-API-Key': env.ALGOLIA_ADMIN_KEY,
+          'X-Algolia-Application-Id': env.ALGOLIA_APP_ID,
+        },
+      },
+    );
+    if (res.status === 404) return json({ error: 'no such round' }, { status: 404 });
+    if (!res.ok) return json({ error: `search index refused (${res.status})` }, { status: 502 });
+    return json({ record: await res.json() });
+  },
+
+  /**
+   * Corrects what a submission says.
+   *
+   * What it says, not where it lives: submitters describe a round in their own
+   * words and someone has to be able to fix a title, but the slug is the
+   * round's address and the name its audio is filed under in R2, so it is left
+   * exactly as it was. The link is not editable here either, because a
+   * different link is a different recording and would have to be probed and
+   * ingested rather than typed over.
+   */
+  'PATCH /recordings/:id': async (req, env, url, user) => {
+    if (!isAdmin(user, env)) return json({ error: 'not permitted' }, { status: 403 });
+    const objectID = url.pathname.split('/')[2];
+    const row = await env.DB.prepare(
+      `SELECT slug, title FROM submissions WHERE object_id = ?1`
+    ).bind(objectID).first<{ slug: string; title: string }>();
+    if (!row) return json({ error: 'no such submission' }, { status: 404 });
+
+    const body = await req.json<any>().catch(() => ({}));
+    const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
+
+    const errors: Record<string, string> = {};
+    const patch: Record<string, unknown> = { objectID };
+
+    if (has('title')) {
+      const title = str(body.title);
+      if (!title) errors.title = 'A round title is required';
+      else if (title.length > 200) errors.title = 'That title is too long';
+      else patch.title = title;
+    }
+    if (has('year')) {
+      const year = str(body.year);
+      if (year && !/^\d{4}-\d{2}$/.test(year)) errors.year = 'Expected a season like 2020-21';
+      else patch.year = year;
+    }
+    if (has('decision')) {
+      const decision = str(body.decision);
+      if (decision && !/^(\d+-\d+\s+(aff|neg)|aff|neg|\d+-\d+\s+split)$/i.test(decision)) {
+        errors.decision = 'Expected Aff, Neg, 3-0 Aff, or 1-1 Split';
+      } else patch.decision = decision;
+    }
+    if (has('format')) {
+      const format = str(body.format);
+      if (!FORMATS.includes(format)) errors.format = 'Choose parli or policy';
+      else patch.format = format;
+    }
+    if (has('level')) {
+      const level = str(body.level);
+      if (!LEVELS.includes(level)) errors.level = 'Choose college or high school';
+      else patch.level = level;
+    }
+    if (has('resolution')) patch.resolution = str(body.resolution);
+    if (has('tournament')) patch.tournament = str(body.tournament);
+    if (has('aff')) patch.aff = described(str(body.aff));
+    if (has('neg')) patch.neg = described(str(body.neg));
+    if (has('tags')) {
+      const tags: string[] = Array.isArray(body.tags)
+        ? body.tags.map(str).filter((t: string) => t.startsWith('#'))
+        : [];
+      patch._tags = tags;
+      patch.searchable_tags = tags;
+      patch.aff_type = tags.includes('#k-aff') ? 'k-aff'
+        : tags.includes('#performance') ? 'performance' : 'topical';
+    }
+    if (has('neg') || has('tags')) {
+      const neg = has('neg') ? described(str(body.neg)) : '';
+      patch.neg_strategy_count = Number(neg.match(/(\d+)-off/i)?.[1]) || null;
+    }
+
+    if (Object.keys(errors).length) return json({ errors }, { status: 400 });
+    if (Object.keys(patch).length === 1) return json({ error: 'nothing to change' }, { status: 400 });
+
+    const res = await fetch(
+      `https://${env.ALGOLIA_APP_ID}.algolia.net/1/indexes/${env.ALGOLIA_INDEX}/${objectID}/partial`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Algolia-API-Key': env.ALGOLIA_ADMIN_KEY,
+          'X-Algolia-Application-Id': env.ALGOLIA_APP_ID,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(patch),
+      },
+    );
+    if (!res.ok) return json({ error: `search index refused the edit (${res.status})` }, { status: 502 });
+
+    // The queue reads from D1, so the columns it shows follow the record.
+    await env.DB.prepare(
+      `UPDATE submissions
+          SET title = COALESCE(?1, title),
+              year = COALESCE(?2, year),
+              tournament = COALESCE(?3, tournament),
+              updated_at = ?4
+        WHERE object_id = ?5`
+    ).bind(
+      patch.title ?? null,
+      has('year') ? (patch.year || null) : null,
+      has('tournament') ? (patch.tournament || null) : null,
+      now(), objectID,
+    ).run();
+
+    await logEvent(env, 'recording.edited', user!.id, row.slug, {
+      objectID, fields: Object.keys(patch).filter(k => k !== 'objectID'),
+    });
+    return json({ ok: true, slug: row.slug, changed: Object.keys(patch).filter(k => k !== 'objectID') });
   },
 
   /**

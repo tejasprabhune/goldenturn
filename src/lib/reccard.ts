@@ -46,9 +46,11 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
     ? (hit['_tags'] as string[]).filter(t => typeof t === 'string' && t.startsWith('#'))
     : [];
 
+  const slug = text(hit, 'slug');
   const href = escapeHtml(recordingHref({
     title: text(hit, 'title'),
     objectID: text(hit, 'objectID'),
+    slug,
   }));
 
   const tagPills = tags
@@ -58,7 +60,7 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
   const meta = [year, tournament].filter(Boolean).join(', ');
 
   return `
-    <article class="rec-card" data-objectid="${objectID}" data-link="${link}">
+    <article class="rec-card" data-objectid="${objectID}" data-link="${link}" data-slug="${escapeHtml(slug)}">
       <div class="rec-card__header" role="button" tabindex="0" aria-expanded="false">
         <div class="rec-card__main">
           <!--
@@ -281,6 +283,7 @@ export async function hydrateRatings(container: HTMLElement) {
     const slug = recordingSlug({
       title: card.querySelector('.rec-card__link')?.textContent ?? '',
       objectID: card.dataset.objectid ?? '',
+      slug: card.dataset.slug,
     });
     bySlug.set(slug, [...(bySlug.get(slug) ?? []), card]);
   }
@@ -339,6 +342,7 @@ export function createCardList(container: HTMLElement, opts: CardListOptions = {
     const slug = recordingSlug({
       title: card.querySelector('.rec-card__link')?.textContent ?? '',
       objectID: card.dataset.objectid ?? '',
+      slug: card.dataset.slug,
     });
     if (playable.has(slug)) {
       buildWaveformPlayer(playerEl, slug);

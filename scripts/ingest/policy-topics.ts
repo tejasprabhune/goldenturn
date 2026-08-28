@@ -197,7 +197,7 @@ async function main() {
   let noYear = 0, notTranscribed = 0, tooClose = 0;
 
   for (const round of rounds.slice(0, limit)) {
-    const slug = slugFor(round.title, round.objectID);
+    const slug = slugFor(round.title, round.objectID, round.slug);
     if (!transcribed.has(slug)) { notTranscribed += 1; continue; }
 
     const calendar = Number(round.year);

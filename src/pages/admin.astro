@@ -84,6 +84,48 @@ const PANELS = [
 </BaseLayout>
 
 <style>
+  /* The editor opens inside the row it corrects, so it is laid out as a form
+     rather than as another panel. */
+  .sub-edit {
+    margin-top: 0.6rem;
+    padding: 0.7rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+  }
+
+  .sub-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.6rem;
+  }
+
+  .sub-edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .sub-edit-field .field {
+    width: 100%;
+  }
+
+  /* The two that are sentences rather than labels get the whole row. */
+  .sub-edit-wide {
+    grid-column: 1 / -1;
+  }
+
+  .sub-edit-hint {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.75rem;
+    color: var(--diff-del);
+    min-height: 0.9rem;
+  }
+
+  .sub-edit-status {
+    align-self: center;
+  }
+
   .admin-totals {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
@@ -189,6 +231,7 @@ const PANELS = [
   import {
     adminStats, adminEvents, adminProposals, adminResolve, getUser,
     listSubmissions, confirmRecording, removeRecording,
+    getRoundRecord, editRecording, FieldErrors,
     type AdminStats, type AdminEvent,
   } from '../lib/api';
   import { areaChart, barChart } from '../lib/chart';
@@ -474,6 +517,18 @@ const PANELS = [
         actions.append(keep);
       }
 
+      const edit = document.createElement('button');
+      edit.className = 'chip';
+      edit.textContent = 'Edit';
+      edit.setAttribute('aria-expanded', 'false');
+      edit.addEventListener('click', () => {
+        const open = edit.getAttribute('aria-expanded') === 'true';
+        edit.setAttribute('aria-expanded', String(!open));
+        if (open) { li.querySelector('.sub-edit')?.remove(); return; }
+        void openEditor(li, s, edit);
+      });
+      actions.append(edit);
+
       // Removal deletes the media as well as the listing, so it asks first.
       const drop = document.createElement('button');
       drop.className = 'chip';
@@ -493,6 +548,156 @@ const PANELS = [
       li.append(actions);
       list.appendChild(li);
     }
+  }
+
+  /**
+   * Corrects what a submitted round says.
+   *
+   * Submitters describe a round in their own words, and a title with a typo
+   * in it is a round nobody searching finds. The fields come from the record
+   * itself rather than the queue, because the queue only knows the handful of
+   * columns the database keeps.
+   *
+   * What cannot be edited here: the slug, which is the round's address and the
+   * name its audio is filed under, and the link, because a different link is a
+   * different recording and has to be probed and ingested rather than typed
+   * over.
+   */
+  const EDIT_FIELDS: Array<{ name: string; label: string; kind?: 'select'; options?: Array<[string, string]> }> = [
+    { name: 'title', label: 'Round title' },
+    { name: 'resolution', label: 'Resolution' },
+    { name: 'aff', label: 'Aff' },
+    { name: 'neg', label: 'Neg' },
+    { name: 'decision', label: 'Decision' },
+    { name: 'tags', label: 'Tags' },
+    { name: 'year', label: 'Year' },
+    { name: 'tournament', label: 'Tournament' },
+    { name: 'format', label: 'Format', kind: 'select', options: [['parli', 'parli'], ['policy', 'policy']] },
+    { name: 'level', label: 'Level', kind: 'select', options: [['college', 'college'], ['hs', 'high school']] },
+  ];
+
+  async function openEditor(li: HTMLElement, s: any, edit: HTMLButtonElement) {
+    const form = document.createElement('form');
+    form.className = 'sub-edit';
+    form.innerHTML = '<p class="queue-note">Reading the round.</p>';
+    li.append(form);
+
+    let record: any;
+    try {
+      ({ record } = await getRoundRecord(s.object_id));
+    } catch (err) {
+      form.innerHTML = '';
+      const failed = document.createElement('p');
+      failed.className = 'queue-note';
+      failed.textContent = `Could not read the round: ${(err as Error).message}`;
+      form.append(failed);
+      return;
+    }
+
+    form.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'sub-edit-grid';
+
+    for (const f of EDIT_FIELDS) {
+      const wrap = document.createElement('label');
+      wrap.className = 'sub-edit-field';
+      const name = document.createElement('span');
+      name.className = 'label label-muted';
+      name.textContent = f.label;
+
+      let input: HTMLInputElement | HTMLSelectElement;
+      if (f.kind === 'select') {
+        input = document.createElement('select');
+        input.className = 'field';
+        for (const [value, text] of f.options!) {
+          const opt = document.createElement('option');
+          opt.value = value;
+          opt.textContent = text;
+          input.append(opt);
+        }
+        input.value = record[f.name] ?? '';
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'field';
+        input.value = f.name === 'tags'
+          ? (record._tags ?? []).join(', ')
+          : (record[f.name] ?? '');
+      }
+      input.name = f.name;
+      if (f.name === 'title' || f.name === 'resolution') wrap.classList.add('sub-edit-wide');
+      // The two descriptions are filed in lower case, so the field shows what
+      // will be filed rather than leaving the server to correct it quietly.
+      if (f.name === 'aff' || f.name === 'neg') {
+        input.addEventListener('blur', () => { input.value = input.value.trim().toLowerCase(); });
+      }
+
+      const hint = document.createElement('span');
+      hint.className = 'sub-edit-hint';
+      wrap.append(name, input, hint);
+      grid.append(wrap);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'queue-actions';
+    const save = document.createElement('button');
+    save.className = 'chip';
+    save.type = 'submit';
+    save.textContent = 'Save';
+    const cancel = document.createElement('button');
+    cancel.className = 'chip';
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => { form.remove(); edit.setAttribute('aria-expanded', 'false'); });
+    const status = document.createElement('span');
+    status.className = 'label label-muted sub-edit-status';
+    actions.append(save, cancel, status);
+
+    const note = document.createElement('p');
+    note.className = 'queue-note';
+    note.textContent = `Filed at /recordings/${record.slug ?? s.slug}, which an edit here leaves alone. `
+      + 'Search updates at once; the round\'s own page follows on the next deploy.';
+
+    form.append(grid, note, actions);
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      form.querySelectorAll<HTMLElement>('.sub-edit-hint').forEach(h => { h.textContent = ''; });
+      status.textContent = '';
+
+      const value = (name: string) =>
+        (form.querySelector(`[name="${name}"]`) as HTMLInputElement).value.trim();
+      const tags = value('tags').split(',').map(t => t.trim()).filter(Boolean);
+
+      save.disabled = true;
+      try {
+        await editRecording(s.object_id, {
+          title: value('title'),
+          resolution: value('resolution'),
+          aff: value('aff'),
+          neg: value('neg'),
+          decision: value('decision'),
+          year: value('year'),
+          tournament: value('tournament'),
+          format: value('format'),
+          level: value('level'),
+          tags,
+        });
+        void loadPending();
+      } catch (err) {
+        save.disabled = false;
+        if (err instanceof FieldErrors) {
+          for (const [name, message] of Object.entries(err.fields)) {
+            const field = form.querySelector(`[name="${name}"]`);
+            const hint = field?.parentElement?.querySelector('.sub-edit-hint');
+            if (hint) hint.textContent = message;
+          }
+          status.textContent = 'Not saved';
+        } else {
+          status.textContent = (err as Error).message;
+        }
+      }
+    });
   }
 
   function readSpans(p: any): { from: Span; to: Span } | null {

@@ -11,6 +11,11 @@ export interface Recording {
   year?: string;
   tournament?: string;
   teams?: string[];
+  /**
+   * The round's address, stored rather than derived, on everything submitted
+   * since titles became editable. See recordingSlug.
+   */
+  slug?: string;
   aff_type?: string;
   /**
    * Whether the linked video file still answers. Settled at ingest by
@@ -26,8 +31,14 @@ export interface Recording {
  * Permalinks are built from the title plus a slice of the objectID. The
  * objectIDs Algolia generated are opaque (`ffee0400f9790_dashboard_generated_id`),
  * so the title carries the meaning and the suffix guarantees uniqueness.
+ *
+ * A round that carries its own slug keeps it. Deriving the address from the
+ * title means correcting a typo in a title moves the page and orphans the
+ * audio filed under the old name, so the slug is data now: settled once, at
+ * the moment the round arrives, and never recomputed.
  */
-export function recordingSlug(hit: { title?: string; objectID: string }): string {
+export function recordingSlug(hit: { title?: string; objectID: string; slug?: string }): string {
+  if (hit.slug) return hit.slug;
   const base = (hit.title ?? 'round')
     .toLowerCase()
     .replace(/['']/g, '')

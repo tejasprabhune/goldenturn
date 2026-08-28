@@ -25,8 +25,9 @@ function client() {
   });
 }
 
-/** Mirrors recordingSlug in src/lib/recordings.ts. */
-function slugFor(title: string, objectID: string): string {
+/** Mirrors recordingSlug in src/lib/recordings.ts, stored slug included. */
+function slugFor(title: string, objectID: string, stored?: string): string {
+  if (stored) return stored;
   const base = (title ?? 'round')
     .toLowerCase()
     .replace(/['']/g, '')
@@ -65,7 +66,7 @@ async function formatsBySlug(): Promise<Map<string, RoundFormat>> {
       const format = h.format === 'policy'
         ? (h.level === 'hs' ? FORMATS['policy-hs'] : FORMATS.policy)
         : FORMATS.parli;
-      out.set(slugFor(h.title, h.objectID), format);
+      out.set(slugFor(h.title, h.objectID, h.slug), format);
     }
     if (page >= (res.nbPages ?? 1) - 1) break;
     page += 1;

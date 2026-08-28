@@ -20,6 +20,18 @@ export function composeTitle({ stage, affTeam, negTeam }: TitleParts): string {
   return [stage, teams].filter(Boolean).join(' - ');
 }
 
+/**
+ * How the archive files a description of a side.
+ *
+ * Lower case throughout: "T-Framework", "t-framework" and "T-framework" are
+ * one argument written three ways, and a reader scanning a list of rounds
+ * should not have to notice which one somebody typed. The preview shows the
+ * lowered text, because that is what is going to be filed.
+ */
+function described(v: string): string {
+  return v.trim().toLowerCase();
+}
+
 export interface AffParts {
   topical: boolean;
   advantages: string[];
@@ -40,17 +52,17 @@ export interface AffParts {
  */
 export function composeAff({ topical, advantages, mg, pmr, other, free }: AffParts): string {
   const rest = [
-    mg.trim() && `mg reads ${mg.trim()}`,
-    pmr.trim() && `pmr goes for ${pmr.trim()}`,
-    other.trim(),
+    described(mg) && `mg reads ${described(mg)}`,
+    described(pmr) && `pmr goes for ${described(pmr)}`,
+    described(other),
   ].filter(Boolean) as string[];
 
-  const advs = advantages.map(a => a.trim()).filter(Boolean);
+  const advs = advantages.map(described).filter(Boolean);
   // Nothing said at all is nothing filed, rather than a bare "topical" on
   // every round whose aff nobody got round to describing.
   const lead = topical
     ? (advs.length ? `topical (${advs.join(', ')})` : 'topical')
-    : free.trim();
+    : described(free);
 
   if (topical && advs.length === 0 && rest.length === 0) return '';
   if (!lead && rest.length === 0) return '';
@@ -61,7 +73,7 @@ export function composeAff({ topical, advantages, mg, pmr, other, free }: AffPar
 /** "3-off (framework-t, actor spec, orientalism)". */
 export function composeNeg(count: number, positions: string[]): string {
   if (!Number.isFinite(count) || count <= 0) return '';
-  const named = positions.map(p => p.trim()).filter(Boolean);
+  const named = positions.map(described).filter(Boolean);
   return named.length ? `${count}-off (${named.join(', ')})` : `${count}-off`;
 }
 
