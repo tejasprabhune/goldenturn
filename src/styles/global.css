@@ -977,6 +977,24 @@
     word-break: break-all;
   }
 
+  /* How far a submission has got, which is a state rather than a fact about
+     the round, so it sits with the other states instead of running into the
+     tournament name. */
+  .queue-stage {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    letter-spacing: 0.02em;
+    color: rgba(23, 21, 15, 0.5);
+    align-self: center;
+    padding-right: 0.3rem;
+  }
+
+  /* An ingest that failed is the one worth reading twice. */
+  .queue-stage[data-status='failed'] {
+    color: var(--diff-del);
+    font-weight: 500;
+  }
+
   /* The editor opens inside the row it corrects, so it is laid out as a form
      rather than as another panel. */
   .sub-edit {
