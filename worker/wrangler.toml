@@ -4,7 +4,9 @@ compatibility_date = "2026-07-01"
 
 [vars]
 SESSION_TTL_DAYS = "30"
-ADMIN_EMAIL = "prabhune@berkeley.edu"
+# Comma separated. The second is a machine account used to exercise the admin
+# endpoints; its password lives in .env and nowhere in the repo.
+ADMIN_EMAIL = "prabhune@berkeley.edu,admincli@goldenturn.org"
 ALLOWED_ORIGINS = "https://goldenturn.org,http://localhost:4321,http://localhost:4400"
 # Where an edit asks for a rebuild. The token that authorises it is a secret.
 GITHUB_REPO = "tejasprabhune/goldenturn"

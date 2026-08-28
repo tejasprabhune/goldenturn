@@ -80,7 +80,10 @@ function cors(origin: string | null, allowed: string[]): Record<string, string> 
   const ok = origin && allowed.includes(origin) ? origin : allowed[0];
   return {
     'Access-Control-Allow-Origin': ok,
-    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+    // PATCH included: an edit from the admin page is a PATCH, and a method
+    // missing from this list is refused at the preflight, before the handler
+    // it would have reached ever runs.
+    'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     'Access-Control-Allow-Credentials': 'true',
     Vary: 'Origin',
@@ -164,7 +167,11 @@ async function settleProposal(env: Env, proposalId: string) {
 }
 
 function isAdmin(user: User | null, env: Env): boolean {
-  return Boolean(user && user.email === (env.ADMIN_EMAIL ?? '').toLowerCase());
+  // A list, so a second account can hold the same powers without the first
+  // one losing them. Emails are stored lowered, and compared that way.
+  const admins = (env.ADMIN_EMAIL ?? '')
+    .toLowerCase().split(',').map(e => e.trim()).filter(Boolean);
+  return Boolean(user && admins.includes(user.email));
 }
 
 /**
