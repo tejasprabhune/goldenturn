@@ -97,7 +97,10 @@ export function filenameFromLink(link: string): string {
  * every ingest script needs it, and importing it from one that runs on import
  * starts a download nobody asked for.
  */
-export function slugFor(title: string, objectID: string): string {
+export function slugFor(title: string, objectID: string, stored?: string): string {
+  // A round that carries its own slug keeps it, so a corrected title does not
+  // send the ingest looking for audio under a name nothing is filed under.
+  if (stored) return stored;
   const base = (title ?? 'round')
     .toLowerCase()
     .replace(/['']/g, '')

@@ -162,7 +162,7 @@ async function main() {
   const client = s3();
   const audio = await have(client, 'audio/', '.m4a');
 
-  const outstanding = rounds.filter(r => !audio.has(slugFor(r.title, r.objectID)));
+  const outstanding = rounds.filter(r => !audio.has(slugFor(r.title, r.objectID, r.slug)));
   // A named round is pulled whether or not it is outstanding, so a bad
   // download can be replaced without emptying the bucket first.
   let queue = only.length ? rounds.filter(r => only.includes(r.objectID)) : outstanding;
@@ -187,7 +187,7 @@ async function main() {
   async function worker() {
     while (next < batch.length) {
       const r = batch[next++];
-      const slug = slugFor(r.title, r.objectID);
+      const slug = slugFor(r.title, r.objectID, r.slug);
       try {
         const res = await ingest(r, slug, client);
         console.log(`  ${Math.round(res.duration / 60)}min  ${res.audioMB}MB  -> ${slug}`);

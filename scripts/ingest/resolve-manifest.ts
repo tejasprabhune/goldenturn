@@ -28,7 +28,8 @@ interface ManifestEntry {
   dropbox?: { id: string; path: string; size: number };
 }
 
-function recordingSlug(hit: { title?: string; objectID: string }): string {
+function recordingSlug(hit: { title?: string; objectID: string; slug?: string }): string {
+  if (hit.slug) return hit.slug;
   const base = (hit.title ?? 'round')
     .toLowerCase().replace(/['']/g, '').replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '').slice(0, 70).replace(/-+$/g, '');

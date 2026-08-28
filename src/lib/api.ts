@@ -86,7 +86,12 @@ async function call<T>(path: string, init: RequestInit = {}, auth = false): Prom
     throw new Error((body as any).error ?? 'sign in failed');
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((body as any).error ?? `request failed (${res.status})`);
+  if (!res.ok) {
+    // A refusal that names the fields it refused is worth keeping as one, so
+    // an editor can put each complaint under the field it belongs to.
+    if ((body as any).errors) throw new FieldErrors((body as any).errors);
+    throw new Error((body as any).error ?? `request failed (${res.status})`);
+  }
   return body as T;
 }
 
@@ -196,6 +201,40 @@ export function confirmRecording(objectID: string) {
 export function removeRecording(objectID: string, note?: string) {
   return call<{ ok: true; removed: string[] }>(`/recordings/${encodeURIComponent(objectID)}`,
     { method: 'DELETE', body: JSON.stringify({ note }) }, true);
+}
+
+/** What search holds for a round, so an edit starts from the record itself. */
+export interface RoundRecord {
+  objectID: string;
+  title?: string;
+  link?: string;
+  slug?: string;
+  resolution?: string;
+  aff?: string;
+  neg?: string;
+  decision?: string;
+  year?: string;
+  tournament?: string;
+  format?: string;
+  level?: string;
+  _tags?: string[];
+}
+
+export function getRoundRecord(objectID: string) {
+  return call<{ record: RoundRecord }>(`/recordings/${encodeURIComponent(objectID)}`, {}, true);
+}
+
+/**
+ * Corrects what a round says. Only the fields passed are touched, and the
+ * slug is never one of them: it is the round's address and the name its audio
+ * is filed under.
+ */
+export function editRecording(objectID: string, fields: Partial<RoundRecord> & { tags?: string[] }) {
+  return call<{ ok: true; slug: string; changed: string[] }>(
+    `/recordings/${encodeURIComponent(objectID)}`,
+    { method: 'PATCH', body: JSON.stringify(fields) },
+    true,
+  );
 }
 
 export function vote(proposalId: string, value: -1 | 0 | 1) {
