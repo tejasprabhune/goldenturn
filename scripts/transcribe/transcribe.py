@@ -101,6 +101,14 @@ def load_shard():
 
 def main():
     client = s3()
+    # Asked before the model is loaded. With a key the bucket refuses, every
+    # round was transcribed in full and lost at the upload, and the check for
+    # an existing transcript reads a refusal as "not there".
+    try:
+        client.list_objects_v2(Bucket=BUCKET, MaxKeys=1)
+    except Exception as e:
+        print(f"FAIL storage refused this job's key :: {type(e).__name__}: {str(e)[:200]}", flush=True)
+        sys.exit(1)
     todo = load_shard()
     print(f"shard {SHARD}/{SHARD_COUNT}: {len(todo)} candidate rounds", flush=True)
 

@@ -61,22 +61,77 @@ function azSignedIn(): boolean {
   }
 }
 
+interface Execution { status: string; start: number; end: number }
+
 /**
- * Whether a transcription job still has work in flight.
+ * A job's executions, newest first, or null when Azure could not be asked.
  *
- * Treated as busy when the answer cannot be got: refusing to start a job that
- * might already be running costs a delay, and starting one that is costs a
- * second GPU for as long as it takes.
+ * Null is treated as busy by the caller: refusing to start a job that might
+ * already be running costs a delay, and starting one that is costs a second
+ * GPU for as long as it takes.
  */
-function isRunning(job: string): boolean {
+function executions(job: string): Execution[] | null {
   try {
-    const out = sh('az', ['containerapp', 'job', 'execution', 'list', '-n', job,
-      '-g', RG, '--query', "[?properties.status=='Running'] | length(@)", '-o', 'tsv']);
-    return Number(out.trim()) > 0;
+    const out = sh('az', ['containerapp', 'job', 'execution', 'list', '-n', job, '-g', RG,
+      '--query', '[].{status:properties.status,start:properties.startTime,end:properties.endTime}',
+      '-o', 'json']);
+    const rows = JSON.parse(out) as Array<{ status?: string; start?: string; end?: string }>;
+    return rows
+      .map(r => {
+        const start = Date.parse(r.start ?? '') || 0;
+        return { status: r.status ?? 'Unknown', start, end: Date.parse(r.end ?? '') || start };
+      })
+      .sort((a, b) => b.start - a.start);
   } catch {
-    return true;
+    return null;
   }
 }
+
+/**
+ * How long a job is left alone after an execution of it failed.
+ *
+ * A job that fails is not a job that is free. Started again by every run, one
+ * with a storage key the bucket refuses transcribed the same three rounds on a
+ * GPU every fifteen minutes and threw each result away at the upload, and
+ * every one of those runs reported that transcription had started.
+ */
+const TX_REST_MS = Math.max(0, Number(process.env.TX_REST_MIN ?? '60')) * 60_000;
+
+/** The storage key and secret, taken out of anything about to be shown. */
+function scrub(text: string): string {
+  let out = text;
+  for (const k of ['CLOUDFLARE_S3_KEY', 'CLOUDFLARE_S3_SECRET']) {
+    const v = process.env[k];
+    if (v) out = out.split(v).join('***');
+  }
+  return out;
+}
+
+/**
+ * Hands a job the storage key this run is using.
+ *
+ * The jobs write transcripts to the same bucket with a key of their own, set
+ * on each job in Azure. Replacing the key in the repository's secrets left
+ * theirs as it was, so the ingest could write and the jobs could not. Given
+ * the key at every start, there is one place to change it.
+ */
+function giveStorageKey(job: string): void {
+  try {
+    // Its errors are kept off the log, where sh would let them through: one
+    // that quotes the command back quotes the key with it.
+    execFileSync('az', ['containerapp', 'job', 'secret', 'set', '-n', job, '-g', RG, '--secrets',
+      `gt-r2-key=${process.env.CLOUDFLARE_S3_KEY}`,
+      `gt-r2-secret=${process.env.CLOUDFLARE_S3_SECRET}`, '-o', 'none'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 3 * 60_000, killSignal: 'SIGKILL' });
+  } catch (err) {
+    throw new Error(`its storage key could not be set: ${scrub(errorText(err))}`);
+  }
+}
+const STORAGE_KEY_ENV = [
+  'CLOUDFLARE_S3_KEY=secretref:gt-r2-key', 'CLOUDFLARE_S3_SECRET=secretref:gt-r2-secret',
+];
+
+const clock = (ms: number) => `${new Date(ms).toISOString().slice(11, 16)} UTC`;
 
 async function slugsUnder(client: S3Client, prefix: string, suffix: string): Promise<Set<string>> {
   const out = new Set<string>();
@@ -175,14 +230,37 @@ async function main() {
     // second GPU, and this runs on a schedule: with a backlog and no check,
     // every run would stack more paid GPUs on top of the ones already going.
     const signedIn = azSignedIn();
-    const idle = signedIn ? TX_JOBS.filter(job => !isRunning(job)) : [];
+    const free: string[] = [];
+    // Jobs whose last execution failed a short while ago, and when it ended.
+    const resting: Array<{ job: string; at: number }> = [];
+    let busy = 0;
+    for (const job of signedIn ? TX_JOBS : []) {
+      const runs = executions(job);
+      if (!runs || runs.some(r => r.status === 'Running' || r.status === 'Processing')) busy++;
+      else if (runs[0]?.status === 'Failed' && Date.now() - runs[0].end < TX_REST_MS) {
+        resting.push({ job, at: runs[0].end });
+      } else free.push(job);
+    }
+    // One job failing may be that job. Two is the thing they share, and the
+    // rest would fail the same way, each on a GPU of its own.
+    const stopped = resting.length >= 2;
+    const idle = stopped ? [] : free;
+    const resumeAt = resting.length ? Math.max(...resting.map(r => r.at)) + TX_REST_MS : 0;
     console.log(`\nstarting transcription for ${untranscribed.length} round(s)`);
     if (!signedIn) {
       console.log('  not signed in to Azure, so no transcription job can be started');
-    } else if (idle.length < TX_JOBS.length) {
-      console.log(`  ${TX_JOBS.length - idle.length} job(s) still busy from a previous run`);
+    } else if (busy) {
+      console.log(`  ${busy} job(s) still busy from a previous run`);
     }
-    if (signedIn && !idle.length) {
+    for (const r of resting) {
+      console.log(`  ${r.job} failed its last run at ${clock(r.at)} and is left alone until ${clock(r.at + TX_REST_MS)}`);
+      // Said once, on the run that finds it, since a run that ends in error
+      // is what reaches a person and four an hour would be noise.
+      if (Date.now() - r.at < 20 * 60_000) problems.push(`transcription job ${r.job} failed its last run`);
+    }
+    if (stopped) {
+      console.log(`  ${resting.length} jobs failed, so none is started until ${clock(resumeAt)}`);
+    } else if (signedIn && !idle.length) {
       console.log('  every job is busy; the rest wait for the next run');
     }
     const handed = new Set<string>();
@@ -197,14 +275,15 @@ async function main() {
       const batch = untranscribed.slice(i * perJob, (i + 1) * perJob);
       const job = idle[i];
       try {
+        giveStorageKey(job);
         sh('az', ['containerapp', 'job', 'update', '-n', job, '-g', RG,
-          '--set-env-vars', `SLUGS=${batch.join(' ')}`, '-o', 'none']);
+          '--set-env-vars', `SLUGS=${batch.join(' ')}`, ...STORAGE_KEY_ENV, '-o', 'none']);
         sh('az', ['containerapp', 'job', 'start', '-n', job, '-g', RG, '-o', 'none']);
         console.log(`  ${job}: ${batch.length} round(s)`);
         batch.forEach(s => handed.add(s));
         await reportEvents(batch.map(slug => ({ stage: 'transcript', state: 'started', slug, note: job })));
       } catch (err) {
-        const why = errorText(err).slice(0, 200);
+        const why = scrub(errorText(err)).slice(0, 200);
         console.log(`  ${job}: could not start (${why})`);
         batch.forEach(s => refused.add(s));
         await reportEvents(batch.map(slug => (
@@ -215,10 +294,14 @@ async function main() {
     // has something on its record besides the wait.
     const waiting = untranscribed.filter(s => !handed.has(s) && !refused.has(s));
     if (waiting.length) {
-      await reportEvents(waiting.map(slug => ({
-        stage: 'transcript', state: 'skipped', slug,
-        note: signedIn ? 'every transcription job was busy' : 'not signed in to Azure',
-      })));
+      // Failed rather than skipped when it is a failure they wait on: the
+      // round's page then says the step went wrong and is tried again.
+      const failedJobs = resting.map(r => r.job).join(', ');
+      await reportEvents(waiting.map(slug => (stopped || (resting.length && !free.length && !busy)
+        ? { stage: 'transcript' as const, state: 'failed' as const, slug,
+            note: `${failedJobs} failed the last run; transcription is tried again after ${clock(resumeAt)}` }
+        : { stage: 'transcript' as const, state: 'skipped' as const, slug,
+            note: signedIn ? 'every transcription job was busy' : 'not signed in to Azure' })));
     }
     if (handed.size) {
       console.log('  left running; their transcripts are picked up on a later run');
