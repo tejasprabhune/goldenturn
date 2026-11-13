@@ -1,6 +1,7 @@
 ---
 import { formatTime } from '../lib/waveform';
 import { BOOST_LEVELS, boostLabel } from '../lib/boost';
+import { directMediaUrl, mediaKind } from '../lib/recordings';
 
 interface Props {
   slug: string;
@@ -20,6 +21,14 @@ interface Props {
 const { slug, title, hasMedia, videoEmbed = null, videoFile = null, sourceLink } = Astro.props;
 const MEDIA = 'https://media.goldenturn.org';
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+// A round not processed yet can still be heard when its link is a plain file,
+// as the card on the list already does. A video link is left to the embed or
+// the checked video above, since an unchecked one can be a dead link to a
+// file of several hundred megabytes.
+const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLink) === 'audio'
+  ? directMediaUrl(sourceLink)
+  : null;
 ---
 
 <section
@@ -86,14 +95,32 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         <p class="wave-loading label label-muted" id="wave-loading">loading waveform</p>
       </div>
 
+      <!--
+        The steps either side of play are the ones people reach for while
+        listening, to hear a line again or skip a pause, so they sit with play
+        rather than only behind the keyboard or in the phone's following bar.
+      -->
       <div class="transport">
-        <button id="play" class="transport-play" aria-label="Play">
-          <span id="play-icon">play</span>
-        </button>
+        <div class="transport-main" id="transport-main">
+          <button class="transport-skip" data-seek="-30" aria-label="Back 30 seconds"
+            aria-keyshortcuts="Shift+ArrowLeft" title="Back 30 seconds (Shift+Left)">&minus;30</button>
+          <button class="transport-skip" data-seek="-5" aria-label="Back 5 seconds"
+            aria-keyshortcuts="ArrowLeft" title="Back 5 seconds (Left)">&minus;5</button>
+          <button id="play" class="transport-play" aria-label="Play" aria-keyshortcuts="Space">
+            <span id="play-icon">play</span>
+          </button>
+          <button class="transport-skip" data-seek="5" aria-label="Forward 5 seconds"
+            aria-keyshortcuts="ArrowRight" title="Forward 5 seconds (Right)">+5</button>
+          <button class="transport-skip" data-seek="30" aria-label="Forward 30 seconds"
+            aria-keyshortcuts="Shift+ArrowRight" title="Forward 30 seconds (Shift+Right)">+30</button>
+        </div>
+
+        <span class="transport-clock">
 
         <span class="transport-time" id="time">0:00</span>
         <span class="transport-sep" aria-hidden="true">/</span>
         <span class="transport-time transport-total" id="total">0:00</span>
+        </span>
 
         <div class="transport-right">
           {(videoEmbed || videoFile) && (
@@ -111,9 +138,14 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
               {BOOST_LEVELS.map(b => <option value={b}>{boostLabel(b)}</option>)}
             </select>
           </label>
-          <a class="chip" href={`${MEDIA}/audio/${slug}.m4a`} download>download</a>
+          <a class="chip" id="download" href={`${MEDIA}/audio/${slug}.m4a`} download={`${slug}.m4a`}>download</a>
         </div>
       </div>
+
+      <!-- Shown in place of the controls when the audio file will not load. -->
+      <p class="page-lede player-missing" id="player-missing" hidden>
+        The audio file for this round could not be loaded. The original source is linked below.
+      </p>
 
       <div class="loop" id="loop" hidden>
         <span class="label label-muted">loop</span>
@@ -149,8 +181,8 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
       <dl class="keys">
         <div class="key-row"><dt>Play</dt><dd><kbd>Space</kbd></dd></div>
-        <div class="key-row"><dt>Seek</dt><dd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
-        <div class="key-row"><dt>Seek 30s</dt><dd><kbd>Shift</kbd><kbd>&larr;</kbd></dd></div>
+        <div class="key-row"><dt>5s</dt><dd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
+        <div class="key-row"><dt>30s</dt><dd><kbd>Shift</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dd></div>
         <div class="key-row"><dt>Speech</dt><dd><kbd>1</kbd><span>&ndash;</span><kbd>6</kbd></dd></div>
         <div class="key-row"><dt>Loop</dt><dd><kbd>Shift</kbd><kbd>drag</kbd></dd></div>
         <div class="key-row"><dt>2x</dt><dd><kbd>hold</kbd></dd></div>
@@ -182,10 +214,27 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       </div>
     </>
   ) : (
-    <p class="page-lede" style="margin-top: 0;">
-      No hosted audio for this round.
-      <a href={sourceLink} target="_blank" rel="noopener noreferrer" class="link">Open the original source</a>.
-    </p>
+    <>
+      {sourceAudio && (
+        <div class="player-source" id="player-source">
+          <audio id="player-source-audio" controls preload="none" src={sourceAudio}></audio>
+          <p class="label label-muted player-source-note">
+            Playing from the original link until this round is processed.
+          </p>
+        </div>
+      )}
+      <!--
+        Under a working embed this said there was no audio, which read as a
+        fault in the video above it, and then linked the source the page links
+        again just below. It is only said when there is nothing to play.
+      -->
+      <p class="page-lede player-none" id="player-none" style="margin-top: 0;"
+        hidden={Boolean(videoEmbed || videoFile || sourceAudio)}>
+        No hosted audio for this round yet.
+      </p>
+      <!-- Where a submitted round has got to, from the progress endpoint. -->
+      <p class="label label-muted player-progress" id="player-progress" hidden></p>
+    </>
   )}
 </section>
 
@@ -290,7 +339,59 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     flex-wrap: wrap;
   }
 
+  /* Play and the steps either side of it read as one control: joined edges,
+     one ink rule round the lot, play in gold at the centre. */
+  .transport-main {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .transport-skip {
+    font-family: 'Neue Montreal', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    background: var(--paper-raised);
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    min-width: 2.75rem;
+    padding: 0 0.5rem;
+    cursor: pointer;
+    transition: background-color 60ms linear;
+    /* Two quick presses are two skips, not a zoom; see the following bar. */
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .transport-main > * + * {
+    margin-left: -1px;
+  }
+
+  .transport-skip:hover {
+    background: var(--sky-wash);
+  }
+
+  .transport-skip:active {
+    background: var(--sky);
+  }
+
+  .transport-skip:focus-visible,
+  .transport-play:focus-visible {
+    position: relative;
+    z-index: 1;
+  }
+
+  .transport-clock {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 0.5rem;
+  }
+
   .transport-play {
+    touch-action: manipulation;
     font-family: 'Neue Montreal', system-ui, sans-serif;
     font-size: 0.6875rem;
     font-weight: 500;
@@ -590,11 +691,60 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       height: 96px;
     }
 
+    /* Straight under the waveform, the whole width, and big enough for a
+       thumb, so moving five seconds never means scrolling the waveform away. */
+    .transport-main {
+      width: 100%;
+    }
+
+    .transport-main > * {
+      flex: 1;
+      min-height: 46px;
+      min-width: 0;
+    }
+
+    .transport-main .transport-play {
+      flex: 1.6;
+    }
+
+    .transport-clock {
+      margin-left: 0;
+    }
+
+    .transport-right {
+      margin-left: auto;
+    }
+  }
+
+  @media (max-width: 420px) {
     .transport-right {
       margin-left: 0;
       width: 100%;
-      padding-top: 0.5rem;
+      padding-top: 0.25rem;
     }
+  }
+
+  .player-missing {
+    margin: 1rem 0 0;
+  }
+
+  /* An audio file that will not load takes its controls with it. */
+  .player[data-audio-failed='1'] :is(.wave-wrap, .transport, .loop, .speeches-row,
+    .speech-missing, .timing-votes, .fixer, .keys) {
+    display: none;
+  }
+
+  .player-source audio {
+    display: block;
+    width: 100%;
+  }
+
+  .player-source-note {
+    margin: 0.5rem 0 0;
+  }
+
+  .player-progress {
+    margin: 0.75rem 0 0;
   }
 </style>
 
@@ -602,7 +752,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
   import {
     track, propose, listRevisions, listProposals, vote, getUser, isAdmin,
-    adminResolve, NotSignedIn, type Proposal,
+    adminResolve, NotSignedIn, API, type Proposal,
   } from '../lib/api';
   import {
     sideOf, usable, placed, byTime, applyBoundaries, parseSpan, withSpans,
@@ -613,6 +763,45 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
   const MEDIA = 'https://media.goldenturn.org';
+  const SPEED_KEY = 'gt:speed';
+
+  /**
+   * Whether a key press belongs to something other than the player.
+   *
+   * Typing fields keep their keys. A button or link reached from the keyboard
+   * keeps Space and Enter, so Space presses Follow or a vote instead of
+   * toggling playback; one that was clicked with a mouse does not, since the
+   * click left it focused and Space after a click means play or pause. Any
+   * chord with Alt, Ctrl or Cmd is the browser's (Back, Home, switching tab),
+   * and so is everything while a dialog is open.
+   */
+  // Whether focus last moved by pointer. :focus-visible alone is not enough:
+  // a button tabbed to and then clicked keeps matching it in Chrome.
+  let pointerFocus = false;
+  document.addEventListener('pointerdown', () => { pointerFocus = true; }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Tab') pointerFocus = false; }, true);
+
+  function notForPlayer(e: KeyboardEvent): boolean {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return true;
+    if (document.querySelector('dialog[open]')) return true;
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) return false;
+    if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return true;
+    const pressable = el.matches('button, a[href], summary, [role="button"], [role="checkbox"]');
+    return pressable && (e.key === ' ' || e.key === 'Enter') && !pointerFocus;
+  }
+
+  /**
+   * How far a round submitted through the site has got. Anonymous, and asked
+   * once per page however many parts of it want to know.
+   */
+  function roundProgress(slug: string): Promise<any | null> {
+    const w = window as any;
+    w.__gtProgress ??= fetch(`${API}/rounds/${encodeURIComponent(slug)}/progress`)
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null);
+    return w.__gtProgress;
+  }
 
   const root = document.querySelector<HTMLElement>('.player');
   const audio = document.getElementById('audio') as HTMLAudioElement | null;
@@ -637,6 +826,41 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     const positionKey = `gt:pos:${slug}`;
     track('round.view', slug);
+
+    // A speed is how somebody listens, not a property of one round, so it is
+    // kept across rounds and reloads. defaultPlaybackRate as well, because
+    // loading the source resets playbackRate to it.
+    const savedSpeed = Number(localStorage.getItem(SPEED_KEY));
+    if (speed && savedSpeed && [...speed.options].some(o => Number(o.value) === savedSpeed)) {
+      speed.value = String(savedSpeed);
+      audio.defaultPlaybackRate = savedSpeed;
+      audio.playbackRate = savedSpeed;
+    }
+
+    /** Plays without letting a refused or failed start pass silently. */
+    function play() {
+      void audio!.play().catch(() => {});
+    }
+    function toggle() {
+      if (audio!.paused) play(); else audio!.pause();
+    }
+    function seekBy(by: number) {
+      audio!.currentTime = Math.max(0, Math.min(audio!.duration || 1e9, audio!.currentTime + by));
+    }
+
+    /**
+     * A file the index lists can still be missing, and a play button that
+     * does nothing says nothing. The controls make way for a line that does.
+     */
+    const audioFailed = () => {
+      root!.dataset.audioFailed = '1';
+      document.getElementById('player-missing')!.hidden = false;
+      document.getElementById('nowbar')?.remove();
+      document.body.style.paddingBottom = '';
+    };
+    audio.addEventListener('error', audioFailed);
+    // The load starts with the markup, so it can fail before this runs.
+    if (audio.error || audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) audioFailed();
 
     fetch(peaksUrl)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
@@ -665,17 +889,18 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
     }
 
-    playBtn.addEventListener('click', () => {
-      if (audio.paused) audio.play(); else audio.pause();
-    });
+    playBtn.addEventListener('click', toggle);
     audio.addEventListener('play', () => setPlaying(true));
     audio.addEventListener('pause', () => setPlaying(false));
-    audio.addEventListener('loadedmetadata', () => {
+    const onMetadata = () => {
       if (isFinite(audio.duration)) {
         totalEl.textContent = formatTime(audio.duration);
         canvas.setAttribute('aria-valuemax', String(Math.floor(audio.duration)));
       }
-    });
+    };
+    audio.addEventListener('loadedmetadata', onMetadata);
+    // The metadata can arrive before this script does, and the event with it.
+    if (audio.readyState >= 1) onMetadata();
 
     let lastSaved = 0;
     audio.addEventListener('timeupdate', () => {
@@ -696,7 +921,43 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       }
     });
 
-    speed?.addEventListener('change', () => { audio.playbackRate = Number(speed.value); });
+    speed?.addEventListener('change', () => {
+      audio.playbackRate = Number(speed.value);
+      audio.defaultPlaybackRate = Number(speed.value);
+      try { localStorage.setItem(SPEED_KEY, speed.value); } catch {}
+    });
+
+    /**
+     * download is ignored on a link to another origin, so the link opened the
+     * bare file in place of the round. Fetched and saved from here instead,
+     * which R2's CORS headers allow; if that fails the file opens in a new tab
+     * and the round stays where it was.
+     */
+    const download = document.getElementById('download') as HTMLAnchorElement | null;
+    download?.addEventListener('click', async e => {
+      e.preventDefault();
+      if (download.dataset.busy) return;
+      download.dataset.busy = '1';
+      const label = download.textContent;
+      download.textContent = 'downloading';
+      try {
+        const res = await fetch(download.href);
+        if (!res.ok) throw new Error(String(res.status));
+        const url = URL.createObjectURL(await res.blob());
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = download.getAttribute('download') || `${slug}.m4a`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } catch {
+        window.open(download.href, '_blank', 'noopener');
+      } finally {
+        download.textContent = label;
+        delete download.dataset.busy;
+      }
+    });
 
     /**
      * Louder than the device goes, for the rounds recorded from the back of a
@@ -829,7 +1090,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       holdTimer = setTimeout(() => {
         holding = true;
         audio.playbackRate = 2;
-        if (audio.paused) void audio.play().catch(() => {});
+        if (audio.paused) play();
       }, 350);
     });
 
@@ -882,19 +1143,44 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     });
 
     document.addEventListener('keydown', e => {
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (notForPlayer(e)) return;
       if (e.key === ' ') {
         e.preventDefault();
-        if (audio.paused) audio.play(); else audio.pause();
+        toggle();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        audio.currentTime = Math.min(audio.duration || 1e9, audio.currentTime + (e.shiftKey ? 30 : 5));
+        seekBy(e.shiftKey ? 30 : 5);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        audio.currentTime = Math.max(0, audio.currentTime - (e.shiftKey ? 30 : 5));
+        seekBy(e.shiftKey ? -30 : -5);
       }
     });
+
+    /*
+     * Steps of five and thirty seconds, and speech to speech: the transport
+     * row and the phone's following bar share one handler, so the two cannot
+     * drift apart.
+     */
+    function onSeekButton(e: Event) {
+      const btn = (e.target as Element).closest('[data-seek]') as HTMLElement | null;
+      if (!btn) return;
+      const what = btn.dataset.seek!;
+      if (what === 'play') { toggle(); return; }
+      if (what === 'speech-prev' || what === 'speech-next') {
+        const starts = fitted.filter(placed).map(s => s.start).sort((a, b) => a - b);
+        // A second or two into a speech, "previous" means the start of this
+        // one rather than the one before it, which is what a person pressing
+        // it twice expects.
+        const here = audio!.currentTime;
+        const to = what === 'speech-next'
+          ? starts.find(s => s > here + 1)
+          : [...starts].reverse().find(s => s < here - 2);
+        if (to !== undefined) audio!.currentTime = to;
+        return;
+      }
+      seekBy(Number(what));
+    }
+    document.getElementById('transport-main')?.addEventListener('click', onSeekButton);
 
     // Speech regions shade the waveform and give keyboard jumps 1-6.
     let speechStarts: number[] = [];
@@ -941,7 +1227,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         b.appendChild(at);
         b.addEventListener('click', () => {
           audio.currentTime = s.start;
-          void audio.play();
+          play();
           track('speech.jump', slug, { label: s.label });
         });
         box.appendChild(b);
@@ -971,17 +1257,18 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     canvas.addEventListener('keydown', e => {
       if (e.key === 'Home') { e.preventDefault(); audio.currentTime = 0; }
       else if (e.key === 'End') { e.preventDefault(); audio.currentTime = Math.max(0, audio.duration - 1); }
-      else if (e.key === 'Enter') { e.preventDefault(); if (audio.paused) void audio.play(); else audio.pause(); }
+      else if (e.key === 'PageUp') { e.preventDefault(); seekBy(30); }
+      else if (e.key === 'PageDown') { e.preventDefault(); seekBy(-30); }
+      else if (e.key === 'Enter') { e.preventDefault(); toggle(); }
     });
 
     document.addEventListener('keydown', e => {
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (notForPlayer(e)) return;
       const n = Number(e.key);
       if (n >= 1 && n <= 6 && speechStarts[n - 1] !== undefined) {
         e.preventDefault();
         audio.currentTime = speechStarts[n - 1];
-        void audio.play();
+        play();
       }
     });
 
@@ -1062,29 +1349,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
         if (e.buttons) seekOnMap(e.clientX);
       });
 
-      nowbar.querySelector('.nowbar-row')!.addEventListener('click', e => {
-        const btn = (e.target as Element).closest('[data-seek]') as HTMLElement | null;
-        if (!btn) return;
-        const what = btn.dataset.seek!;
-        if (what === 'play') {
-          if (audio.paused) void audio.play(); else audio.pause();
-          return;
-        }
-        if (what === 'speech-prev' || what === 'speech-next') {
-          const starts = fitted.filter(placed).map(s => s.start).sort((a, b) => a - b);
-          // A second or two into a speech, "previous" means the start of this
-          // one rather than the one before it, which is what a person pressing
-          // it twice expects.
-          const here = audio.currentTime;
-          const to = what === 'speech-next'
-            ? starts.find(s => s > here + 1)
-            : [...starts].reverse().find(s => s < here - 2);
-          if (to !== undefined) audio.currentTime = to;
-          return;
-        }
-        const by = Number(what);
-        audio.currentTime = Math.max(0, Math.min(audio.duration || 1e9, audio.currentTime + by));
-      });
+      nowbar.querySelector('.nowbar-row')!.addEventListener('click', onSeekButton);
 
       audio.addEventListener('play', () => {
         if (nowbarPlay) { nowbarPlay.textContent = 'pause'; nowbarPlay.setAttribute('aria-label', 'Pause'); }
@@ -1523,5 +1788,55 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     const ro = new ResizeObserver(() => wave.resize());
     ro.observe(canvas);
+  } else if (root) {
+    // A round with nothing hosted is still a round somebody opened, and
+    // counting only the hosted ones skewed "most opened" towards them.
+    const slug = root.dataset.slug!;
+    track('round.view', slug);
+
+    const none = document.getElementById('player-none');
+    const source = document.getElementById('player-source-audio') as HTMLAudioElement | null;
+    // The original link can be gone or not a recording after all.
+    source?.addEventListener('error', () => {
+      document.getElementById('player-source')?.setAttribute('hidden', '');
+      if (none) none.hidden = false;
+    });
+
+    /*
+     * A round submitted through the site says where it has got to rather than
+     * only that nothing is here. Rounds from the old archive have no progress
+     * record and keep the plain line.
+     */
+    const line = document.getElementById('player-progress');
+    void roundProgress(slug).then(p => {
+      if (!p || !line) return;
+      const ago = (at: number | null) => {
+        if (!at) return '';
+        const mins = Math.max(0, Math.round(((p.now ?? Date.now() / 1000) - at) / 60));
+        if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+        const hours = Math.round(mins / 60);
+        if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+        const days = Math.round(hours / 24);
+        return `${days} days ago`;
+      };
+      let text = '';
+      if (p.status === 'failed' || p.status === 'removed') {
+        text = p.failure?.reason ?? 'The audio could not be fetched.';
+      } else if (p.status === 'fetching') {
+        text = p.pipeline?.stalled
+          ? 'Submitted ' + ago(p.submittedAt) + '. The ingest is not running; the site owner has been told.'
+          : 'Submitted ' + ago(p.submittedAt) + '. The audio is being fetched.';
+      } else if (p.media?.audio) {
+        text = 'The audio is in and this page is being rebuilt with the player.';
+      }
+      if (!text) return;
+      line.textContent = text + ' ';
+      const a = document.createElement('a');
+      a.className = 'link';
+      a.href = `/recordings/pending/?ref=${encodeURIComponent(slug)}`;
+      a.textContent = 'Follow its progress';
+      line.append(a, '.');
+      line.hidden = false;
+    });
   }
 </script>

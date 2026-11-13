@@ -96,3 +96,73 @@ export function composeDecision({ kind, side, won, lost }: DecisionParts): strin
   if (Number(won) === Number(lost)) return `${won}-${lost} Split`;
   return side ? `${won}-${lost} ${side}` : '';
 }
+
+/**
+ * The reverse of the above, for filling the form again from what was sent in
+ * (a resubmission starts from the failed round's own entry). Each takes the
+ * line as filed and gives back the parts, or null when the line is not in the
+ * archive's form, in which case the form keeps the line whole where it can.
+ */
+
+/** Splits "a (b, c), d" at its top-level commas. */
+function topLevel(line: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of line) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) {
+      out.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+export function parseAff(line: string): AffParts {
+  const parts: AffParts = { topical: true, advantages: [], mg: '', pmr: '', other: '', free: '' };
+  const pieces = topLevel(line.trim());
+  if (!pieces.length) return parts;
+  const lead = pieces[0].match(/^topical(?:\s*\((.*)\))?$/i);
+  let rest = pieces;
+  if (lead) {
+    parts.advantages = (lead[1] ?? '').split(',').map(s => s.trim()).filter(Boolean);
+    rest = pieces.slice(1);
+  } else if (!/^(mg reads|pmr goes for) /i.test(pieces[0])) {
+    parts.topical = false;
+    parts.free = pieces[0];
+    rest = pieces.slice(1);
+  }
+  const other: string[] = [];
+  for (const piece of rest) {
+    const mg = piece.match(/^mg reads (.+)$/i);
+    const pmr = piece.match(/^pmr goes for (.+)$/i);
+    if (mg && !parts.mg) parts.mg = mg[1];
+    else if (pmr && !parts.pmr) parts.pmr = pmr[1];
+    else other.push(piece);
+  }
+  parts.other = other.join(', ');
+  return parts;
+}
+
+export function parseNeg(line: string): { count: number; positions: string[] } | null {
+  const m = line.trim().match(/^(\d+)-off(?:\s*\((.*)\))?$/i);
+  if (!m) return null;
+  return { count: Number(m[1]), positions: (m[2] ?? '').split(',').map(s => s.trim()).filter(Boolean) };
+}
+
+export function parseDecision(line: string): DecisionParts | null {
+  const v = line.trim();
+  if (/^(aff|neg)$/i.test(v)) return { kind: 'prelim', side: capitalSide(v), won: '', lost: '' };
+  const m = v.match(/^(\d+)-(\d+)\s+(aff|neg|split)$/i);
+  if (!m) return null;
+  return { kind: 'panel', side: /split/i.test(m[3]) ? '' : capitalSide(m[3]), won: m[1], lost: m[2] };
+}
+
+function capitalSide(v: string): string {
+  return v.toLowerCase() === 'aff' ? 'Aff' : 'Neg';
+}

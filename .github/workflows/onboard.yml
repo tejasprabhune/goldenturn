@@ -8,12 +8,22 @@ name: onboard submitted rounds
 # It deploys the site itself when something changed, rather than asking the
 # deploy workflow to run: a workflow cannot trigger another with the built-in
 # token, and a round has no page until the site is rebuilt.
+#
+# It has no schedule of its own any more. GitHub switches off a scheduled
+# workflow once its repository has gone sixty days without activity, and a
+# schedule firing is not activity: the last commit was on 28 August, the last
+# run on 27 October, and the rounds submitted after that sat without pages
+# while nothing anywhere said so. A workflow with no schedule is not subject
+# to that, so the clock lives in the API instead: the Worker has a cron
+# trigger (worker/wrangler.toml) and sends this event every fifteen minutes.
+# It is also on time, which GitHub's own schedule was not under load.
+#
+# Do not add a `schedule:` back as a fallback. It is the schedule that makes
+# the workflow eligible to be disabled, and a disabled workflow ignores the
+# Worker's event as well.
 on:
-  schedule:
-    # GitHub delays and drops scheduled runs under load, and the ones on the
-    # hour are the most contended. Asking often, and off the hour, is what
-    # makes the "within an hour" on the submit page true rather than hopeful.
-    - cron: '7,22,37,52 * * * *'
+  repository_dispatch:
+    types: [onboard-due]
   workflow_dispatch:
 
 permissions:
@@ -29,8 +39,15 @@ concurrency:
 jobs:
   onboard:
     runs-on: ubuntu-latest
+    # A backstop. Each step in auto.ts has a limit of its own and every link
+    # has a time and size limit in drain-submissions.ts, so a run normally
+    # ends long before this. Without any, one link that answered and then
+    # sent nothing held the run, and the pages group with it, for six hours,
+    # and the next run did the same.
+    timeout-minutes: 90
     outputs:
       changed: ${{ steps.run.outputs.changed }}
+      built: ${{ steps.upload.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,8 +106,13 @@ jobs:
 
       # Only when a round actually changed: a rebuild every twenty minutes
       # would republish the whole site for nothing.
+      #
+      # Not only when the step above succeeded, though. It ends in error when
+      # any one thing went wrong, so that somebody is told, and by then it may
+      # have given three other rounds their audio; those still get their pages.
       - name: build
-        if: steps.run.outputs.changed == 'true'
+        id: build
+        if: ${{ !cancelled() && steps.run.outputs.changed == 'true' }}
         env:
           PUBLIC_ALGOLIA_APP_ID: CS1MDMNJTO
           PUBLIC_ALGOLIA_SEARCH_KEY: ${{ secrets.ALGOLIA_SEARCH_KEY }}
@@ -99,14 +121,19 @@ jobs:
         run: pnpm run build
 
       - uses: actions/upload-pages-artifact@v3
-        if: steps.run.outputs.changed == 'true'
+        id: upload
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         with:
           path: ./dist
 
   deploy:
     needs: onboard
-    if: needs.onboard.outputs.changed == 'true'
+    # The onboard job is marked failed when its run step was, even with the
+    # site built and uploaded after it, so this asks whether there is a site
+    # to deploy rather than whether the job succeeded.
+    if: ${{ !cancelled() && needs.onboard.outputs.built == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

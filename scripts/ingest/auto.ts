@@ -20,8 +20,8 @@ import 'dotenv/config';
 import { execFileSync } from 'child_process';
 import { appendFileSync } from 'fs';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { API, errorText, fetchWithin, r2, reportEvents } from './lib.js';
 
-const API = process.env.GT_API ?? 'https://goldenturn-api.tejas-prabhune.workers.dev';
 const BUCKET = 'goldenturn-media';
 const RG = process.env.AZ_RESOURCE_GROUP ?? 'thava';
 const TX_JOBS = (process.env.TX_JOBS ?? 'gt-rx-2,gt-rx-4,gt-rx-6,gt-rx-8,gt-rx-10').split(',');
@@ -31,8 +31,34 @@ const TX_JOBS = (process.env.TX_JOBS ?? 'gt-rx-2,gt-rx-4,gt-rx-6,gt-rx-8,gt-rx-1
  */
 const TX_LIMIT = Number(process.env.TX_LIMIT ?? '20');
 
-function sh(cmd: string, args: string[]): string {
-  return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 });
+/**
+ * Runs a step and waits for it, for at most `minutes`. Every step has a
+ * limit, so that one that hangs fails like any other, and the steps after it
+ * and the build still happen; the job's own limit in onboard.yml is the
+ * backstop for the run as a whole.
+ */
+function sh(cmd: string, args: string[], env: Record<string, string> = {}, minutes = 3): string {
+  return execFileSync(cmd, args, {
+    encoding: 'utf8', maxBuffer: 1024 * 1024 * 64, env: { ...process.env, ...env },
+    timeout: minutes * 60_000, killSignal: 'SIGKILL',
+  });
+}
+
+/**
+ * Whether there is an Azure session to start jobs with.
+ *
+ * Asked once, and apart from the question below, because without a session
+ * every job looks busy: the check that protects against starting a second GPU
+ * cannot tell "running" from "could not ask". A run with no Azure login then
+ * reported every job busy on every pass, for as long as nobody looked.
+ */
+function azSignedIn(): boolean {
+  try {
+    sh('az', ['account', 'show', '-o', 'none']);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -52,17 +78,6 @@ function isRunning(job: string): boolean {
   }
 }
 
-function s3(): S3Client {
-  return new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.CLOUDFLARE_S3_KEY!,
-      secretAccessKey: process.env.CLOUDFLARE_S3_SECRET!,
-    },
-  });
-}
-
 async function slugsUnder(client: S3Client, prefix: string, suffix: string): Promise<Set<string>> {
   const out = new Set<string>();
   let token: string | undefined;
@@ -79,27 +94,55 @@ async function slugsUnder(client: S3Client, prefix: string, suffix: string): Pro
 }
 
 async function main() {
+  // What went wrong without stopping the run. A step that fails is not a
+  // reason to skip the ones after it, which have their own work to find, but
+  // it is a reason for the run to end in error: a red run is the only thing
+  // here that reaches a person.
+  const problems: string[] = [];
+  const did: string[] = [];
+
+  // Reports in first, before anything can stop it, so that "the run has not
+  // been heard from" only ever means it is not running.
+  const heard = await reportEvents([{ stage: 'run', state: 'started' }]);
+  if (heard === 'refused') problems.push('GT_ADMIN_TOKEN is refused by the API');
+
   // Scheduled, so it runs whether or not anyone has finished wiring it up.
   // Saying what is missing and stopping beats failing every twenty minutes.
   const missing = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_S3_KEY', 'CLOUDFLARE_S3_SECRET']
     .filter(k => !process.env[k]);
   if (missing.length) {
     console.log(`not configured yet: ${missing.join(', ')} unset. Nothing done.`);
+    await reportEvents([{ stage: 'run', state: 'failed', note: `not configured: ${missing.join(', ')} unset` }]);
     return;
   }
 
-  const client = s3();
+  const client = r2();
   let changed = false;
 
   // 1. Audio for anything submitted and not yet pulled.
-  const pending = await fetch(`${API}/recordings/pending`)
+  const pending = await fetchWithin(`${API}/recordings/pending`)
     .then(r => r.json() as Promise<{ pending: Array<{ slug: string; title: string }> }>)
-    .catch(() => ({ pending: [] }));
+    .catch(() => {
+      problems.push('the queue of submitted rounds could not be read');
+      return { pending: [] };
+    });
 
   if (pending.pending.length) {
     console.log(`pulling audio for ${pending.pending.length} submitted round(s)`);
-    console.log(sh('npx', ['tsx', 'scripts/ingest/drain-submissions.ts']));
-    changed = true;
+    try {
+      // Its own limits stop it starting rounds after thirty minutes and any
+      // one step after fifteen; this is past both.
+      console.log(sh('npx', ['tsx', 'scripts/ingest/drain-submissions.ts'], {}, 50));
+      changed = true;
+      did.push(`audio for ${pending.pending.length} submitted`);
+    } catch (err) {
+      const e = err as { status?: number; stdout?: string };
+      // What it printed before it stopped is the account of what it did.
+      console.log(String(e.stdout ?? ''));
+      problems.push('pulling audio');
+      // It leaves with 2 when it refused to start, and then nothing changed.
+      if (e.status !== 2) changed = true;
+    }
   }
 
   const audio = await slugsUnder(client, 'audio/', '.m4a');
@@ -117,14 +160,19 @@ async function main() {
     // again does not queue behind the first, it runs a second replica on a
     // second GPU, and this runs on a schedule: with a backlog and no check,
     // every run would stack more paid GPUs on top of the ones already going.
-    const idle = TX_JOBS.filter(job => !isRunning(job));
+    const signedIn = azSignedIn();
+    const idle = signedIn ? TX_JOBS.filter(job => !isRunning(job)) : [];
     console.log(`\nstarting transcription for ${untranscribed.length} round(s)`);
-    if (idle.length < TX_JOBS.length) {
+    if (!signedIn) {
+      console.log('  not signed in to Azure, so no transcription job can be started');
+    } else if (idle.length < TX_JOBS.length) {
       console.log(`  ${TX_JOBS.length - idle.length} job(s) still busy from a previous run`);
     }
-    if (!idle.length) {
+    if (signedIn && !idle.length) {
       console.log('  every job is busy; the rest wait for the next run');
     }
+    const handed = new Set<string>();
+    const refused = new Set<string>();
     // Capped per job rather than shared out, because a job is killed at its
     // replica timeout: dividing the backlog between however many happen to be
     // free means that when few are free each gets a stint longer than it is
@@ -139,19 +187,58 @@ async function main() {
           '--set-env-vars', `SLUGS=${batch.join(' ')}`, '-o', 'none']);
         sh('az', ['containerapp', 'job', 'start', '-n', job, '-g', RG, '-o', 'none']);
         console.log(`  ${job}: ${batch.length} round(s)`);
+        batch.forEach(s => handed.add(s));
+        await reportEvents(batch.map(slug => ({ stage: 'transcript', state: 'started', slug, note: job })));
       } catch (err) {
-        console.log(`  ${job}: could not start (${(err as Error).message.slice(0, 80)})`);
+        const why = errorText(err).slice(0, 200);
+        console.log(`  ${job}: could not start (${why})`);
+        batch.forEach(s => refused.add(s));
+        await reportEvents(batch.map(slug => (
+          { stage: 'transcript', state: 'failed', slug, note: `${job} could not be started: ${why}` })));
       }
     }
-    console.log('  left running; their transcripts are picked up on a later run');
+    // The ones nobody took, with why, so a round that waits here for a week
+    // has something on its record besides the wait.
+    const waiting = untranscribed.filter(s => !handed.has(s) && !refused.has(s));
+    if (waiting.length) {
+      await reportEvents(waiting.map(slug => ({
+        stage: 'transcript', state: 'skipped', slug,
+        note: signedIn ? 'every transcription job was busy' : 'not signed in to Azure',
+      })));
+    }
+    if (handed.size) {
+      console.log('  left running; their transcripts are picked up on a later run');
+      did.push(`transcription started for ${handed.size}`);
+    }
   }
 
   // 3. Fit anything transcribed that has no timings yet.
   const unfitted = [...transcripts].filter(s => !speeches.has(s));
   if (unfitted.length) {
     console.log(`\nfitting speeches for ${unfitted.length} round(s)`);
-    console.log(sh('npx', ['tsx', 'scripts/segment/run.ts'], ).slice(-800));
-    changed = true;
+    await reportEvents(unfitted.map(slug => ({ stage: 'speeches', state: 'started', slug })));
+    try {
+      // Only the rounds that need it. Left to itself the fitter refits every
+      // transcript there is, which rewrote six hundred files to add one and
+      // made "when were this round's speeches marked" always "just now".
+      console.log(sh('npx', ['tsx', 'scripts/segment/run.ts'], { SLUGS: unfitted.join(' ') }, 30).slice(-800));
+    } catch (err) {
+      console.log(`  the fitter stopped (${errorText(err).slice(0, 300)})`);
+      problems.push('fitting speeches');
+    }
+    // Asked of the bucket rather than assumed, since the fitter can stop
+    // part of the way down its list.
+    const fitted = await slugsUnder(client, 'speeches/', '.json');
+    const missed = unfitted.filter(s => !fitted.has(s));
+    if (missed.length) {
+      await reportEvents(missed.map(slug => (
+        { stage: 'speeches', state: 'failed', slug, note: 'the fitter produced no timings' })));
+    }
+    // Only when something was fitted. A transcript the fitter cannot do is
+    // in this list on every run, and rebuilding the whole site every fifteen
+    // minutes for it changed nothing but the deploy history.
+    if (missed.length < unfitted.length) changed = true;
+    did.push(`speeches for ${unfitted.length - missed.length}`);
   }
 
   // 4. Give newly transcribed policy rounds their topic. A round's resolution
@@ -161,7 +248,7 @@ async function main() {
   if (unfitted.length && process.env.ALGOLIA_ADMIN_KEY) {
     console.log('\nassigning topics to policy rounds');
     try {
-      console.log(sh('npx', ['tsx', 'scripts/ingest/policy-topics.ts']).slice(-700));
+      console.log(sh('npx', ['tsx', 'scripts/ingest/policy-topics.ts'], {}, 20).slice(-700));
     } catch (err) {
       console.log(`  could not assign topics (${(err as Error).message.slice(0, 120)})`);
     }
@@ -170,11 +257,27 @@ async function main() {
   // 5. The index decides what the site treats as playable.
   if (changed) {
     console.log('\nrepublishing the media index');
-    console.log(sh('npx', ['tsx', 'scripts/ingest/publish-index.ts']));
+    console.log(sh('npx', ['tsx', 'scripts/ingest/publish-index.ts'], {}, 10));
     await purge([...pending.pending.map(p => p.slug), ...unfitted]);
+    await reportEvents([
+      { stage: 'index', state: 'done' },
+      // The rebuild that follows is what gives these rounds a page with a
+      // player, so this is when their pages were started on.
+      ...pending.pending.filter(p => audio.has(p.slug))
+        .map(p => ({ stage: 'page' as const, state: 'started' as const, slug: p.slug })),
+    ]);
     askForRebuild();
   } else {
     console.log('nothing to do');
+  }
+
+  await reportEvents([{
+    stage: 'run', state: problems.length ? 'failed' : 'done',
+    note: [...did, ...problems.map(p => `problem: ${p}`)].join('; ') || 'nothing to do',
+  }]);
+  if (problems.length) {
+    console.error(`\nfinished with problems: ${problems.join('; ')}`);
+    process.exitCode = 1;
   }
 }
 
@@ -208,7 +311,7 @@ async function purge(slugs: string[]) {
   }
 
   for (let i = 0; i < files.length; i += 30) {
-    await fetch(`https://api.cloudflare.com/client/v4/zones/${zone}/purge_cache`, {
+    await fetchWithin(`https://api.cloudflare.com/client/v4/zones/${zone}/purge_cache`, {
       method: 'POST',
       headers: { 'X-Auth-Email': email, 'X-Auth-Key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({ files: files.slice(i, i + 30) }),

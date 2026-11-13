@@ -2,8 +2,9 @@
   "name": "goldenturn-api",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "deploy": "wrangler d1 migrations apply goldenturn --remote && wrangler deploy",
+    "dev": "wrangler dev",
+    "test": "node test/local.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",

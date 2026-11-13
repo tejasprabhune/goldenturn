@@ -6,6 +6,7 @@
  */
 import 'dotenv/config';
 import { S3Client, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
+import { r2 } from './lib.js';
 
 const BUCKET = 'goldenturn-media';
 
@@ -25,14 +26,7 @@ async function listSlugs(client: S3Client, prefix: string, suffix: string) {
 }
 
 async function main() {
-  const client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.CLOUDFLARE_S3_KEY!,
-      secretAccessKey: process.env.CLOUDFLARE_S3_SECRET!,
-    },
-  });
+  const client = r2();
 
   const audio = await listSlugs(client, 'audio/', '.m4a');
   const peaks = await listSlugs(client, 'peaks/', '.json');

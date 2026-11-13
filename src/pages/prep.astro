@@ -1,0 +1,554 @@
+---
+/**
+ * Prep: instant search over the backfiles, for the 25 minutes before a round.
+ *
+ * Private. The page ships empty: who may see it is decided by the Worker when
+ * the browser asks for a search key, and every block arrives from the prep
+ * index with that key, so nothing from the files is in this HTML.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import '../styles/prep.css';
+---
+
+<BaseLayout title="Prep | the golden turn" description="" noFooter>
+  <div class="prep" id="prep">
+    <p class="prep-gate" id="prep-gate" role="status" hidden></p>
+
+    <div class="prep-app" id="prep-app" hidden>
+      <section class="prep-left" aria-label="Search">
+        <div class="prep-bar">
+          <input
+            id="prep-q"
+            class="prep-q"
+            type="search"
+            placeholder="two or three words"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            enterkeyhint="go"
+            aria-label="Search prep blocks"
+            aria-controls="prep-list"
+            aria-activedescendant=""
+          />
+          <span class="prep-rtt" id="prep-rtt" title="Round trip of the last search"></span>
+        </div>
+
+        <div class="prep-filters">
+          <div class="seg" role="group" aria-label="Side">
+            <button class="chip" type="button" data-side="aff" aria-pressed="false">aff</button>
+            <button class="chip" type="button" data-side="neg" aria-pressed="false">neg</button>
+          </div>
+          <div class="seg" role="group" aria-label="Block type">
+            <button class="chip" type="button" data-type="uq" aria-pressed="false">UQ</button>
+            <button class="chip" type="button" data-type="link" aria-pressed="false">Link</button>
+            <button class="chip" type="button" data-type="il" aria-pressed="false">IL</button>
+            <button class="chip" type="button" data-type="impact" aria-pressed="false">Impact</button>
+            <button class="chip" type="button" data-type="answer" aria-pressed="false">AT</button>
+            <button class="chip" type="button" data-type="other" aria-pressed="false">Other</button>
+          </div>
+          <select class="prep-file" id="prep-file" aria-label="File">
+            <option value="">all files</option>
+          </select>
+        </div>
+
+        <p class="prep-status" id="prep-status" aria-live="polite"></p>
+        <ol class="prep-list" id="prep-list" role="listbox" aria-label="Blocks"></ol>
+
+        <p class="prep-keys" aria-hidden="true">
+          <span><kbd>↑↓</kbd>move</span>
+          <span><kbd>↵</kbd>copy</span>
+          <span><kbd>⇧↵</kbd>copy link</span>
+          <span><kbd class="js-mod">⌘</kbd><kbd>↵</kbd>open doc</span>
+          <span><kbd>/</kbd><kbd>esc</kbd>search</span>
+        </p>
+      </section>
+
+      <section class="prep-right" id="prep-view" aria-label="Selected block"></section>
+    </div>
+
+    <div class="prep-toast" id="prep-toast" role="status" aria-live="polite"></div>
+  </div>
+</BaseLayout>
+
+<script>
+  import { getUser } from '../lib/api';
+  import { PrepRefusal, type PrepRefusalReason } from '../lib/prep/access';
+  import { PrepSearch, type PrepFilters, type PrepHit } from '../lib/prep/search';
+  import { blockHtml, blockText, copyPlain, copyRich } from '../lib/prep/clipboard';
+  import {
+    escapeHtml, familyHead, fileRowHtml, rowHtml, summarise, tocHtml, viewHtml, MOD,
+    type FileSummary,
+  } from '../lib/prep/render';
+  import type { PrepRecord, PrepType } from '../lib/prep/types';
+
+  const gate = document.getElementById('prep-gate') as HTMLParagraphElement;
+  const app = document.getElementById('prep-app') as HTMLDivElement;
+  const input = document.getElementById('prep-q') as HTMLInputElement;
+  const rtt = document.getElementById('prep-rtt') as HTMLSpanElement;
+  const statusEl = document.getElementById('prep-status') as HTMLParagraphElement;
+  const list = document.getElementById('prep-list') as HTMLOListElement;
+  const view = document.getElementById('prep-view') as HTMLElement;
+  const fileSelect = document.getElementById('prep-file') as HTMLSelectElement;
+  const toast = document.getElementById('prep-toast') as HTMLDivElement;
+
+  document.querySelectorAll('.js-mod').forEach(el => { el.textContent = MOD === '⌘' ? '⌘' : 'Ctrl'; });
+
+  // The panes size themselves to the window under the masthead.
+  const masthead = document.querySelector('.masthead');
+  const setTop = () => document.documentElement.style.setProperty(
+    '--prep-top', `${Math.ceil(masthead?.getBoundingClientRect().bottom ?? 64)}px`);
+  setTop();
+  window.addEventListener('resize', setTop);
+
+  const search = new PrepSearch();
+  const filters: PrepFilters = { sides: new Set(), types: new Set(), file: null };
+
+  /** What the list shows: the file index, or blocks (a file's, or a search's). */
+  type Item = { kind: 'file'; file: FileSummary } | { kind: 'block'; hit: PrepHit };
+  let items: Item[] = [];
+  let selected = 0;
+  let files: FileSummary[] = [];
+  let seq = 0;
+  let offline = false;
+  let lastQuery = '';
+  let returnTo: string | null = null;
+
+  // ---- gate ----
+
+  const GATE: Record<PrepRefusalReason, string> = {
+    signed_out: 'Prep is private. <button class="link account-link" type="button" data-signin>Sign in</button> with an account that has access.',
+    not_allowed: 'This account does not have prep access. Ask the site owner to add it.',
+    not_configured: 'Prep search is not set up yet.',
+    offline: 'You are offline. Prep opens when the connection is back.',
+    error: 'Prep could not reach the server. Try again in a moment.',
+  };
+
+  function showGate(reason: PrepRefusalReason) {
+    app.hidden = true;
+    gate.hidden = false;
+    gate.innerHTML = GATE[reason];
+    gate.querySelector('[data-signin]')?.addEventListener('click', () =>
+      document.dispatchEvent(new CustomEvent('gt:open-signin')));
+    // Whatever was on screen goes: a revoked key must not leave blocks behind.
+    list.innerHTML = '';
+    view.innerHTML = '';
+    items = [];
+  }
+
+  async function start() {
+    if (!getUser()) return showGate('signed_out');
+    try {
+      await search.connect();
+    } catch (e) {
+      return showGate(e instanceof PrepRefusal ? e.reason : 'error');
+    }
+    gate.hidden = true;
+    app.hidden = false;
+    setTop();
+    input.focus();
+
+    const params = new URLSearchParams(location.search);
+    input.value = params.get('q') ?? '';
+    filters.file = params.get('file');
+    statusEl.textContent = 'Loading the index…';
+
+    try {
+      files = summarise(await search.overview());
+    } catch (e) {
+      if (handleFailure(e)) return;
+    }
+    fileSelect.innerHTML = '<option value="">all files</option>' +
+      files.map(f => `<option value="${escapeHtml(f.slug)}">${escapeHtml(f.title)}</option>`).join('');
+    syncControls();
+
+    const linked = params.get('b');
+    if (linked) await openLinked(linked);
+    else await update();
+  }
+
+  /** A link copied with ⇧↵: search for its title and land on it. */
+  async function openLinked(id: string) {
+    try {
+      const hit = await search.block(id);
+      if (!hit) {
+        await update();
+        flashStatus('That block is no longer in the files.');
+        return;
+      }
+      input.value = hit.title;
+      await update(hit.objectID);
+    } catch (e) {
+      handleFailure(e);
+    }
+  }
+
+  /** True when the failure ended the page (the gate is up). */
+  function handleFailure(e: unknown): boolean {
+    if (e instanceof PrepRefusal && (e.reason === 'signed_out' || e.reason === 'not_allowed')) {
+      showGate(e.reason);
+      return true;
+    }
+    setOffline(true);
+    return false;
+  }
+
+  function setOffline(on: boolean) {
+    offline = on;
+    if (on) {
+      rtt.textContent = 'no answer';
+      rtt.dataset.slow = 'true';
+      statusEl.innerHTML = `<span data-tone="warn">${navigator.onLine ? 'Search is not answering.' : 'Offline.'}</span> Showing the last results; they refresh when the connection is back.`;
+    }
+  }
+
+  window.addEventListener('online', () => { if (offline) void update(currentId()); });
+  window.addEventListener('offline', () => setOffline(true));
+
+  // ---- searching ----
+
+  function currentId(): string | undefined {
+    const item = items[selected];
+    return item?.kind === 'block' ? item.hit.objectID : undefined;
+  }
+
+  function writeUrl(q: string) {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (filters.file) params.set('file', filters.file);
+    const qs = params.toString();
+    history.replaceState(null, '', `${location.pathname}${qs ? `?${qs}` : ''}`);
+  }
+
+  /**
+   * Every keypress runs this with no debounce. Answers can come back out of
+   * order, so each carries a sequence number and only the newest is drawn.
+   */
+  async function update(keepId?: string) {
+    const q = input.value.trim();
+    const mine = ++seq;
+    writeUrl(q);
+
+    if (!q && !filters.file) {
+      offline = false;
+      rtt.textContent = '';
+      items = files.map(file => ({ kind: 'file', file }));
+      // Back out of a file lands on that file, not the top of the index.
+      const back = files.findIndex(f => f.slug === returnTo);
+      selected = back >= 0 ? back : lastQuery ? 0 : Math.min(selected, Math.max(items.length - 1, 0));
+      returnTo = null;
+      const total = files.reduce((n, f) => n + f.blocks.length, 0);
+      statusEl.innerHTML = `${files.length} files<span class="prep-dot">·</span>${total} blocks<span class="prep-dot">·</span>type to search, or pick a file`;
+      lastQuery = '';
+      renderList();
+      return;
+    }
+
+    try {
+      const res = filters.file && !q ? await search.file(filters.file, filters) : await search.search(q, filters);
+      if (mine !== seq) return;
+      offline = false;
+      const fresh = q !== lastQuery;
+      lastQuery = q;
+      items = res.hits.map(hit => ({ kind: 'block', hit }));
+      const keep = keepId ? items.findIndex(i => i.kind === 'block' && i.hit.objectID === keepId) : -1;
+      selected = keep >= 0 ? keep : fresh ? 0 : Math.min(selected, Math.max(items.length - 1, 0));
+      showRtt(res.ms);
+      renderStatus(q, res.nbHits);
+      renderList();
+    } catch (e) {
+      if (mine !== seq) return;
+      handleFailure(e);
+    }
+  }
+
+  function showRtt(ms: number) {
+    // The client answers a repeated query from memory without a request.
+    rtt.textContent = ms < 1.5 ? 'cached' : `${Math.round(ms)} ms`;
+    rtt.dataset.slow = String(ms > 80);
+    rtt.title = ms > 80 ? 'Round trip of the last search: over 80 ms' : 'Round trip of the last search';
+  }
+
+  function renderStatus(q: string, n: number) {
+    const file = files.find(f => f.slug === filters.file);
+    const parts: string[] = [];
+    if (file) parts.push(`<button type="button" data-clear-file>all files</button><span class="prep-dot">/</span>${escapeHtml(file.title)}`);
+    parts.push(q ? `${n} block${n === 1 ? '' : 's'}` : `${n} blocks in reading order`);
+    statusEl.innerHTML = parts.join('<span class="prep-dot">·</span>');
+    statusEl.querySelector('[data-clear-file]')?.addEventListener('click', () => setFile(null));
+  }
+
+  // ---- drawing ----
+
+  function renderList() {
+    if (items.length === 0) {
+      const q = input.value.trim();
+      const narrowed = filters.sides.size || filters.types.size || filters.file;
+      list.innerHTML = `<li class="prep-empty">Nothing for “${escapeHtml(q)}”${narrowed ? ' with these filters' : ''}.
+        ${narrowed ? '<br><button class="link account-link" type="button" data-clear-filters>Clear the filters</button> or try fewer words.' : 'Try fewer words, or shorthand like “econ uq” or “a2 heg bad”.'}</li>`;
+      list.querySelector('[data-clear-filters]')?.addEventListener('click', clearFilters);
+      input.setAttribute('aria-activedescendant', '');
+      renderView();
+      return;
+    }
+
+    const inFile = Boolean(filters.file) && !input.value.trim();
+    let html = '';
+    let family = '';
+    items.forEach((item, i) => {
+      if (item.kind === 'file') {
+        html += fileRowHtml(item.file, i, i === selected);
+        return;
+      }
+      if (inFile && item.hit.family !== family) {
+        family = item.hit.family;
+        html += familyHead(family);
+      }
+      html += rowHtml(item.hit, i, i === selected, !inFile);
+    });
+    list.innerHTML = html;
+    input.setAttribute('aria-activedescendant', `prep-opt-${selected}`);
+    renderView();
+  }
+
+  function renderView() {
+    const item = items[selected];
+    if (!item) {
+      view.innerHTML = files.length ? hintHtml() : '';
+      return;
+    }
+    view.innerHTML = item.kind === 'file' ? tocHtml(item.file) : viewHtml(item.hit);
+    view.scrollTop = 0;
+  }
+
+  function hintHtml() {
+    return `<p class="prep-hint">Type two or three words: <kbd>econ da spending</kbd>, <kbd>a2 heg bad</kbd>, <kbd>tix thumpers</kbd>.
+      <kbd>↑</kbd> <kbd>↓</kbd> to move, <kbd>↵</kbd> to copy the block into your doc.</p>`;
+  }
+
+  function select(i: number, scroll = true) {
+    if (!items.length) return;
+    const next = Math.max(0, Math.min(items.length - 1, i));
+    if (next === selected) return;
+    list.querySelector(`#prep-opt-${selected}`)?.setAttribute('aria-selected', 'false');
+    selected = next;
+    const row = list.querySelector<HTMLElement>(`#prep-opt-${selected}`);
+    row?.setAttribute('aria-selected', 'true');
+    if (scroll) row?.scrollIntoView({ block: 'nearest' });
+    input.setAttribute('aria-activedescendant', `prep-opt-${selected}`);
+    renderView();
+  }
+
+  // ---- taking a block ----
+
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  function flashStatus(html: string) {
+    toast.innerHTML = html;
+    toast.dataset.show = 'true';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.dataset.show = 'false'; }, 2200);
+  }
+
+  function markDone(act: string) {
+    const btn = view.querySelector<HTMLElement>(`[data-act="${act}"]`);
+    if (btn) {
+      const label = btn.firstChild as Text;
+      const before = label.textContent;
+      btn.dataset.done = 'true';
+      label.textContent = act === 'copy' ? 'Copied ' : 'Link copied ';
+      setTimeout(() => { btn.dataset.done = 'false'; label.textContent = before; }, 1600);
+    }
+    const doc = document.getElementById('prep-doc');
+    if (doc && act === 'copy') {
+      doc.dataset.flash = 'true';
+      setTimeout(() => { doc.dataset.flash = 'false'; }, 450);
+    }
+  }
+
+  function currentBlock(): PrepRecord | null {
+    const item = items[selected];
+    return item?.kind === 'block' ? item.hit : null;
+  }
+
+  // Both of these are started inside the key press or click, with nothing
+  // awaited first, so the browser still counts it as the user's gesture.
+  function copyBlock() {
+    const rec = currentBlock();
+    if (!rec) return;
+    copyRich(blockHtml(rec), blockText(rec))
+      .then(() => {
+        markDone('copy');
+        flashStatus(`<b>Copied</b> ${escapeHtml(rec.title)}. Paste it into your doc.`);
+      })
+      .catch(() => flashStatus('Could not copy. Select the block and copy it by hand.'));
+  }
+
+  function copyLink() {
+    const rec = currentBlock();
+    if (!rec) return;
+    const url = `${location.origin}/prep/?b=${encodeURIComponent(rec.objectID)}`;
+    copyPlain(url)
+      .then(() => {
+        markDone('link');
+        flashStatus(`<b>Link copied</b> to ${escapeHtml(rec.title)}.`);
+      })
+      .catch(() => flashStatus('Could not copy the link.'));
+  }
+
+  function openDoc() {
+    const item = items[selected];
+    const url = item?.kind === 'block' ? item.hit.doc_url : item?.kind === 'file' ? item.file.docUrl : null;
+    if (url) window.open(url, '_blank', 'noopener');
+    else flashStatus('This file has no Google Doc yet.');
+  }
+
+  // ---- filters ----
+
+  function syncControls() {
+    document.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b =>
+      b.setAttribute('aria-pressed', String(filters.sides.has(b.dataset.side as 'aff' | 'neg'))));
+    document.querySelectorAll<HTMLButtonElement>('[data-type]').forEach(b =>
+      b.setAttribute('aria-pressed', String(filters.types.has(b.dataset.type as PrepType))));
+    fileSelect.value = filters.file ?? '';
+    fileSelect.dataset.active = String(Boolean(filters.file));
+  }
+
+  function setFile(slug: string | null) {
+    if (!slug) returnTo = filters.file;
+    filters.file = slug;
+    selected = 0;
+    syncControls();
+    void update();
+    input.focus();
+  }
+
+  function clearFilters() {
+    filters.sides.clear();
+    filters.types.clear();
+    filters.file = null;
+    syncControls();
+    void update();
+    input.focus();
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.addEventListener('click', () => {
+    const side = b.dataset.side as 'aff' | 'neg';
+    // A side is a choice, not a set: picking neg while aff is on swaps them.
+    const on = filters.sides.has(side);
+    filters.sides.clear();
+    if (!on) filters.sides.add(side);
+    syncControls();
+    void update(currentId());
+    input.focus();
+  }));
+
+  document.querySelectorAll<HTMLButtonElement>('[data-type]').forEach(b => b.addEventListener('click', () => {
+    const t = b.dataset.type as PrepType;
+    if (filters.types.has(t)) filters.types.delete(t);
+    else filters.types.add(t);
+    syncControls();
+    void update(currentId());
+    input.focus();
+  }));
+
+  fileSelect.addEventListener('change', () => setFile(fileSelect.value || null));
+
+  // ---- input ----
+
+  input.addEventListener('input', () => { void update(); });
+
+  list.addEventListener('click', e => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.prep-row');
+    if (!row) return;
+    const i = Number(row.dataset.index);
+    const item = items[i];
+    if (item?.kind === 'file') {
+      setFile(item.file.slug);
+      return;
+    }
+    select(i, false);
+    // One column: the block is under the list, so take the reader to it.
+    if (window.matchMedia('(max-width: 899px)').matches) view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  view.addEventListener('click', e => {
+    const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
+    if (act === 'copy') copyBlock();
+    else if (act === 'link') copyLink();
+    else if (act === 'open-file') {
+      const item = items[selected];
+      if (item?.kind === 'file') setFile(item.file.slug);
+    }
+  });
+
+  /**
+   * Keys are caught on the window before anything else sees them, so `/` here
+   * means the prep box rather than the site-wide search the layout opens.
+   * Only keys this page uses are stopped.
+   */
+  window.addEventListener('keydown', e => {
+    if (app.hidden) return;
+    const target = e.target as HTMLElement;
+    const inBox = target === input;
+    const inOther = !inBox && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
+    const onControl = !inBox && /^(BUTTON|A)$/.test(target.tagName);
+    if (document.querySelector('dialog[open]')) return;
+
+    const stop = () => { e.preventDefault(); e.stopPropagation(); };
+
+    if (e.key === '/' && !inBox && !inOther) {
+      stop();
+      input.focus();
+      input.select();
+      return;
+    }
+    if (e.key === 'Escape') {
+      stop();
+      if (!inBox) {
+        input.focus();
+        input.select();
+      } else if (input.value) {
+        // First escape selects what was typed, so the next word replaces it.
+        if (input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+          input.value = '';
+          void update();
+        } else {
+          input.select();
+        }
+      } else if (filters.file) {
+        setFile(null);
+      }
+      return;
+    }
+    if (inOther) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      stop();
+      select(selected + (e.key === 'ArrowDown' ? 1 : -1));
+      return;
+    }
+    if (e.key === 'PageDown' || e.key === 'PageUp') {
+      if (!inBox) return;
+      stop();
+      select(selected + (e.key === 'PageDown' ? 8 : -8));
+      return;
+    }
+    if (e.key === 'Backspace' && inBox && !input.value && filters.file) {
+      stop();
+      setFile(null);
+      return;
+    }
+    if (e.key === 'Enter' && !onControl) {
+      stop();
+      const item = items[selected];
+      if (!item) return;
+      if (e.metaKey || e.ctrlKey) openDoc();
+      else if (item.kind === 'file') setFile(item.file.slug);
+      else if (e.shiftKey) copyLink();
+      else copyBlock();
+    }
+  }, { capture: true });
+
+  document.addEventListener('gt:signed-in', () => { void start(); });
+
+  void start();
+</script>

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { readFileSync } from 'fs';
+import { S3Client } from '@aws-sdk/client-s3';
 
 export interface DbxFile {
   name: string;
@@ -119,4 +120,112 @@ export function loadEnv(name: string): string {
 
 export function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, 'utf-8')) as T;
+}
+
+export const API = process.env.GT_API ?? 'https://goldenturn-api.tejas-prabhune.workers.dev';
+
+/**
+ * A request with a deadline. An unattended run that waits on a host that has
+ * stopped answering waits until GitHub kills it six hours later, and every
+ * round behind it waits with it.
+ */
+export function fetchWithin(url: string, init: RequestInit = {}, seconds = 30): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(seconds * 1000) });
+}
+
+/**
+ * Which video host a link is on, by its host name. It used to be whether the
+ * text "youtube.com" appeared anywhere in it, which any link can arrange.
+ * Must match videoHost in worker/src/index.ts.
+ */
+export function videoHost(link: string): 'youtube' | 'vimeo' | null {
+  let host: string;
+  try { host = new URL(link).hostname.toLowerCase().replace(/\.$/, ''); } catch { return null; }
+  const on = (domain: string) => host === domain || host.endsWith(`.${domain}`);
+  if (on('youtube.com') || on('youtu.be') || on('youtube-nocookie.com')) return 'youtube';
+  if (on('vimeo.com')) return 'vimeo';
+  return null;
+}
+
+/**
+ * The media bucket. CLOUDFLARE_S3_ENDPOINT points it somewhere else, which is
+ * only for running the ingest against a stand-in; a stand-in has no bucket
+ * subdomains, so the bucket goes in the path there.
+ */
+export function r2(): S3Client {
+  const standIn = process.env.CLOUDFLARE_S3_ENDPOINT;
+  return new S3Client({
+    region: 'auto',
+    endpoint: standIn ?? `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    forcePathStyle: Boolean(standIn),
+    credentials: {
+      accessKeyId: process.env.CLOUDFLARE_S3_KEY!,
+      secretAccessKey: process.env.CLOUDFLARE_S3_SECRET!,
+    },
+  });
+}
+
+/**
+ * What a command actually said went wrong.
+ *
+ * The message of a failed execFile is "Command failed:" followed by the whole
+ * command line, and only then whatever the tool printed. Cut to fit a note,
+ * that was a yt-dlp invocation with a temp path in it and none of the error,
+ * which is all an admin looking at a failed round had to go on. The tool's own
+ * last words are on stderr, so those are what is kept: the ERROR lines if it
+ * marks them (yt-dlp does, after any number of warnings), the tail if not.
+ */
+export function errorText(err: unknown): string {
+  const e = err as { stderr?: string | Buffer; message?: string; cmd?: string; code?: number | string; signal?: string };
+  const lines = String(e?.stderr ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length) {
+    const marked = lines.filter(l => /^ERROR\b/i.test(l));
+    return (marked.length ? marked : lines).slice(-3).join(' | ').slice(-600);
+  }
+  const message = String(e?.message ?? err);
+  if (!message.startsWith('Command failed')) return message.slice(0, 600);
+  // Nothing on stderr: say which tool, and how it ended, not how it was called.
+  const tool = (e.cmd ?? message.replace(/^Command failed:\s*/, '')).split(/\s+/)[0].split('/').pop();
+  return e.signal ? `${tool} was stopped (${e.signal})` : `${tool} exited with ${e.code ?? 'an error'} and said nothing`;
+}
+
+export interface IngestEvent {
+  stage: 'run' | 'audio' | 'transcript' | 'speeches' | 'index' | 'page';
+  state: 'started' | 'done' | 'failed' | 'skipped';
+  slug?: string;
+  objectID?: string;
+  note?: string;
+}
+
+/**
+ * Tells the API what the run is doing, so a round's page can say "being
+ * transcribed" rather than "queued", and so a run that has stopped coming is
+ * missed.
+ *
+ * The answer matters only when it is a refusal. `refused` means the token is
+ * wrong, and then nothing this run did could be recorded either, so the caller
+ * stops rather than doing the work again every fifteen minutes. Anything else
+ * that is not a yes (an API from before this endpoint, a network fault) is
+ * `unavailable`, and the run carries on: the work is the point, and the files
+ * in the bucket say what was done regardless.
+ */
+export async function reportEvents(events: IngestEvent[]): Promise<'ok' | 'refused' | 'unavailable' | 'no-token'> {
+  const token = process.env.GT_ADMIN_TOKEN;
+  if (!token) return 'no-token';
+  try {
+    // At least one request even with nothing to say: an empty report is how
+    // the token is checked before any work is started.
+    for (let i = 0; i < Math.max(events.length, 1); i += 200) {
+      const res = await fetchWithin(`${API}/ingest/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ events: events.slice(i, i + 200) }),
+      });
+      if (res.status === 401 || res.status === 403) return 'refused';
+      if (!res.ok) return 'unavailable';
+    }
+    return 'ok';
+  } catch {
+    return 'unavailable';
+  }
 }

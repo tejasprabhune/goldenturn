@@ -24,7 +24,7 @@ const tournamentVocab = [...new Set(
       Fill in the pieces and the form writes the entry for you, so every round
       is filed the same way. Your round will be available to search
       immediately. The audio, transcript, and speech markers are processed
-      after and will be visible within an hour. Email me:
+      after, and you can follow each step on the round's progress page. Email me:
       <a href="mailto:prabhune@berkeley.edu" class="link">prabhune@berkeley.edu</a>
       if you're having issues.
     </p>
@@ -37,6 +37,8 @@ const tournamentVocab = [...new Set(
     </p>
 
     <form id="submission-form" novalidate hidden>
+
+      <p class="add-resubmit" id="add-resubmit" hidden></p>
 
       <div class="mb-7">
         <span class="form-label">Round title <span class="form-required">required</span></span>
@@ -214,19 +216,26 @@ const tournamentVocab = [...new Set(
         </button>
         <p id="submit-error" class="form-hint hidden" style="margin: 0;"></p>
       </div>
+      <p class="form-hint add-existing" id="submit-existing" hidden></p>
 
     </form>
 
-    <div id="success-state" class="hidden pt-2">
-      <p class="page-lede" style="margin-top: 0;" id="success-line"></p>
-      <p class="form-hint" id="success-detail"></p>
-      <p style="margin-top: 1rem;">
-        <a href="/recordings" class="link">Back to recordings</a>
-        <span aria-hidden="true" style="opacity: 0.4; margin: 0 0.5rem;">/</span>
-        <a href="#" class="link" id="success-round">Open the round</a>
-        <span aria-hidden="true" style="opacity: 0.4; margin: 0 0.5rem;">/</span>
-        <button class="link account-link" id="submit-another">Submit another</button>
-      </p>
+    <!--
+      The round's own page does not exist until the ingest has run and the
+      site has been rebuilt, so the way on is the page that follows it there.
+    -->
+    <div id="success-state" class="hidden pt-2 add-done">
+      <p class="add-done-label" id="success-label">submitted</p>
+      <div>
+        <p class="add-done-title" id="success-line"></p>
+        <p class="add-done-text" id="success-detail"></p>
+        <p class="add-done-actions">
+          <a href="#" class="btn" id="success-round">Follow its progress</a>
+          <a href="/me" class="link">Your submissions</a>
+          <span aria-hidden="true" class="add-done-sep">/</span>
+          <button class="link account-link" id="submit-another">Submit another</button>
+        </p>
+      </div>
     </div>
   </div>
 
@@ -237,6 +246,96 @@ const tournamentVocab = [...new Set(
 </BaseLayout>
 
 <style is:global>
+  /* What a submitter is told once the round is in: a label column beside the
+     message, as on the page that follows it. */
+  .add-done {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem 2rem;
+    border-top: 1px solid var(--rule);
+    padding-top: 1.25rem;
+  }
+
+  .add-done.hidden {
+    display: none;
+  }
+
+  @media (min-width: 760px) {
+    .add-done {
+      grid-template-columns: 8rem minmax(0, 1fr);
+    }
+  }
+
+  .add-done-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: rgba(23, 21, 15, 0.45);
+    margin: 0;
+    padding-top: 0.3rem;
+  }
+
+  .add-done-title {
+    font-size: 1.125rem;
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .add-done-text {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--ink-muted);
+    max-width: 58ch;
+    margin: 0.6rem 0 0;
+  }
+
+  .add-done-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 0.75rem;
+    margin: 1.4rem 0 0;
+    font-size: 0.9375rem;
+  }
+
+  .add-done-actions .btn {
+    margin-right: 0.75rem;
+  }
+
+  .add-done-sep {
+    color: rgba(23, 21, 15, 0.3);
+  }
+
+  .add-existing {
+    margin: 0.75rem 0 0;
+  }
+
+  .add-existing[hidden] {
+    display: none;
+  }
+
+  /* Sending a failed round again: the form says which round it is for. */
+  .add-resubmit {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    box-shadow: inset 2px 0 0 var(--diff-del);
+    padding: 0.85rem 1rem 0.9rem 1.2rem;
+    margin: 0 0 2rem;
+  }
+
+  .add-resubmit[hidden] {
+    display: none;
+  }
+
+  .add-resubmit-reason {
+    display: block;
+    color: var(--diff-del);
+    font-size: 0.875rem;
+    margin: 0.25rem 0 0.4rem;
+  }
+
   .form-label {
     display: block;
     font-family: 'Neue Montreal', system-ui, sans-serif;
@@ -454,10 +553,12 @@ const tournamentVocab = [...new Set(
   // parts rather than typed freehand: the archive is only worth searching if
   // every round says "3-off (framework-t, actor spec)" the same way, and that
   // convention used to live in a placeholder nobody was obliged to follow.
-  import { submitRecording, getUser, FieldErrors, NotSignedIn } from '../../lib/api';
-  import { recordingHref } from '../../lib/recordings';
+  import { getUser, FieldErrors, NotSignedIn, AlreadySubmitted, submitRecording } from '../../lib/api';
+  import { getProgress, pendingHref, type Progress } from '../../lib/progress';
   import { attachAutocomplete } from '../../lib/autocomplete';
-  import { composeAff, composeDecision, composeNeg, composeTitle } from '../../lib/entry';
+  import {
+    composeAff, composeDecision, composeNeg, composeTitle, parseAff, parseDecision, parseNeg,
+  } from '../../lib/entry';
 
   const form = document.getElementById('submission-form') as HTMLFormElement;
   const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
@@ -743,6 +844,7 @@ const tournamentVocab = [...new Set(
       delete h.dataset.error;
     });
     submitError.classList.add('hidden');
+    el('submit-existing').hidden = true;
   }
 
   // Signed in or the form is not offered: a submission is credited to whoever
@@ -775,17 +877,27 @@ const tournamentVocab = [...new Set(
       const res = await submitRecording(payload);
       form.classList.add('hidden');
       successState.classList.remove('hidden');
-      document.getElementById('success-line')!.textContent =
-        `${payload.title} is in search.`;
+      document.getElementById('success-label')!.textContent =
+        res.resubmitted ? 'resubmitted' : 'submitted';
+      document.getElementById('success-line')!.textContent = res.resubmitted
+        ? `${payload.title} is back in the queue with the new link.`
+        : `${payload.title} is in, and already in search.`;
+      // Honest about the order things happen in: the ingest runs every 15
+      // minutes, so the audio comes first and the page with its player last.
       document.getElementById('success-detail')!.textContent =
-        'Its audio, transcript and speech markers are being processed and '
-        + 'should be on the page within an hour.';
+        'Its audio is fetched at the next ingest run, within about 15 minutes, then '
+        + 'transcribed and divided into speeches. You can follow each step, and listen '
+        + 'as soon as the audio is in, on its progress page. If something goes wrong '
+        + 'it says what and how to fix it. The round is also listed on your account page.';
       const open = document.getElementById('success-round') as HTMLAnchorElement;
-      open.href = recordingHref({ title: payload.title, objectID: res.objectID });
+      open.href = pendingHref(res.slug);
     } catch (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Submit a recording';
-      if (err instanceof FieldErrors) {
+      if (err instanceof AlreadySubmitted) {
+        showFieldErrors(err.fields);
+        showExisting(err.existing);
+      } else if (err instanceof FieldErrors) {
         showFieldErrors(err.fields);
       } else if (err instanceof NotSignedIn) {
         renderAuth();
@@ -796,6 +908,109 @@ const tournamentVocab = [...new Set(
       }
     }
   });
+
+  /**
+   * A duplicate names the round it collided with, so the submitter is sent to
+   * it rather than left wondering whether theirs went in.
+   */
+  function showExisting(existing: { slug: string; status: string }) {
+    const line = el<HTMLParagraphElement>('submit-existing');
+    line.textContent = existing.status === 'pending'
+      ? 'That round is already in and waiting to be processed. '
+      : 'That round is already in the archive. ';
+    const a = document.createElement('a');
+    a.className = 'link';
+    a.href = existing.status === 'pending' ? pendingHref(existing.slug) : `/recordings/${existing.slug}`;
+    a.textContent = existing.status === 'pending' ? 'Follow its progress' : 'Open it';
+    line.appendChild(a);
+    line.hidden = false;
+  }
+
+  /**
+   * Sending a failed round again. The resubmission is matched to the failed
+   * one by title, season and tournament, so it is filled in from what was
+   * sent the first time (the Worker gives that back to the submitter) and
+   * only the link needs to change. Without it (somebody else's round, or one
+   * from before the Worker kept it) the title, season and tournament still
+   * come from the progress record.
+   */
+  async function prefillResubmit(ref: string) {
+    let p: Progress;
+    try {
+      p = await getProgress(ref, { submitted: true });
+    } catch {
+      return;
+    }
+    if (p.status !== 'failed') return;
+    if (p.teams) {
+      input('field-stage').value = p.round;
+      input('field-aff-team').value = p.teams.aff;
+      input('field-neg-team').value = p.teams.neg;
+    } else {
+      input('field-stage').value = p.title;
+    }
+    if (p.year) input('field-year').value = p.year;
+    if (p.tournament) input('field-tournament').value = p.tournament;
+    if (p.submitted) fillFrom(p.submitted);
+    redraw();
+
+    const note = el<HTMLParagraphElement>('add-resubmit');
+    note.textContent = '';
+    note.append(`Sending ${p.title} again. Its link could not be used:`);
+    const why = document.createElement('span');
+    why.className = 'add-resubmit-reason';
+    why.textContent = p.failure?.reason ?? 'the audio could not be fetched.';
+    note.appendChild(why);
+    note.append(p.submitted
+      ? 'Everything else is filled in as you sent it. Correct the link below; keep the title, '
+        + 'season and tournament as they are so this replaces the failed submission.'
+      : 'Paste a corrected link below. Keep the title, season and tournament as they '
+        + 'are so this replaces the failed submission instead of adding a second one.');
+    note.hidden = false;
+    const link = input('field-link');
+    if (p.link) {
+      // The old link, selected, so typing replaces it and a typo can be mended.
+      link.value = p.submitted?.link ?? p.link;
+      link.placeholder = p.link;
+    }
+    link.focus();
+    link.select();
+  }
+
+  /** The form set back to an entry as it was filed. */
+  function fillFrom(f: NonNullable<Progress['submitted']>) {
+    if (f.format) formatPick.set(f.format);
+    if (f.level) levelPick.set(f.level);
+    input('field-resolution').value = f.resolution ?? '';
+    input('field-tags').value = (f.tags ?? []).join(', ');
+
+    const aff = parseAff(f.aff ?? '');
+    affTypePick.set(aff.topical ? 'topical' : 'nontopical');
+    advantages.innerHTML = '';
+    const advs = aff.advantages.length ? aff.advantages : ['', ''];
+    for (const a of advs) addAdvantage(a);
+    if (advs.length < 2) addAdvantage();
+    input('field-aff-free').value = aff.free;
+    input('field-mg').value = aff.mg;
+    input('field-pmr').value = aff.pmr;
+    input('field-aff-other').value = aff.other;
+
+    const neg = parseNeg(f.neg ?? '');
+    if (neg) {
+      input('field-off-count').value = String(neg.count);
+      paintNegPositions();
+      negPositions.querySelectorAll<HTMLInputElement>('input')
+        .forEach((field, i) => { field.value = neg.positions[i] ?? ''; });
+    }
+
+    const decision = parseDecision(f.decision ?? '');
+    if (decision) {
+      decisionKindPick.set(decision.kind);
+      winnerPick.set(decision.side);
+      input('field-win-ballots').value = decision.won;
+      input('field-lose-ballots').value = decision.lost;
+    }
+  }
 
   /** Back to an empty form, chips and built rows included. */
   function startOver() {
@@ -825,4 +1040,12 @@ const tournamentVocab = [...new Set(
   addAdvantage();
   addAdvantage();
   redraw();
+
+  // The entry as first sent is only given to whoever sent it, so a reader who
+  // signs in on this page is filled in then.
+  const resubmit = new URLSearchParams(location.search).get('resubmit');
+  if (resubmit) {
+    void prefillResubmit(resubmit);
+    document.addEventListener('gt:signed-in', () => void prefillResubmit(resubmit));
+  }
 </script>

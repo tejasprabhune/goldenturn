@@ -1,5 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+// The stage marks the submissions list shares with the processing page.
+import '../styles/pending.css';
 ---
 
 <BaseLayout title="Your account | the golden turn" description="Your saved rounds, notes and tags.">
@@ -10,6 +12,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   <div class="shell page-body" id="me-body" hidden>
     <div class="me-grid">
+      <!-- Hidden until the list arrives, and for anyone who never submitted:
+           most readers have nothing to show here. -->
+      <section class="me-block me-block--wide" id="me-subs-block" hidden>
+        <p class="section-head me-subs-head">
+          <span>Rounds you submitted</span>
+          <a class="me-subs-add" href="/recordings/add">Submit another</a>
+        </p>
+        <ul class="row-list me-subs" id="me-subs"></ul>
+        <p class="me-empty" id="me-subs-error" hidden></p>
+      </section>
+
       <section class="me-block me-block--wide">
         <p class="section-head">Saved rounds</p>
         <ul class="row-list" id="me-favorites"></ul>
@@ -104,6 +117,44 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     margin-top: 0.2rem;
   }
 
+  .me-subs-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .me-subs-add {
+    color: inherit;
+    font-weight: 400;
+    text-decoration: none;
+  }
+
+  .me-subs-add:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+
+  /* The state column holds a mark and a few words, so it is given room and
+     lined up rather than left to the auto track. */
+  .me-subs :global(.row) {
+    grid-template-columns: 2.5rem minmax(0, 1fr) 11rem;
+  }
+
+  @media (max-width: 640px) {
+    .me-subs :global(.row) {
+      grid-template-columns: 2rem minmax(0, 1fr);
+    }
+
+    .me-subs :global(.row-meta) {
+      grid-column: 2;
+      margin-top: 0.3rem;
+    }
+  }
+
+  .me-block[hidden] {
+    display: none;
+  }
+
   .me-actions {
     margin-top: 3rem;
     display: flex;
@@ -118,6 +169,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     isAdmin, NotSignedIn,
   } from '../lib/api';
   import { formatTime } from '../lib/waveform';
+  import { listMySubmissions, pendingHref, ago, STATUS_WORD } from '../lib/progress';
   import { ownStarsHtml } from '../lib/stars';
 
   const title = document.getElementById('me-title')!;
@@ -145,6 +197,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     body.hidden = false;
     const adminLink = document.getElementById('me-admin');
     if (adminLink) adminLink.hidden = !isAdmin();
+
+    void renderSubmissions();
 
     try {
       const [{ favorites }, { notes }, { tags }, { ratings }] = await Promise.all([
@@ -226,6 +280,72 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     } catch (e) {
       if (e instanceof NotSignedIn) { body.hidden = true; guest.hidden = false; }
     }
+  }
+
+  /**
+   * The rounds this account submitted, newest first, each with how far it has
+   * got. Until now a submitter who left the confirmation had no way back to a
+   * round, and no way to learn that its ingest had failed.
+   */
+  async function renderSubmissions() {
+    const block = document.getElementById('me-subs-block')!;
+    const list = document.getElementById('me-subs')!;
+    const error = document.getElementById('me-subs-error')!;
+    let submissions;
+    try {
+      ({ submissions } = await listMySubmissions());
+    } catch (e) {
+      if (e instanceof NotSignedIn) return;
+      block.hidden = false;
+      list.innerHTML = '';
+      error.hidden = false;
+      error.textContent = 'Your submissions could not be loaded just now.';
+      return;
+    }
+    error.hidden = true;
+    list.innerHTML = '';
+    block.hidden = submissions.length === 0;
+    const now = Math.floor(Date.now() / 1000);
+
+    submissions.forEach((s, i) => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.className = 'row';
+      // A published round has its page; anything else is followed where it is
+      // being processed, which also explains a failure or a removal.
+      a.href = s.status === 'published' ? `/recordings/${s.slug}` : pendingHref(s.object_id);
+
+      const idx = document.createElement('span');
+      idx.className = 'row-index';
+      idx.textContent = String(i + 1).padStart(2, '0');
+
+      const t = document.createElement('span');
+      t.className = 'row-title';
+      t.textContent = s.title;
+      const when = document.createElement('span');
+      when.className = 'sub-when';
+      when.textContent = [s.tournament, s.year, `submitted ${ago(s.created_at, now)}`]
+        .filter(Boolean).join(', ');
+      t.appendChild(when);
+      if (s.status === 'failed' && s.reason) {
+        const why = document.createElement('span');
+        why.className = 'sub-reason';
+        why.textContent = s.reason;
+        t.appendChild(why);
+      }
+
+      const meta = document.createElement('span');
+      meta.className = 'row-meta';
+      const state = document.createElement('span');
+      state.className = 'sub-state';
+      state.dataset.status = s.status;
+      state.textContent = STATUS_WORD[s.status] ?? s.status;
+      meta.appendChild(state);
+
+      a.append(idx, t, meta);
+      li.appendChild(a);
+      list.appendChild(li);
+    });
   }
 
   document.getElementById('me-signin')?.addEventListener('click', () =>

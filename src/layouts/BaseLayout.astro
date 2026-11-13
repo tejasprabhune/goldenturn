@@ -71,6 +71,9 @@ function isActive(href: string) {
               {label}
             </a>
           ))}
+          <!-- Shown only to accounts the Worker says may use prep; see lib/prep/access. -->
+          <a href="/prep" class={isActive('/prep') ? 'masthead-link masthead-auth js-nav-prep is-current' : 'masthead-link masthead-auth js-nav-prep'}
+             aria-current={isActive('/prep') ? 'page' : undefined} hidden>prep</a>
           <a href="/admin" class="masthead-link masthead-auth js-nav-admin" hidden>admin</a>
           <a href="/me" class="masthead-link masthead-auth js-nav-account" hidden></a>
           <button class="masthead-link masthead-auth-btn js-nav-signin" type="button">sign in</button>
@@ -99,6 +102,9 @@ function isActive(href: string) {
               {label}
             </a>
           ))}
+          <!-- Shown only to accounts the Worker says may use prep; see lib/prep/access. -->
+          <a href="/prep" class={isActive('/prep') ? 'masthead-link masthead-auth js-nav-prep is-current' : 'masthead-link masthead-auth js-nav-prep'}
+             aria-current={isActive('/prep') ? 'page' : undefined} hidden>prep</a>
           <a href="/admin" class="masthead-link masthead-auth js-nav-admin" hidden>admin</a>
           <a href="/me" class="masthead-link masthead-auth js-nav-account" hidden></a>
           <button class="masthead-link masthead-auth-btn js-nav-signin" type="button">sign in</button>
@@ -531,12 +537,14 @@ function isActive(href: string) {
   import { algoliasearch } from 'algoliasearch';
   import { recordingHref } from '../lib/recordings';
   import { getUser, signIn, signUp, isAdmin, track } from '../lib/api';
+  import { hasPrepAccess, refreshPrepFlag } from '../lib/prep/access';
 
   // Auth state is rendered on the client so pages stay static and cacheable.
   // The bar and the mobile drawer each carry a copy of these controls.
   const navAccounts = Array.from(document.querySelectorAll<HTMLAnchorElement>('.js-nav-account'));
   const navSignins = Array.from(document.querySelectorAll<HTMLElement>('.js-nav-signin'));
   const navAdmins = Array.from(document.querySelectorAll<HTMLElement>('.js-nav-admin'));
+  const navPreps = Array.from(document.querySelectorAll<HTMLElement>('.js-nav-prep'));
   const signinDialog = document.getElementById('signin-dialog') as HTMLDialogElement | null;
 
   function renderAuth() {
@@ -548,6 +556,7 @@ function isActive(href: string) {
     });
     navSignins.forEach(el => { el.hidden = Boolean(user); });
     navAdmins.forEach(el => { el.hidden = !admin; });
+    navPreps.forEach(el => { el.hidden = !(user && hasPrepAccess()); });
   }
 
   let signupMode = false;
@@ -607,6 +616,9 @@ function isActive(href: string) {
   });
 
   renderAuth();
+  // The prep link is a hint from the sign-in, kept for an hour; re-read it
+  // when it is stale, since access can change while somebody stays signed in.
+  void refreshPrepFlag().then(changed => { if (changed) renderAuth(); });
 
   const mobileToggle = document.getElementById('mobile-menu-toggle');
   const mobileMenu = document.getElementById('mobile-menu');

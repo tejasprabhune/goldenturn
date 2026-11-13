@@ -12,36 +12,69 @@
  *
  * Transcription is a separate GPU run, which then picks these up because they
  * have audio and no transcript.
+ *
+ * Every link is somebody else's server, so nothing here waits on one for
+ * ever: each round has a time limit and a size limit, a download that stops
+ * sending is given up on, and a round that hits any of them fails with a
+ * plain reason like any other bad link, rather than holding up every round
+ * queued behind it until GitHub kills the run.
  */
 import 'dotenv/config';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { mkdtempSync, readFileSync, createWriteStream, rmSync } from 'fs';
-import { Readable } from 'stream';
+import { mkdtempSync, readFileSync, readdirSync, createWriteStream, rmSync } from 'fs';
+import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { API, errorText, fetchWithin, r2, reportEvents, videoHost } from './lib.js';
 
 const run = promisify(execFile);
-const API = process.env.GT_API ?? 'https://goldenturn-api.tejas-prabhune.workers.dev';
 const BUCKET = 'goldenturn-media';
 const PEAK_BUCKETS = 3000;
+
+// The limits. The environment can lower them, which is how the tests make a
+// hung link fail in seconds rather than minutes.
+const num = (name: string, fallback: number) => Number(process.env[name]) || fallback;
+/** The longest any one step of one round may take: the download, yt-dlp, ffmpeg. */
+const STEP_LIMIT_S = num('GT_STEP_LIMIT_S', 15 * 60);
+/** How long a download may go without a byte before it is given up on. */
+const STALL_LIMIT_S = num('GT_STALL_LIMIT_S', 120);
+/** The largest file taken: four hours of video is well under it. */
+const MAX_DOWNLOAD_MB = num('GT_MAX_DOWNLOAD_MB', 3072);
+/** After this long, no new round is started; the rest wait for the next run. */
+const RUN_BUDGET_S = num('GT_RUN_BUDGET_S', 30 * 60);
+
+const minutes = (s: number) => (s >= 120 ? `${Math.round(s / 60)} minutes` : `${s} seconds`);
+
+/**
+ * The tools see the system's paths and nothing else. They are run on links
+ * anyone could have submitted, and the run's environment holds the bucket
+ * keys, the search write key and the ingest token.
+ */
+function toolEnv(): NodeJS.ProcessEnv {
+  const keep = ['PATH', 'HOME', 'LANG', 'TMPDIR'];
+  return Object.fromEntries(keep.filter(k => process.env[k]).map(k => [k, process.env[k]]));
+}
+
+/** A tool run with a deadline; past it the tool is killed and that is the error. */
+async function tool(cmd: string, args: string[], maxBuffer = 1024 * 1024 * 32) {
+  try {
+    return await run(cmd, args, { maxBuffer, timeout: STEP_LIMIT_S * 1000, killSignal: 'SIGKILL', env: toolEnv() });
+  } catch (err) {
+    if ((err as { killed?: boolean }).killed) {
+      throw new Error(`${cmd} took longer than ${minutes(STEP_LIMIT_S)} and was stopped`);
+    }
+    throw err;
+  }
+}
 
 interface Pending {
   object_id: string; slug: string; title: string; link: string;
   year: string | null; tournament: string | null; author: string | null;
-}
-
-function s3(): S3Client {
-  return new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.CLOUDFLARE_S3_KEY!,
-      secretAccessKey: process.env.CLOUDFLARE_S3_SECRET!,
-    },
-  });
+  /** Which time round the queue this is; handed back with the result. */
+  attempt?: number | null;
 }
 
 function directUrl(url: string): string {
@@ -57,29 +90,66 @@ function directUrl(url: string): string {
     .split('?')[0];
 }
 
-const isVideoHost = (link: string) => /youtube\.com|youtu\.be|vimeo\.com/i.test(link);
-
 async function fetchSource(link: string, dir: string): Promise<string> {
-  if (isVideoHost(link)) {
+  if (videoHost(link)) {
     const out = join(dir, 'external.%(ext)s');
-    await run('yt-dlp', ['-f', 'bestaudio/best', '-o', out, '--no-playlist',
-      '--no-progress', '--quiet', link], { maxBuffer: 1024 * 1024 * 32 });
-    const { stdout } = await run('sh', ['-c', `ls ${dir}/external.* | head -1`]);
-    const path = stdout.trim();
-    if (!path) throw new Error('yt-dlp produced no file');
-    return path;
+    await tool('yt-dlp', ['-f', 'bestaudio/best', '-o', out, '--no-playlist',
+      '--no-progress', '--quiet', '--socket-timeout', String(STALL_LIMIT_S),
+      '--max-filesize', `${MAX_DOWNLOAD_MB}M`, link]);
+    const found = readdirSync(dir).find(f => f.startsWith('external.'));
+    if (!found) throw new Error('yt-dlp produced no file');
+    return join(dir, found);
   }
   const dest = join(dir, 'src.bin');
-  const res = await fetch(directUrl(link));
-  if (!res.ok || !res.body) throw new Error(`download ${res.status}`);
-  await pipeline(Readable.fromWeb(res.body as any), createWriteStream(dest));
+  await download(directUrl(link), dest);
   return dest;
+}
+
+/**
+ * Downloads a file, within the limits above. Whichever is hit first, the
+ * request is abandoned and the error says which, in words plainReason in the
+ * Worker turns into something the submitter can act on.
+ */
+async function download(url: string, dest: string): Promise<void> {
+  const cap = MAX_DOWNLOAD_MB * 1024 * 1024;
+  const tooBig = () => new Error(`the file is larger than ${MAX_DOWNLOAD_MB}MB`);
+  const ctrl = new AbortController();
+  let why: string | null = null;
+  const stop = (reason: string) => { if (!why) { why = reason; ctrl.abort(); } };
+  const overall = setTimeout(() => stop(`download took longer than ${minutes(STEP_LIMIT_S)}`), STEP_LIMIT_S * 1000);
+  let stall: NodeJS.Timeout | undefined;
+  const waiting = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => stop(`download stalled: nothing arrived for ${minutes(STALL_LIMIT_S)}`), STALL_LIMIT_S * 1000);
+  };
+  waiting();
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok || !res.body) throw new Error(`download ${res.status}`);
+    if (Number(res.headers.get('content-length') ?? 0) > cap) throw tooBig();
+    let size = 0;
+    const counted = new Transform({
+      transform(chunk: Buffer, _enc, done) {
+        size += chunk.length;
+        waiting();
+        if (size > cap) done(tooBig()); else done(null, chunk);
+      },
+    });
+    await pipeline(Readable.fromWeb(res.body as any), counted, createWriteStream(dest));
+  } catch (err) {
+    if (why) throw new Error(why);
+    throw err;
+  } finally {
+    clearTimeout(overall);
+    clearTimeout(stall);
+    if (!why) ctrl.abort();
+  }
 }
 
 async function computePeaks(src: string): Promise<number[]> {
   const pcm = `${src}.pcm`;
-  await run('ffmpeg', ['-v', 'error', '-y', '-i', src, '-ac', '1', '-ar', '8000',
-    '-f', 's16le', '-acodec', 'pcm_s16le', pcm], { maxBuffer: 1024 * 1024 * 64 });
+  await tool('ffmpeg', ['-v', 'error', '-y', '-i', src, '-ac', '1', '-ar', '8000',
+    '-f', 's16le', '-acodec', 'pcm_s16le', pcm], 1024 * 1024 * 64);
   const raw = readFileSync(pcm);
   const samples = new Int16Array(raw.buffer, raw.byteOffset, Math.floor(raw.length / 2));
   const per = Math.max(1, Math.floor(samples.length / PEAK_BUCKETS));
@@ -100,11 +170,10 @@ async function ingest(p: Pending, client: S3Client) {
   try {
     const src = await fetchSource(p.link, dir);
     const out = join(dir, 'out.m4a');
-    await run('ffmpeg', ['-v', 'error', '-y', '-i', src, '-vn', '-ac', '1',
-      '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', out],
-      { maxBuffer: 1024 * 1024 * 32 });
+    await tool('ffmpeg', ['-v', 'error', '-y', '-i', src, '-vn', '-ac', '1',
+      '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', out]);
 
-    const { stdout } = await run('ffprobe', ['-v', 'error', '-show_entries',
+    const { stdout } = await tool('ffprobe', ['-v', 'error', '-show_entries',
       'format=duration', '-of', 'default=nw=1:nk=1', out]);
     const duration = Number(stdout.trim());
     if (!Number.isFinite(duration) || duration < 300) {
@@ -128,45 +197,103 @@ async function ingest(p: Pending, client: S3Client) {
   }
 }
 
-async function report(objectID: string, status: 'ingested' | 'failed', note?: string) {
+/**
+ * Tells the API how a round's audio went, and says whether it was heard.
+ *
+ * A report that does not land leaves the round pending, and a pending round
+ * is fetched, transcoded and uploaded again by every run. So a report that
+ * fails is not swallowed: the caller counts it and the run ends in error.
+ *
+ * The report names the attempt it belongs to and the link that was fetched.
+ * If the round was removed, or queued again with another link, while this
+ * run was working on it, the API refuses it (409) and takes back what was
+ * uploaded where it does not belong. That is not a failure to report: the
+ * round's current attempt is still owed, and the next run makes it.
+ */
+async function report(p: Pending, status: 'ingested' | 'failed', note?: string): Promise<boolean> {
   const token = process.env.GT_ADMIN_TOKEN;
-  if (!token) return;
-  await fetch(`${API}/recordings/${encodeURIComponent(objectID)}/status`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ status, note }),
-  }).catch(() => {});
+  if (!token) return true;
+  try {
+    const res = await fetchWithin(`${API}/recordings/${encodeURIComponent(p.object_id)}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status, note, attempt: p.attempt ?? undefined, link: p.link }),
+    });
+    if (res.status === 409) {
+      const said = await res.json().catch(() => ({})) as { error?: string };
+      console.log(`  not kept: ${said.error ?? 'the round changed while it was being fetched'}`);
+      return true;
+    }
+    if (!res.ok) console.log(`  could not report "${status}": the API answered ${res.status}`);
+    return res.ok;
+  } catch (err) {
+    console.log(`  could not report "${status}": ${(err as Error).message}`);
+    return false;
+  }
 }
 
 async function main() {
-  const res = await fetch(`${API}/recordings/pending`);
+  const began = Date.now();
+  const res = await fetchWithin(`${API}/recordings/pending`);
   const { pending } = await res.json() as { pending: Pending[] };
   console.log(`${pending.length} submission(s) waiting on audio\n`);
   if (!pending.length) return;
-  if (!process.env.GT_ADMIN_TOKEN) {
+
+  // Asked before anything is downloaded. A result that cannot be recorded
+  // leaves the round pending, so an unattended run with no token, or the
+  // wrong one, would pull the same audio every fifteen minutes for ever. Run
+  // by hand with no token it still works, and says the queue will not move.
+  const heard = await reportEvents([]);
+  if (heard === 'refused') {
+    console.error('GT_ADMIN_TOKEN is refused by the API (it must match the Worker\'s INGEST_TOKEN).\n'
+      + 'Nothing ingested: the results could not have been recorded.');
+    process.exit(2);
+  }
+  if (heard === 'no-token') {
+    if (process.env.GITHUB_ACTIONS) {
+      console.error('GT_ADMIN_TOKEN is not set.\nNothing ingested: the results could not have been recorded.');
+      process.exit(2);
+    }
     console.log('note: GT_ADMIN_TOKEN unset, so results are not reported back\n');
   }
 
-  const client = s3();
+  const client = r2();
   const done: string[] = [];
+  const unreported: string[] = [];
+  const left: string[] = [];
   for (const p of pending) {
+    // A long queue is worked through over several runs rather than in one
+    // that never ends: what is not started now is still pending next time.
+    if (Date.now() - began > RUN_BUDGET_S * 1000) {
+      left.push(p.slug);
+      continue;
+    }
     console.log(`${p.title}\n  ${p.link.slice(0, 90)}`);
+    await reportEvents([{ stage: 'audio', state: 'started', objectID: p.object_id, slug: p.slug }]);
     try {
       const r = await ingest(p, client);
       console.log(`  ${Math.round(r.duration / 60)}min  ${r.audioMB}MB  -> ${p.slug}`);
-      await report(p.object_id, 'ingested');
+      if (!(await report(p, 'ingested'))) unreported.push(p.slug);
       done.push(p.slug);
     } catch (err) {
-      const message = (err as Error).message.slice(0, 160);
+      const message = errorText(err);
       console.log(`  FAILED ${message}`);
-      await report(p.object_id, 'failed', message);
+      if (!(await report(p, 'failed', message))) unreported.push(p.slug);
     }
     console.log();
   }
 
   console.log(`ingested ${done.length} of ${pending.length}`);
+  if (left.length) {
+    console.log(`${left.length} not started, out of time for this run; the next run takes them: ${left.join(', ')}`);
+  }
   if (done.length) {
     console.log('\nnext: publish-index.ts, then a transcription run, then segment/run.ts');
+  }
+  if (unreported.length) {
+    console.error(`\n${unreported.length} result(s) could not be reported and will be fetched again next run: `
+      + unreported.join(', '));
+    process.exitCode = 1;
   }
 }
 

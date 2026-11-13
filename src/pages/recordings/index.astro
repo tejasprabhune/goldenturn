@@ -1,6 +1,10 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import '../../styles/reccard.css';
+
+// Every round page is built in this same run, so a round submitted after this
+// moment is in search without a page yet. The cards need to know which.
+const builtAt = Date.now();
 ---
 
 <BaseLayout title="Recordings | the golden turn">
@@ -65,7 +69,7 @@ import '../../styles/reccard.css';
 
     <p id="results-count" class="label label-muted" style="margin-bottom: 1.25rem;"></p>
 
-    <div id="results" class="rec-results"></div>
+    <div id="results" class="rec-results" data-built-at={builtAt}></div>
 
     <div style="margin-top: 2.5rem;">
       <button id="load-more" class="chip hidden">Load more</button>
@@ -104,7 +108,20 @@ import '../../styles/reccard.css';
 
   const PAGE_SIZE = 20;
 
+  const builtAt = Number(resultsEl.dataset.builtAt) || undefined;
+
   let currentPage = 0;
+  /**
+   * The Algolia page behind each step of "load more". In order, except after
+   * the random landing page, which goes first and is not fetched again.
+   */
+  let pageOrder: number[] = [];
+  /** Bumped by every search, so a slow answer to an older one is dropped. */
+  let searchSeq = 0;
+  /** A card named by ?expand=, opened once by the render that finds it. */
+  let pendingExpand = '';
+  /** The last query sent to the activity log, so a pause does not repeat it. */
+  let trackedQuery = '';
   let currentQuery = '';
   let currentYear = '';
   let currentAffType = '';
@@ -219,12 +236,19 @@ import '../../styles/reccard.css';
   document.getElementById('kinds-tip-signin')?.addEventListener('click', () =>
     document.dispatchEvent(new CustomEvent('gt:open-signin')));
 
-  function updateURL() {
+  function updateURL(mode: 'push' | 'replace' = 'push') {
     const params = new URLSearchParams();
     // Only when they say something the reader's own preference would not, so
     // an ordinary browse keeps a clean address and a shared one is explicit.
-    if (prefs.formats.length !== FORMATS.length) prefs.formats.forEach(f => params.append('format', f));
-    if (prefs.levels.length !== LEVELS.length) prefs.levels.forEach(l => params.append('level', l));
+    // That is the preference this browser holds, not every format there is:
+    // measured against all of them, the parli-only default wrote
+    // ?format=parli into the address on the first click.
+    const standing = readLocal();
+    const differs = (a: string[], b: string[]) => a.length !== b.length || a.some(x => !b.includes(x));
+    if (differs(prefs.formats, standing.formats) || differs(prefs.levels, standing.levels)) {
+      prefs.formats.forEach(f => params.append('format', f));
+      prefs.levels.forEach(l => params.append('level', l));
+    }
     if (currentQuery) params.set('q', currentQuery);
     if (currentYear) params.set('year', currentYear);
     if (currentAffType) params.set('affType', currentAffType);
@@ -233,7 +257,9 @@ import '../../styles/reccard.css';
     activeTags.forEach(t => params.append('tag', t));
     if (cards.expandedObjectID) params.set('expand', cards.expandedObjectID);
     const url = params.toString() ? `/recordings?${params}` : '/recordings';
-    history.pushState({}, '', url);
+    if (url === location.pathname + location.search) return;
+    if (mode === 'replace') history.replaceState({}, '', url);
+    else history.pushState({}, '', url);
   }
 
   function renderActiveFilters() {
@@ -318,6 +344,7 @@ import '../../styles/reccard.css';
     // Browse is the bare landing state: a random slice, so the archive does not
     // always open on the same rounds. A chosen order replaces that.
     const isBrowse = !currentQuery && !filtered && !currentSort && page === 0;
+    const seq = ++searchSeq;
     try {
       // A sorted view pages through the sorted array rather than through
       // Algolia, so it only fetches once.
@@ -328,7 +355,8 @@ import '../../styles/reccard.css';
         return;
       }
 
-      let effectivePage = page;
+      if (page === 0) pageOrder = [];
+      let effectivePage = pageOrder[page] ?? page;
       if (isBrowse) {
         // Asking for no hits returns no page count either, so this asked for a
         // random page out of zero and opened on the first one every time; the
@@ -340,8 +368,13 @@ import '../../styles/reccard.css';
           indexName: INDEX_NAME,
           searchParams: { query: '', hitsPerPage: PAGE_SIZE, page: 0, ...(filters ? { filters } : {}) },
         });
+        if (seq !== searchSeq) return;
         const nbPages = probe.nbPages ?? 1;
         effectivePage = nbPages > 0 ? Math.floor(Math.random() * nbPages) : 0;
+        // Load more carries on from here through every other page once. It
+        // used to ask for pages 1, 2, 3 after landing on a random one, which
+        // showed that page twice and never showed page 0.
+        pageOrder = [effectivePage, ...Array.from({ length: nbPages }, (_, i) => i).filter(i => i !== effectivePage)];
       }
 
       const result = await client.searchSingleIndex({
@@ -353,6 +386,9 @@ import '../../styles/reccard.css';
           ...(filters ? { filters } : {}),
         },
       });
+      // Typing fires a search per pause, and an early, short query can answer
+      // after a later one; its results would replace the right ones.
+      if (seq !== searchSeq) return;
 
       const rawHits = result.hits as Record<string, unknown>[];
       const nbHits = result.nbHits ?? 0;
@@ -374,41 +410,100 @@ import '../../styles/reccard.css';
       resultsCount.textContent = countLabel;
 
       renderPage(hits, append);
+      if (!append && nbHits === 0) renderEmpty();
       loadMoreBtn.classList.toggle('hidden', currentPage + 1 >= totalPages);
     } catch (err) {
+      if (seq !== searchSeq) return;
       resultsCount.textContent = 'Search unavailable.';
       console.error('Algolia search error:', err);
     }
   }
 
   function renderPage(hits: Record<string, unknown>[], append: boolean) {
-    if (!append) resultsEl.innerHTML = '';
+    if (!append) {
+      resultsEl.innerHTML = '';
+      // The card that was open went with the old results.
+      cards.expandedObjectID = '';
+    }
     for (const hit of hits) {
-      resultsEl.insertAdjacentHTML('beforeend', renderRecordingCard(hit, activeTags));
+      resultsEl.insertAdjacentHTML('beforeend', renderRecordingCard(hit, activeTags, { builtAt }));
     }
     void hydrateRatings(resultsEl);
-    if (initExpandID && !append) {
-      const card = resultsEl.querySelector(`[data-objectid="${CSS.escape(initExpandID)}"]`) as HTMLElement | null;
+    // ?expand= names a card to open on arrival, once. Kept for every render it
+    // reopened the same card after each new search.
+    if (pendingExpand && !append) {
+      const card = resultsEl.querySelector(`[data-objectid="${CSS.escape(pendingExpand)}"]`) as HTMLElement | null;
       if (card) {
-        cards.expandedObjectID = initExpandID;
+        cards.expandedObjectID = pendingExpand;
         cards.expandCard(card);
       }
+      pendingExpand = '';
     }
+  }
+
+  /**
+   * Nothing matched. Said in words rather than left as a blank space under
+   * "0 rounds", and when the reader's own format choice is what hid the
+   * answer, which is most of the time for a policy round, the way round it is
+   * one click away.
+   */
+  function renderEmpty() {
+    const off = FORMATS.filter(f => !prefs.formats.includes(f));
+    const p = document.createElement('p');
+    p.className = 'page-lede rec-empty';
+    p.textContent = currentQuery
+      ? `No ${prefs.formats.join(' or ')} rounds match "${currentQuery}".`
+      : `No ${prefs.formats.join(' or ')} rounds match these filters.`;
+    if (off.length) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip rec-empty-more';
+      btn.dataset.includeFormat = off.join(',');
+      btn.textContent = `Also search ${off.join(' and ')} rounds`;
+      btn.addEventListener('click', () => {
+        for (const f of off) formatGroup.querySelector<HTMLButtonElement>(`[data-value="${f}"]`)?.click();
+      });
+      p.append(' ', btn);
+    }
+    resultsEl.appendChild(p);
   }
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function runSearch() {
+  let trackTimer: ReturnType<typeof setTimeout> | undefined;
+  /** True from the first keystroke of a burst of typing until it settles. */
+  let typing = false;
+
+  /**
+   * One search is logged per query somebody actually meant: on Enter, or once
+   * they have stopped typing for a moment. Logging every pause filled "what
+   * people search for" with fra, fram, frame.
+   */
+  function trackQuery() {
+    clearTimeout(trackTimer);
+    if (currentQuery.length > 2 && currentQuery !== trackedQuery) {
+      trackedQuery = currentQuery;
+      track('search', undefined, { q: currentQuery, source: 'recordings' });
+    }
+  }
+
+  function runSearch(settled = false) {
     clearTimeout(debounceTimer);
     currentQuery = searchInput.value.trim();
-    if (currentQuery.length > 2) track('search', undefined, { q: currentQuery, source: 'recordings' });
-    updateURL();
+    // The first pause in a burst of typing makes a history entry and the rest
+    // rewrite it, so Back leaves the search rather than unpicking it a letter
+    // at a time.
+    updateURL(typing ? 'replace' : 'push');
+    typing = !settled;
+    clearTimeout(trackTimer);
+    if (settled) trackQuery();
+    else trackTimer = setTimeout(() => { typing = false; trackQuery(); }, 1500);
     search(0, false);
   }
 
   function onSearchInput() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(runSearch, 150);
+    debounceTimer = setTimeout(() => runSearch(false), 150);
   }
 
   function onFilterChange() {
@@ -426,7 +521,7 @@ import '../../styles/reccard.css';
 
   searchInput.addEventListener('input', onSearchInput);
   searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') runSearch();
+    if (e.key === 'Enter') runSearch(true);
   });
   filterYear.addEventListener('change', onFilterChange);
   filterAffType.addEventListener('change', onFilterChange);
@@ -455,7 +550,7 @@ import '../../styles/reccard.css';
     currentTournament = p.get('tournament') || '';
     currentSort = SORTS[p.get('sort') || ''] ? p.get('sort')! : '';
     activeTags = p.getAll('tag');
-    cards.expandedObjectID = p.get('expand') || '';
+    pendingExpand = p.get('expand') || '';
     searchInput.value = currentQuery;
     filterYear.value = currentYear;
     filterAffType.value = currentAffType;
@@ -475,7 +570,6 @@ import '../../styles/reccard.css';
   prefs = readLocal();
   paintKinds();
   readParams(initParams);
-  const initExpandID = initParams.get('expand') || '';
   renderActiveFilters();
 
   void loadFilterOptions();
@@ -544,5 +638,13 @@ import '../../styles/reccard.css';
 
   .kinds-tip-close:hover {
     color: var(--ink);
+  }
+
+  .rec-empty {
+    margin: 1.5rem 0 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 </style>

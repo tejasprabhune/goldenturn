@@ -32,7 +32,35 @@ function text(hit: Hit, key: string): string {
   return typeof v === 'string' ? v : '';
 }
 
-export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string {
+/**
+ * When a round came in through the submit form, read from its id.
+ *
+ * Submitted ids carry the worker's clock in milliseconds: `sub-<ms>-<random>`
+ * before the slug fix and `<random>-sub-<ms>` after it. Rounds from the old
+ * archive have no such part (one is `GTYytv-sub0`, hence the thirteen digits)
+ * and answer null.
+ */
+export function submittedAt(objectID: string): number | null {
+  const m = objectID.match(/(?:^|-)sub-(\d{13})(?:-|$)/);
+  return m ? Number(m[1]) : null;
+}
+
+export interface CardRenderOptions {
+  /**
+   * When the page holding this card was built, in milliseconds. Every round
+   * page is built in the same run from the same index, so a round submitted
+   * after this moment is in search but has no page yet, and its card points
+   * at the page that follows a submission through instead of at a 404.
+   */
+  builtAt?: number;
+}
+
+/** Where a round's own page will be while it is still on its way. */
+export function pendingHref(slug: string): string {
+  return `/recordings/pending/?ref=${encodeURIComponent(slug)}`;
+}
+
+export function renderRecordingCard(hit: Hit, activeTags: string[] = [], opts: CardRenderOptions = {}): string {
   const objectID = escapeHtml(text(hit, 'objectID'));
   const title = escapeHtml(text(hit, 'title'));
   const link = escapeHtml(text(hit, 'link') || '#');
@@ -47,11 +75,11 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
     : [];
 
   const slug = text(hit, 'slug');
-  const href = escapeHtml(recordingHref({
-    title: text(hit, 'title'),
-    objectID: text(hit, 'objectID'),
-    slug,
-  }));
+  const at = submittedAt(text(hit, 'objectID'));
+  const pending = Boolean(opts.builtAt && at && at > opts.builtAt);
+  const href = escapeHtml(pending
+    ? pendingHref(recordingSlug({ title: text(hit, 'title'), objectID: text(hit, 'objectID'), slug }))
+    : recordingHref({ title: text(hit, 'title'), objectID: text(hit, 'objectID'), slug }));
 
   const tagPills = tags
     .map(t => `<button class="rec-card__tag" data-tag="${escapeHtml(t)}" data-active="${activeTags.includes(t)}">${escapeHtml(t)}</button>`)
@@ -60,7 +88,7 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
   const meta = [year, tournament].filter(Boolean).join(', ');
 
   return `
-    <article class="rec-card" data-objectid="${objectID}" data-link="${link}" data-slug="${escapeHtml(slug)}">
+    <article class="rec-card" data-objectid="${objectID}" data-link="${link}" data-slug="${escapeHtml(slug)}"${pending ? ' data-pending="true"' : ''}>
       <div class="rec-card__header" role="button" tabindex="0" aria-expanded="false">
         <div class="rec-card__main">
           <!--
@@ -91,6 +119,7 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
         <div class="rec-card__aside">
           ${decision ? `<span class="rec-card__decision" role="button" tabindex="0" aria-label="Reveal decision">${decision}</span>` : ''}
           <span class="rec-card__meta">${meta}</span>
+          ${pending ? '<span class="rec-card__pending">just submitted</span>' : ''}
         </div>
       </div>
       <div class="rec-card__body" hidden>
@@ -103,7 +132,7 @@ export function renderRecordingCard(hit: Hit, activeTags: string[] = []): string
               pair of team codes and does not read as a way in, so the way in
               says so once the card is open.
             -->
-            <a class="rec-card__action rec-card__action--open" href="${href}">open round</a>
+            <a class="rec-card__action rec-card__action--open" href="${href}">${pending ? 'follow its progress' : 'open round'}</a>
             <span class="rec-card__footer-rest">
               <button class="rec-card__action" data-action="copy">copy link</button>
               <a class="rec-card__action" href="${link}" target="_blank" rel="noopener noreferrer">open original</a>
@@ -145,7 +174,7 @@ async function drawSpeeches(wave: Waveform, slug: string) {
  * The card gets the same waveform as the round page, minus the parts that
  * belong to a dedicated page: no loop, notes, tags or transcript.
  */
-function buildWaveformPlayer(host: HTMLElement, slug: string) {
+function buildWaveformPlayer(host: HTMLElement, slug: string, link: string) {
   host.innerHTML = `
     <div class="cardplayer">
       <div class="cardplayer-wave"><canvas></canvas></div>
@@ -193,7 +222,10 @@ function buildWaveformPlayer(host: HTMLElement, slug: string) {
 
   void drawSpeeches(wave, slug);
 
-  playBtn.addEventListener('click', () => { if (audio.paused) audio.play(); else audio.pause(); });
+  playBtn.addEventListener('click', () => { if (audio.paused) void audio.play().catch(() => {}); else audio.pause(); });
+  // The index can list a file that has since gone; a play button that does
+  // nothing is worse than saying so.
+  audio.addEventListener('error', () => showFallback(host, link));
   audio.addEventListener('play', () => { playBtn.textContent = 'pause'; });
   audio.addEventListener('pause', () => { playBtn.textContent = 'play'; });
   audio.addEventListener('timeupdate', () => {
@@ -315,7 +347,10 @@ export interface CardListOptions {
   onTag?: (tag: string) => void;
   /** A card opened or closed, so the caller can record it in the URL. */
   onExpandChange?: (objectID: string) => void;
-  /** Where "copy link" should point. */
+  /**
+   * Where "copy link" should point. Left out, it is the round's own page, at
+   * the moment the card's player has reached if it has been played.
+   */
   copyHref?: (objectID: string) => string;
 }
 
@@ -335,6 +370,27 @@ export function createCardList(container: HTMLElement, opts: CardListOptions = {
   let decisionsBlurred = true;
   container.classList.add('decisions-blurred');
 
+  /**
+   * The round's own address, which is what anyone pasting a link expects. It
+   * used to be the list with the card named in it, which opened on a random
+   * page of twenty that rarely held the round. A card that has been played
+   * adds where it got to, which the round page reads back as `t`; a round
+   * still waiting for its page has no player to start there.
+   */
+  function permalink(card: HTMLElement): string {
+    const href = card.querySelector('.rec-card__link')?.getAttribute('href') ?? '/recordings';
+    const url = new URL(href, window.location.origin);
+    if (card.dataset.pending !== 'true') {
+      // The page itself lives at the address with a slash; asking for it
+      // without one is a redirect, and a redirect is one more place for the
+      // time to be dropped.
+      if (!url.pathname.endsWith('/')) url.pathname += '/';
+      const audio = card.querySelector<HTMLAudioElement>('.cardplayer audio');
+      if (audio && audio.currentTime >= 1) url.searchParams.set('t', String(Math.floor(audio.currentTime)));
+    }
+    return url.toString();
+  }
+
   function injectPlayer(card: HTMLElement) {
     const link = card.dataset.link || '';
     const playerEl = card.querySelector('.rec-card__player') as HTMLElement;
@@ -345,7 +401,7 @@ export function createCardList(container: HTMLElement, opts: CardListOptions = {
       slug: card.dataset.slug,
     });
     if (playable.has(slug)) {
-      buildWaveformPlayer(playerEl, slug);
+      buildWaveformPlayer(playerEl, slug, link);
       return;
     }
 
@@ -452,15 +508,21 @@ export function createCardList(container: HTMLElement, opts: CardListOptions = {
     if (actionTarget.dataset?.action === 'copy') {
       const card = target.closest('.rec-card') as HTMLElement;
       const oid = card.dataset.objectid!;
-      const url = opts.copyHref
-        ? opts.copyHref(oid)
-        : `${window.location.origin}/recordings?expand=${encodeURIComponent(oid)}`;
-      navigator.clipboard.writeText(url).then(() => {
-        const btn = target as HTMLButtonElement;
-        const orig = btn.textContent;
-        btn.textContent = 'copied';
-        setTimeout(() => { btn.textContent = orig; }, 1500);
-      });
+      const url = opts.copyHref ? opts.copyHref(oid) : permalink(card);
+      const btn = target as HTMLButtonElement;
+      const say = (word: string) => {
+        btn.textContent = word;
+        setTimeout(() => { btn.textContent = 'copy link'; }, 1500);
+      };
+      // A browser can refuse the clipboard (no permission, an insecure page,
+      // an embedded frame). The link is still worth having, so it is offered
+      // to copy by hand rather than lost with nothing said.
+      Promise.resolve()
+        .then(() => navigator.clipboard.writeText(url))
+        .then(() => say('copied'), () => {
+          window.prompt('Copy this link', url);
+          say('copy failed');
+        });
       return;
     }
 

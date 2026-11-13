@@ -50,7 +50,7 @@ export function recordingSlug(hit: { title?: string; objectID: string; slug?: st
   return `${base}-${suffix}`;
 }
 
-export function recordingHref(hit: { title?: string; objectID: string }): string {
+export function recordingHref(hit: { title?: string; objectID: string; slug?: string }): string {
   return `/recordings/${recordingSlug(hit)}`;
 }
 

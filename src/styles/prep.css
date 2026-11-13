@@ -1,0 +1,617 @@
+/*
+ * The prep page: one search box, results on the left, the block on the right.
+ *
+ * Built for reading under a clock: compact rows on hairline rules, hierarchy
+ * from position and ink rather than weight, and the side of every block in
+ * the first column where the eye lands. Rows are drawn in the browser, so the
+ * styles live here rather than in a scoped block.
+ */
+
+.prep {
+  width: 100%;
+  max-width: 100rem;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.prep-gate {
+  max-width: 34rem;
+  margin: 4.5rem 0 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.prep-gate button,
+.prep-empty button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.prep-gate[hidden],
+.prep-app[hidden] {
+  display: none;
+}
+
+/* Two panes that scroll on their own, under the masthead. --prep-top is the
+   masthead's height, measured once on load. */
+.prep-app {
+  display: grid;
+  grid-template-columns: minmax(22rem, 31rem) minmax(0, 1fr);
+  height: calc(100svh - var(--prep-top, 4rem));
+}
+
+.prep-left {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1.25rem 1.25rem 0 0;
+  border-right: 1px solid var(--rule);
+}
+
+.prep-right {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 1.25rem 0 4rem 2.5rem;
+}
+
+/* ---- the box ---- */
+
+.prep-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--ink);
+}
+
+.prep-q {
+  flex: 1;
+  min-width: 0;
+  font-family: 'PP Editorial New', Georgia, serif;
+  font-weight: 300;
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  background: transparent;
+  border: none;
+  padding: 0 0 0.4rem;
+  color: var(--ink);
+  outline: none;
+}
+
+.prep-q::placeholder {
+  color: rgba(23, 21, 15, 0.28);
+}
+
+/* The global focus ring would box the whole search line; the ink rule under
+   it already says where typing goes. */
+.prep-q:focus-visible {
+  outline: none;
+}
+
+.prep-rtt {
+  flex: none;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  color: rgba(23, 21, 15, 0.45);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.prep-rtt[data-slow='true'] {
+  color: var(--gold-deep);
+}
+
+/* ---- filters ---- */
+
+.prep-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 0 0.65rem;
+}
+
+.prep-filters .chip {
+  padding: 0.22rem 0.55rem;
+  cursor: pointer;
+}
+
+.prep-file {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  color: rgba(23, 21, 15, 0.7);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 0.22rem 0.4rem;
+  max-width: 12rem;
+  cursor: pointer;
+}
+
+.prep-file[data-active='true'] {
+  background: var(--sky);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.prep-status {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-height: 1.6rem;
+  margin: 0;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  color: rgba(23, 21, 15, 0.5);
+}
+
+.prep-status button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(23, 21, 15, 0.3);
+  text-underline-offset: 2px;
+}
+
+.prep-status [data-tone='warn'] {
+  color: var(--gold-deep);
+}
+
+/* ---- the list ---- */
+
+.prep-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 2rem;
+  scrollbar-width: thin;
+}
+
+.prep-row {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  row-gap: 0.1rem;
+  align-items: baseline;
+  padding: 0.5rem 0.6rem 0.55rem 0.5rem;
+  border-bottom: 1px solid var(--rule-soft);
+  cursor: pointer;
+  box-shadow: inset 2px 0 0 transparent;
+}
+
+.prep-row:hover {
+  background: rgba(23, 21, 15, 0.03);
+}
+
+.prep-row[aria-selected='true'] {
+  background: var(--sky-wash);
+  box-shadow: inset 2px 0 0 var(--ink);
+}
+
+.prep-row-title {
+  grid-column: 2;
+  font-size: 0.9375rem;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.prep-row-file {
+  grid-column: 3;
+  font-size: 0.6875rem;
+  color: rgba(23, 21, 15, 0.45);
+  white-space: nowrap;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prep-row-use {
+  grid-column: 2 / 4;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: rgba(23, 21, 15, 0.6);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prep-row-type {
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  margin-right: 0.45rem;
+}
+
+.prep-row mark,
+.prep-doc mark {
+  background: none;
+  color: inherit;
+  box-shadow: inset 0 -0.38em 0 var(--gold);
+}
+
+.prep-family {
+  padding: 0.95rem 0 0.35rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(23, 21, 15, 0.45);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The side, in the first column of every row: aff on sky, neg on gold, a
+   block either side reads in outline. */
+.prep-side {
+  grid-row: 1;
+  grid-column: 1;
+  justify-self: start;
+  display: inline-block;
+  min-width: 2.35rem;
+  padding: 0.05rem 0 0.1rem;
+  text-align: center;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.prep-side--aff {
+  background: var(--sky);
+}
+
+.prep-side--neg {
+  background: var(--gold);
+}
+
+.prep-side--either {
+  border-color: var(--rule);
+  color: rgba(23, 21, 15, 0.55);
+}
+
+.prep-row--file .prep-row-use {
+  -webkit-line-clamp: 1;
+}
+
+.prep-count {
+  grid-row: 1;
+  grid-column: 1;
+  font-size: 0.75rem;
+  color: rgba(23, 21, 15, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.prep-dot {
+  margin: 0 0.35rem;
+  color: rgba(23, 21, 15, 0.3);
+}
+
+.prep-empty {
+  padding: 1.25rem 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.prep-keys {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.9rem;
+  margin: 0;
+  padding: 0.55rem 0 0.8rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.6875rem;
+  color: rgba(23, 21, 15, 0.45);
+}
+
+kbd {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: rgba(23, 21, 15, 0.7);
+}
+
+.prep-keys kbd {
+  margin-right: 0.25rem;
+}
+
+/* ---- the block ---- */
+
+.prep-view-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  max-width: 46rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.prep-crumbs {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(23, 21, 15, 0.55);
+}
+
+.prep-crumbs a {
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: inset 0 -1px 0 rgba(23, 21, 15, 0.3);
+}
+
+.prep-crumbs a:hover {
+  background: var(--gold);
+}
+
+.prep-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.prep-act {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule);
+  padding: 0.25rem 0.6rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 60ms linear, border-color 60ms linear;
+}
+
+.prep-act:hover {
+  border-color: var(--ink);
+}
+
+.prep-act kbd {
+  color: rgba(23, 21, 15, 0.45);
+}
+
+.prep-act[data-done='true'] {
+  background: var(--gold);
+  border-color: var(--ink);
+}
+
+.prep-act[data-done='true'] kbd {
+  color: var(--ink);
+}
+
+/* The block as the doc has it: title, Use line, then the argument, numbered
+   and nested. Neue Montreal at reading size rather than the doc's Calibri;
+   the structure is what has to match. */
+.prep-doc {
+  max-width: 46rem;
+  margin-top: 1.25rem;
+  padding: 1.75rem 2.25rem 2rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--ink);
+  transition: box-shadow 120ms linear;
+}
+
+.prep-doc[data-flash='true'] {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.prep-doc-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: 0 0 0.35rem;
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 1.1875rem;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.prep-doc-title .prep-side {
+  flex: none;
+  position: relative;
+  top: -0.1em;
+}
+
+.prep-doc-use {
+  margin: 0 0 1rem;
+  font-style: italic;
+  font-size: 0.9375rem;
+  color: rgba(23, 21, 15, 0.7);
+}
+
+.prep-doc-body ol,
+.prep-doc-body ul {
+  margin: 0;
+  padding-left: 1.6rem;
+}
+
+.prep-doc-body ol {
+  list-style: decimal;
+}
+
+.prep-doc-body ul {
+  list-style: disc;
+}
+
+.prep-doc-body li {
+  margin: 0.3rem 0;
+  padding-left: 0.2rem;
+}
+
+.prep-doc-body li > ol,
+.prep-doc-body li > ul {
+  margin-top: 0.3rem;
+}
+
+.prep-doc-body li::marker {
+  font-variant-numeric: tabular-nums;
+  color: rgba(23, 21, 15, 0.6);
+}
+
+.prep-doc-body p {
+  margin: 0 0 0.6rem;
+}
+
+.prep-doc-body a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--sky-deep);
+}
+
+.prep-doc-body a:hover {
+  background: var(--gold);
+}
+
+.prep-doc--toc {
+  padding-top: 1.5rem;
+}
+
+.prep-toc-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+.prep-toc-family {
+  margin: 1.1rem 0 0.3rem;
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(23, 21, 15, 0.45);
+}
+
+.prep-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.prep-toc-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.22rem 0;
+  border-top: 1px solid var(--rule-soft);
+  font-size: 0.875rem;
+}
+
+.prep-hint {
+  max-width: 34rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.prep-hint kbd {
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+
+/* A short line at the foot of the window after a copy, so the confirmation is
+   seen wherever the eye is. */
+.prep-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  z-index: 50;
+  transform: translate(-50%, 0.5rem);
+  max-width: calc(100vw - 2rem);
+  padding: 0.55rem 0.9rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 90ms linear, transform 90ms linear;
+}
+
+.prep-toast[data-show='true'] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.prep-toast b {
+  font-weight: 500;
+  color: var(--gold);
+}
+
+.prep-back {
+  display: none;
+}
+
+/* Phone and narrow windows: one column, results then the block, the page
+   scrolling as a whole. */
+@media (max-width: 899px) {
+  .prep-app {
+    display: block;
+    height: auto;
+  }
+
+  .prep-left {
+    padding: 1rem 0 0;
+    border-right: none;
+  }
+
+  .prep-q {
+    font-size: 1.6rem;
+  }
+
+  .prep-list {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .prep-row-file {
+    max-width: 7.5rem;
+  }
+
+  .prep-keys {
+    display: none;
+  }
+
+  .prep-right {
+    padding: 1.25rem 0 3rem;
+    border-top: 1px solid var(--ink);
+    margin-top: 1.25rem;
+  }
+
+  .prep-doc {
+    padding: 1.25rem 1.1rem 1.5rem;
+  }
+
+  .prep-doc-body ol,
+  .prep-doc-body ul {
+    padding-left: 1.3rem;
+  }
+
+  .prep-back {
+    display: inline-flex;
+  }
+}

@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import '../styles/reccard.css';
+
+// The round pages are built in this same run; see the recordings list.
+const builtAt = Date.now();
 ---
 
 <BaseLayout title="Search | the golden turn">
@@ -20,7 +23,7 @@ import '../styles/reccard.css';
     />
 
     <p id="results-count" class="label label-muted hidden" style="margin-bottom: 1.5rem;"></p>
-    <div id="results"></div>
+    <div id="results" data-built-at={builtAt}></div>
 
     <p id="empty-state" class="page-lede">
       Start typing to search across the curriculum, recordings, and lectures.
@@ -31,6 +34,8 @@ import '../styles/reccard.css';
 <script>
   import { algoliasearch } from 'algoliasearch';
   import { renderRecordingCard, createCardList, hydrateRatings, escapeHtml } from '../lib/reccard';
+  import { track } from '../lib/api';
+  import { FORMATS, prefsFilter, readLocal } from '../lib/prefs';
 
   const APP_ID = import.meta.env.PUBLIC_ALGOLIA_APP_ID as string;
   const SEARCH_KEY = import.meta.env.PUBLIC_ALGOLIA_SEARCH_KEY as string;
@@ -42,7 +47,13 @@ import '../styles/reccard.css';
   const resultsCount = document.getElementById('results-count') as HTMLParagraphElement;
   const emptyState = document.getElementById('empty-state') as HTMLParagraphElement;
 
+  const builtAt = Number(resultsEl.dataset.builtAt) || undefined;
+
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let trackTimer: ReturnType<typeof setTimeout> | undefined;
+  let trackedQuery = '';
+  /** Bumped by every search, so a slow answer to an older one is dropped. */
+  let searchSeq = 0;
   let focusedIndex = -1;
   let allLinks: HTMLAnchorElement[] = [];
 
@@ -75,7 +86,27 @@ import '../styles/reccard.css';
     _isRecording?: boolean;
   }
 
+  /**
+   * The query lives in the address, rewritten rather than added to, so Back
+   * from a result comes home to the same results instead of an empty box.
+   */
+  function rememberQuery(query: string) {
+    const url = query ? `/search?q=${encodeURIComponent(query)}` : '/search';
+    if (url !== location.pathname + location.search) history.replaceState({}, '', url);
+  }
+
+  /** Logged once per query somebody settled on, like the recordings list. */
+  function trackQuery(query: string) {
+    clearTimeout(trackTimer);
+    if (query.length > 2 && query !== trackedQuery) {
+      trackedQuery = query;
+      track('search', undefined, { q: query, source: 'search' });
+    }
+  }
+
   async function runSearch(query: string) {
+    const seq = ++searchSeq;
+    rememberQuery(query.trim());
     if (!query.trim()) {
       resultsEl.innerHTML = '';
       resultsCount.classList.add('hidden');
@@ -87,16 +118,28 @@ import '../styles/reccard.css';
 
     emptyState.classList.add('hidden');
 
-    const [contentHits, recordingHits] = await Promise.all([
+    // Rounds follow the reader's format and level choice, as on the list. When
+    // that choice hides some, the count of them is asked for alongside, so a
+    // policy round searched for by name is not simply missing.
+    const prefs = readLocal();
+    const filters = prefsFilter(prefs).join(' AND ');
+    const [contentHits, recordingHits, hiddenRounds] = await Promise.all([
       client
         .searchSingleIndex({ indexName: 'goldenturn_content', searchParams: { query, hitsPerPage: 40 } })
         .then(r => r.hits as Hit[])
         .catch(() => [] as Hit[]),
       client
-        .searchSingleIndex({ indexName: 'all_rounds', searchParams: { query, hitsPerPage: 15 } })
+        .searchSingleIndex({ indexName: 'all_rounds', searchParams: { query, hitsPerPage: 15, ...(filters ? { filters } : {}) } })
         .then(r => (r.hits as Hit[]).map(h => ({ ...h, type: 'recording', _isRecording: true })))
         .catch(() => [] as Hit[]),
+      filters
+        ? client.searchSingleIndex({ indexName: 'all_rounds', searchParams: { query, hitsPerPage: 0 } })
+          .then(r => r.nbHits ?? 0)
+          .catch(() => 0)
+        : Promise.resolve(0),
     ]);
+    // A short query typed first can answer after the longer one typed since.
+    if (seq !== searchSeq) return;
 
     const all = [...contentHits, ...recordingHits].filter(h => GROUP_ORDER.includes(h.type ?? ''));
     const total = all.length;
@@ -121,8 +164,16 @@ import '../styles/reccard.css';
       ...Object.keys(groups).filter(t => !GROUP_ORDER.includes(t) && groups[t]?.length),
     ];
 
+    const unseen = Math.max(0, hiddenRounds - recordingHits.length);
+    const off = FORMATS.filter(f => !prefs.formats.includes(f));
+    const allKinds = `/recordings?q=${encodeURIComponent(query)}&${[...FORMATS].map(f => `format=${f}`).join('&')}`;
+    const unseenNote = unseen > 0 && recordingHits.length < 15
+      ? `<p class="label label-muted search-unseen">${unseen} more round${unseen === 1 ? '' : 's'} hidden by your
+         format choice. <a class="link" href="${escapeHtml(allKinds)}">Search ${escapeHtml(off.join(' and ') || 'every format')} too</a></p>`
+      : '';
+
     if (total === 0) {
-      resultsEl.innerHTML = `<p class="page-lede">No results for "${escapeHtml(query)}".</p>`;
+      resultsEl.innerHTML = `<p class="page-lede">No results for "${escapeHtml(query)}".</p>${unseenNote}`;
       return;
     }
 
@@ -138,8 +189,9 @@ import '../styles/reccard.css';
       if (type === 'recording') {
         const list = document.createElement('div');
         list.className = 'rec-results';
-        list.innerHTML = hits.map(h => renderRecordingCard(h as Record<string, unknown>)).join('');
+        list.innerHTML = hits.map(h => renderRecordingCard(h as Record<string, unknown>, [], { builtAt })).join('');
         section.appendChild(list);
+        if (unseenNote) section.insertAdjacentHTML('beforeend', unseenNote);
         void hydrateRatings(list);
         list.querySelectorAll<HTMLAnchorElement>('.rec-card__link').forEach(a => {
           a.setAttribute('data-index', String(allLinks.length));
@@ -176,6 +228,8 @@ import '../styles/reccard.css';
       updateFocus();
     } else if (e.key === 'Enter' && focusedIndex >= 0 && allLinks[focusedIndex]) {
       allLinks[focusedIndex].click();
+    } else if (e.key === 'Enter') {
+      trackQuery(searchInput.value.trim());
     }
   });
 
@@ -188,7 +242,9 @@ import '../styles/reccard.css';
 
   searchInput.addEventListener('input', () => {
     clearTimeout(debounceTimer);
+    clearTimeout(trackTimer);
     debounceTimer = setTimeout(() => runSearch(searchInput.value.trim()), 150);
+    trackTimer = setTimeout(() => trackQuery(searchInput.value.trim()), 1500);
   });
 
   // Pre-fill from ?q= param
@@ -198,3 +254,9 @@ import '../styles/reccard.css';
     runSearch(q);
   }
 </script>
+
+<style is:global>
+  .search-unseen {
+    margin: 0.9rem 0 0;
+  }
+</style>

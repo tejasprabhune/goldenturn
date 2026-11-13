@@ -5,7 +5,13 @@
  * session send the token and surface a 401 the caller can turn into a prompt.
  */
 
-const API = 'https://goldenturn-api.tejas-prabhune.workers.dev';
+/**
+ * The Worker's address, for every client of it. `PUBLIC_GT_API` points a dev
+ * server at a Worker running locally (`wrangler dev`); a build without it
+ * talks to production.
+ */
+export const API: string = (import.meta.env.PUBLIC_GT_API as string | undefined)?.replace(/\/+$/, '')
+  || 'https://goldenturn-api.tejas-prabhune.workers.dev';
 const TOKEN_KEY = 'gt:token';
 const USER_KEY = 'gt:user';
 
@@ -20,6 +26,34 @@ const ADMIN_KEY = 'gt:admin';
 
 export function isAdmin(): boolean {
   return localStorage.getItem(ADMIN_KEY) === '1';
+}
+
+/**
+ * Whether the signed-in account may open the prep area, as the Worker last
+ * said: at sign-in, or from `GET /me` when `lib/prep/access` re-reads it. Tied
+ * to the user it was read for and to when, so a stale or borrowed hint can be
+ * told apart.
+ */
+const PREP_KEY = 'gt:prep';
+
+export interface PrepFlag {
+  user: string;
+  prep: boolean;
+  at: number;
+}
+
+export function readPrepFlag(): PrepFlag | null {
+  try {
+    const raw = localStorage.getItem(PREP_KEY);
+    return raw ? (JSON.parse(raw) as PrepFlag) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writePrepFlag(prep: boolean, userId = getUser()?.id) {
+  if (!userId) return;
+  localStorage.setItem(PREP_KEY, JSON.stringify({ user: userId, prep, at: Date.now() } satisfies PrepFlag));
 }
 
 export interface Proposal {
@@ -65,6 +99,7 @@ export function signOut() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(ADMIN_KEY);
+  localStorage.removeItem(PREP_KEY);
 }
 
 async function call<T>(path: string, init: RequestInit = {}, auth = false): Promise<T> {
@@ -96,13 +131,15 @@ async function call<T>(path: string, init: RequestInit = {}, auth = false): Prom
 }
 
 async function authenticate(payload: Record<string, unknown>): Promise<User> {
-  const res = await call<{ token: string; user: User; admin?: boolean }>('/auth/session', {
+  const res = await call<{ token: string; user: User; admin?: boolean; prep?: boolean }>('/auth/session', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
   localStorage.setItem(TOKEN_KEY, res.token);
   localStorage.setItem(USER_KEY, JSON.stringify(res.user));
   localStorage.setItem(ADMIN_KEY, res.admin ? '1' : '0');
+  // Kept from the answer itself, so the nav need not ask `GET /me` straight after.
+  writePrepFlag(Boolean(res.prep), res.user.id);
   return res.user;
 }
 
@@ -158,10 +195,36 @@ export interface Submission {
 }
 
 /**
+ * A refusal because the round is already in, carrying the round it collided
+ * with so the form can send the submitter to it rather than leave them at a
+ * dead end.
+ */
+export class AlreadySubmitted extends FieldErrors {
+  constructor(
+    fields: Record<string, string>,
+    public existing: { objectID: string; slug: string; status: 'pending' | 'ingested' },
+  ) {
+    super(fields);
+    this.name = 'AlreadySubmitted';
+  }
+}
+
+export interface Submitted {
+  objectID: string;
+  slug: string;
+  status: 'pending';
+  probe?: string;
+  /** A failed round sent again keeps its address and is queued afresh. */
+  resubmitted: boolean;
+  /** Whether a site build was asked for, so the page appears within minutes. */
+  rebuilding: boolean;
+}
+
+/**
  * Submits a round. The server validates, checks the link plays something and
  * writes to the index with its own key, so the browser carries none.
  */
-export async function submitRecording(payload: Record<string, unknown>) {
+export async function submitRecording(payload: Record<string, unknown>): Promise<Submitted> {
   const token = getToken();
   if (!token) throw new NotSignedIn();
   const res = await fetch(`${API}/recordings`, {
@@ -172,10 +235,11 @@ export async function submitRecording(payload: Record<string, unknown>) {
   const body = await res.json().catch(() => ({} as any));
   if (res.status === 401) { signOut(); throw new NotSignedIn(); }
   if (!res.ok) {
+    if ((body as any).errors && (body as any).existing) throw new AlreadySubmitted((body as any).errors, (body as any).existing);
     if ((body as any).errors) throw new FieldErrors((body as any).errors);
     throw new Error((body as any).error ?? `submission failed (${res.status})`);
   }
-  return body as { objectID: string; slug: string; status: string; probe?: string };
+  return body as Submitted;
 }
 
 export function pendingRecordings() {

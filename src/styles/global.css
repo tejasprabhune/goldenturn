@@ -98,6 +98,15 @@
     z-index: 1;
   }
 
+  /* The attribute has to win over any display a class sets. Touch screens give
+     chips, tags and votes inline-flex for a bigger target, and that alone put
+     every hidden "Edits", "Proposed timings" and "admin" button on screen. A
+     component that animates its own hidden state (the card body) overrides
+     this with a more specific rule. */
+  [hidden] {
+    display: none !important;
+  }
+
   h1,
   h2,
   h3 {
@@ -502,8 +511,10 @@
     color: rgba(23, 21, 15, 0.45);
   }
 
-  .tx-word.is-hit {
+  .tx-word.is-hit,
+  mark.tx-hit {
     background: var(--gold);
+    color: inherit;
   }
 
   .tx-divider {

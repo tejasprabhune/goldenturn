@@ -242,6 +242,20 @@
   line-height: 1.4;
 }
 
+/* A round that is in search before its page is built. Its links lead to the
+   page that follows a submission through, and this says why. */
+.rec-card__pending {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  background: var(--sky-wash);
+  border: 1px solid var(--sky-deep);
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+}
+
 /* Narrow screens cannot spare a whole column for the decision, so it drops
    to a row under the card with the year and tournament. */
 @media (max-width: 720px) {

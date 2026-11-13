@@ -6,10 +6,53 @@ compatibility_date = "2026-07-01"
 SESSION_TTL_DAYS = "30"
 # Comma separated. The second is a machine account used to exercise the admin
 # endpoints; its password lives in .env and nowhere in the repo.
+#
+# Being on this list no longer makes an account an admin: that is a flag on
+# the account, set by POST /admin/bootstrap. The list is the addresses nobody
+# may register or claim through the ordinary sign-up, which is what stops a
+# stranger getting there first.
 ADMIN_EMAIL = "prabhune@berkeley.edu,admincli@goldenturn.org"
 ALLOWED_ORIGINS = "https://goldenturn.org,http://localhost:4321,http://localhost:4400"
 # Where an edit asks for a rebuild. The token that authorises it is a secret.
 GITHUB_REPO = "tejasprabhune/goldenturn"
+# Where the built site and the bucket are served. The Worker asks the site
+# whether a submitted round has its page yet, and hands out audio addresses.
+SITE_URL = "https://goldenturn.org"
+MEDIA_URL = "https://media.goldenturn.org"
+# The one index a prep key is good for. The key those are derived from is the
+# secret ALGOLIA_PREP_KEY: a search-only key, never the write key.
+ALGOLIA_PREP_INDEX = "prep"
+# The media domain's zone, so a file the Worker deletes can be purged from its
+# cache too. Purging needs the secret CACHE_PURGE_TOKEN; without it nothing is
+# purged and a removed file can be served from the edge until it ages out.
+MEDIA_ZONE_ID = "7627240c9688e6514a397b9509758a2a"
+# How many rounds one account may submit (admins are not counted).
+SUBMISSIONS_PER_HOUR = "20"
+SUBMISSIONS_PER_DAY = "60"
+
+# Deploy with `npm run deploy`, never `wrangler deploy` alone: the script
+# applies the migrations first. This Worker run against a database without
+# them falls back where it can (sign-in keeps working, nobody is an admin)
+# and answers 500 elsewhere.
+
+# Secrets, set with `wrangler secret put`, in no file:
+#   ALGOLIA_APP_ID, ALGOLIA_ADMIN_KEY, ALGOLIA_INDEX   the search index
+#   INGEST_TOKEN             lets the onboarding run report in
+#   GITHUB_DISPATCH_TOKEN    starts the onboarding run every fifteen minutes,
+#                            and lets an edit ask for a rebuild
+#   ALGOLIA_PREP_KEY         parent of the prep keys (optional; without it
+#                            GET /prep/key answers 503)
+#   ADMIN_BOOTSTRAP_SECRET   opens POST /admin/bootstrap; unset it when done
+#   CACHE_PURGE_TOKEN        an API token with Cache Purge on the media zone
+#                            (optional; see MEDIA_ZONE_ID)
+
+# The onboarding run's clock. GitHub disables a workflow's own schedule after
+# sixty days without repository activity, so the workflow has none and is
+# started from here instead, by the same event mechanism an edit uses to ask
+# for a rebuild. Off the hour, as the old schedule was. Needs the secret
+# GITHUB_DISPATCH_TOKEN; without it nothing is sent and the admin page says so.
+[triggers]
+crons = ["7,22,37,52 * * * *"]
 
 [[d1_databases]]
 binding = "DB"

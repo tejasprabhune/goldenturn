@@ -1,0 +1,489 @@
+/*
+ * A submitted round while it is being processed (/recordings/pending), and the
+ * state words where the account page lists a submitter's rounds.
+ *
+ * Plain CSS outside Tailwind's layers, like diff.css: almost all of it styles
+ * nodes built in the browser, which a scoped block never reaches and the
+ * content scanner cannot always see.
+ *
+ * One column and as little prose as will do: a title, a sentence, a thin bar
+ * of five segments, then the audio and the transcript. State is carried by
+ * the fill of a segment and the ink of a word, never by badges or dots. Gold
+ * is the one accent, for what is moving now; the diff red, already the
+ * site's colour for a failed ingest, is kept for what stopped.
+ */
+
+/* ------------------------------------------------------------------ head */
+
+/* One column, read top to bottom: the title, one sentence of where it has
+   got, what to do if anything, then the bar, the audio and the words. */
+.pend-column {
+  max-width: 50rem;
+}
+
+.pend-head {
+  padding-bottom: 2rem;
+}
+
+/* The same face as a round's own page: a title is team codes and
+   abbreviations, which the display serif sets poorly. */
+.pend-title {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3vw, 2.125rem);
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.pend-where {
+  font-size: 0.875rem;
+  color: rgba(23, 21, 15, 0.5);
+  margin: 0.45rem 0 0;
+}
+
+.pend-where[hidden],
+.pend-summary[hidden] {
+  display: none;
+}
+
+.pend-summary {
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  max-width: 58ch;
+  margin: 1.25rem 0 0;
+}
+
+.pend-loading {
+  margin-top: 0.5rem;
+}
+
+/* ---------------------------------------------------------- next step */
+
+.pend-next[hidden],
+.pend-reason[hidden] {
+  display: none;
+}
+
+.pend-reason {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  max-width: 58ch;
+  margin: 0.4rem 0 0;
+  color: var(--diff-del);
+}
+
+.pend-next[data-kind='retrying'] .pend-reason {
+  color: var(--ink-muted);
+}
+
+.pend-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.25rem;
+  margin: 1.1rem 0 0;
+}
+
+.pend-actions:empty {
+  display: none;
+}
+
+/* The link that failed, beside the way to replace it: there to check, not
+   to read. */
+.pend-link,
+.pend-redirect {
+  font-size: 0.8125rem;
+  color: rgba(23, 21, 15, 0.5);
+  overflow-wrap: anywhere;
+}
+
+.pend-link {
+  text-decoration: underline;
+  text-decoration-color: rgba(23, 21, 15, 0.25);
+  text-underline-offset: 3px;
+}
+
+.pend-link:hover {
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------ stepper */
+
+.pend-progress {
+  margin-bottom: 2.5rem;
+}
+
+/* Five equal segments of one thin bar, with a hairline gap between them. The
+   state is the fill: ink done, gold moving, pale waiting, red stopped. */
+.pend-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  column-gap: 3px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.step-seg {
+  display: block;
+  height: 4px;
+  background: rgba(23, 21, 15, 0.1);
+}
+
+.step[data-state='done'] .step-seg { background: var(--ink); }
+.step[data-state='active'] .step-seg { background: var(--gold); }
+.step[data-state='failed'] .step-seg,
+.step[data-state='stuck'] .step-seg { background: var(--diff-del); }
+
+.step-label {
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  margin-top: 0.6rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step[data-state='waiting'] .step-label {
+  color: rgba(23, 21, 15, 0.4);
+}
+
+.step[data-state='failed'] .step-label,
+.step[data-state='stuck'] .step-label {
+  color: var(--diff-del);
+}
+
+.step-at {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  margin-top: 0.15rem;
+  min-height: 1.3em;
+  color: rgba(23, 21, 15, 0.45);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.step[data-state='failed'] .step-at,
+.step[data-state='stuck'] .step-at {
+  color: var(--diff-del);
+}
+
+.pend-progress-note {
+  font-size: 0.8125rem;
+  color: rgba(23, 21, 15, 0.5);
+  margin: 0.9rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pend-progress-note:empty {
+  display: none;
+}
+
+.pend-progress-note[data-tone='bad'] {
+  color: var(--diff-del);
+}
+
+/* A phone keeps all five segments; the names shrink, and only a stage that
+   is moving or stopped keeps its figure. */
+@media (max-width: 560px) {
+  .pend-steps { column-gap: 2px; }
+  .step-label { font-size: 0.6875rem; }
+  .step-at { font-size: 0.625rem; }
+  .step[data-state='done'] .step-at { visibility: hidden; }
+}
+
+/* A label over a rule, with a quiet note at the far end of the same line. */
+.pend-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  color: rgba(23, 21, 15, 0.45);
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--rule);
+  margin: 0 0 0.9rem;
+}
+
+.pend-section-note {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-align: right;
+}
+
+/* What stands in for a part that is not there yet. */
+.pend-quiet {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: rgba(23, 21, 15, 0.5);
+  margin: 0;
+}
+
+.pend-quiet[hidden] {
+  display: none;
+}
+
+.pend-audio {
+  margin-bottom: 2.5rem;
+}
+
+/* -------------------------------------------------------------- player */
+
+.pend-player {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  padding: 1rem 1rem 0.9rem;
+}
+
+.pend-player[hidden],
+.pend-wave-wrap[hidden],
+.pend-bar[hidden],
+.pend-speeches[hidden] {
+  display: none;
+}
+
+.pend-wave {
+  display: block;
+  width: 100%;
+  height: 104px;
+  cursor: pointer;
+}
+
+/* No waveform file: a plain bar does the same job. The click target is
+   taller than the line it draws. */
+.pend-bar {
+  position: relative;
+  height: 28px;
+  cursor: pointer;
+}
+
+.pend-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  background: rgba(23, 21, 15, 0.1);
+}
+
+.pend-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  width: 0;
+  background: var(--ink);
+}
+
+.pend-speeches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.pend-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.pend-play {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  min-width: 4.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 60ms linear;
+}
+
+.pend-play:hover {
+  background: var(--gold);
+}
+
+/* The same four steps the round's page offers, butted into one control. */
+.pend-skips {
+  display: flex;
+}
+
+.pend-skip {
+  font-family: 'Neue Montreal', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.6rem;
+  padding: 0.5rem 0.4rem;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 60ms linear, border-color 60ms linear;
+}
+
+.pend-skip + .pend-skip {
+  margin-left: -1px;
+}
+
+.pend-skip:hover {
+  background: var(--sky-wash);
+  border-color: var(--ink);
+  position: relative;
+}
+
+.pend-time {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.pend-time-sep {
+  color: rgba(23, 21, 15, 0.3);
+  margin: 0 0.35rem;
+}
+
+#pend-total {
+  color: rgba(23, 21, 15, 0.5);
+}
+
+.pend-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.pend-speed .speed-select {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.75rem;
+}
+
+/* ---------------------------------------------------------- transcript */
+
+.pend-tx {
+  max-height: 34rem;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.pend-tx[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------ missing */
+
+.pend-missing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem 2rem;
+  border-top: 1px solid var(--rule);
+  padding-top: 1.25rem;
+}
+
+@media (min-width: 760px) {
+  .pend-missing {
+    grid-template-columns: 10rem minmax(0, 1fr);
+  }
+}
+
+.pend-missing-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(23, 21, 15, 0.45);
+  margin: 0;
+  padding-top: 0.2rem;
+}
+
+.pend-missing-title {
+  font-family: 'PP Editorial New', Georgia, serif;
+  font-weight: 300;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.pend-missing-text {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  max-width: 58ch;
+  margin: 1rem 0 0;
+}
+
+.pend-missing-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  margin: 1.5rem 0 0;
+}
+
+.pend-missing-links [aria-hidden] {
+  color: rgba(23, 21, 15, 0.3);
+}
+
+/* ------------------------------------------------- account page rows */
+
+/* A submitter's own rounds: one word for the state, coloured like the
+   stepper (gold moving, red stopped), and no mark beside it. */
+.sub-state {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sub-state[data-status='fetching'],
+.sub-state[data-status='transcribing'],
+.sub-state[data-status='labelling'],
+.sub-state[data-status='publishing'] {
+  color: var(--gold-deep);
+}
+
+.sub-state[data-status='failed'] {
+  color: var(--diff-del);
+}
+
+.sub-state[data-status='removed'] {
+  text-decoration: line-through;
+  text-decoration-color: rgba(23, 21, 15, 0.3);
+}
+
+.sub-reason {
+  display: block;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--diff-del);
+  margin-top: 0.15rem;
+}
+
+.sub-when {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(23, 21, 15, 0.45);
+  margin-top: 0.1rem;
+}
+
+.pend-area-tx[hidden] {
+  display: none;
+}

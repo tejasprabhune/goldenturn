@@ -1,0 +1,874 @@
+---
+/**
+ * Where a submitted round lives until its own page is built.
+ *
+ * Round pages are made at deploy time, one per record in the index, so a
+ * round submitted a minute ago has no page and will not have one until the
+ * ingest has fetched its audio and the site has been rebuilt. This page fills
+ * that gap. It is one static page that takes the round from the address
+ * (`?ref=` a slug or an objectID) and renders everything in the browser from
+ * the Worker's progress record, polling while anything is still moving: the
+ * audio as soon as there is any, the transcript as soon as it is made, the
+ * speech labels once they are marked, and a way on to the real page when it
+ * exists. When a stage fails it says which, why, and what the submitter can
+ * do about it, which until now nobody was ever told.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+// Plain CSS rather than a scoped block: nearly everything here is built in
+// the browser, where scoped selectors never match.
+import '../../styles/pending.css';
+
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+---
+
+<BaseLayout
+  title="Processing a round | the golden turn"
+  description="A submitted round while its audio, transcript and speech markers are being processed."
+>
+  <div class="shell page-head pend-head">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/recordings">recordings</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">processing</span>
+    </nav>
+
+    <p class="page-lede pend-loading" id="pend-loading">Looking up the round.</p>
+
+    <div class="pend-column" id="pend-header" hidden>
+      <h1 class="pend-title" id="pend-title"></h1>
+      <p class="pend-where" id="pend-where"></p>
+      <p class="pend-summary" id="pend-summary" aria-live="polite"></p>
+      <!-- What the reader can do next: resubmit after a failure, or go to the
+           round once it is published. Nothing else is said here. -->
+      <div class="pend-next" id="pend-next" hidden aria-live="polite">
+        <p class="pend-reason" id="pend-reason"></p>
+        <p class="pend-actions" id="pend-actions"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="shell page-body" id="pend-body" hidden>
+    <div class="pend-column">
+      <!-- Five segments in one bar, one per stage. -->
+      <section class="pend-progress" aria-label="Progress">
+        <ol class="pend-steps" id="pend-steps"></ol>
+        <p class="pend-progress-note" id="pend-progress-note"></p>
+      </section>
+
+      <section class="pend-audio">
+        <div class="pend-player" id="pend-player" hidden>
+          <div class="pend-wave-wrap" id="pend-wave-wrap" hidden>
+            <canvas class="pend-wave" id="pend-wave" tabindex="0" role="slider"
+              aria-label="Seek" aria-valuemin="0" aria-valuenow="0" aria-valuetext="0:00"></canvas>
+          </div>
+
+          <div class="pend-bar" id="pend-bar" tabindex="0" role="slider" hidden
+            aria-label="Seek" aria-valuemin="0" aria-valuenow="0" aria-valuetext="0:00">
+            <div class="pend-bar-fill" id="pend-bar-fill"></div>
+          </div>
+
+          <div class="pend-speeches" id="pend-speeches" hidden></div>
+
+          <div class="pend-transport" id="pend-transport">
+            <button class="pend-play" id="pend-play" aria-label="Play">play</button>
+            <div class="pend-skips">
+              <button class="pend-skip" data-seek="-30" aria-label="Back 30 seconds">−30</button>
+              <button class="pend-skip" data-seek="-5" aria-label="Back 5 seconds">−5</button>
+              <button class="pend-skip" data-seek="5" aria-label="Forward 5 seconds">+5</button>
+              <button class="pend-skip" data-seek="30" aria-label="Forward 30 seconds">+30</button>
+            </div>
+            <span class="pend-time"><span id="pend-time">0:00</span><span class="pend-time-sep">/</span><span id="pend-total">0:00</span></span>
+            <label class="pend-speed">
+              <span class="label label-muted">speed</span>
+              <select id="pend-speed" class="field speed-select" aria-label="Playback speed">
+                {SPEEDS.map(s => <option value={s} selected={s === 1}>{s}x</option>)}
+              </select>
+            </label>
+          </div>
+
+          <audio id="pend-audio" preload="metadata"></audio>
+        </div>
+
+        <!-- Before there is anything to play: one quiet line in its place. -->
+        <p class="pend-quiet" id="pend-noaudio" hidden></p>
+      </section>
+
+      <section class="pend-area-tx" id="pend-tx-block">
+        <p class="pend-section-head">
+          <span>transcript</span>
+          <span class="pend-section-note" id="pend-tx-note"></span>
+        </p>
+        <div class="pend-tx" id="pend-tx" hidden></div>
+        <p class="pend-quiet" id="pend-tx-empty"></p>
+      </section>
+    </div>
+  </div>
+
+  <div class="shell page-body" id="pend-missing" hidden>
+    <section class="pend-missing">
+      <p class="pend-missing-label" id="pend-missing-label">not found</p>
+      <div>
+        <p class="pend-missing-title" id="pend-missing-title"></p>
+        <p class="pend-missing-text" id="pend-missing-text"></p>
+        <p class="pend-missing-links">
+          <a class="link" href="/recordings">Browse the recordings</a>
+          <span aria-hidden="true">/</span>
+          <a class="link" href="/search">Search</a>
+          <span aria-hidden="true">/</span>
+          <a class="link" href="/me">Your submissions</a>
+        </p>
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  import {
+    getProgress, NoSuchRound, inMinutes, stamp, aboutDuration, RUN_EVERY,
+    type Progress, type Stage,
+  } from '../../lib/progress';
+  import { Waveform, formatTime, type PeaksFile } from '../../lib/waveform';
+  import { AFF, placed, usable, type Speech } from '../../lib/speeches';
+
+  const MEDIA = 'https://media.goldenturn.org';
+  /** The ingest moves every 15 minutes; checking every 20 seconds is plenty. */
+  const POLL_MS = 20_000;
+  /** How long the published notice waits before taking the reader on. */
+  const REDIRECT_S = 8;
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  const ref = new URLSearchParams(location.search).get('ref')?.trim() ?? '';
+
+  let current: Progress | null = null;
+  let timer: number | undefined;
+  let redirectTimer: number | undefined;
+  let redirectCancelled = false;
+
+  // ---------------------------------------------------------------- states
+
+  function showMissing(title: string, text: string, label = 'not found') {
+    $('pend-loading').hidden = true;
+    $('pend-header').hidden = true;
+    $('pend-body').hidden = true;
+    $('pend-missing').hidden = false;
+    $('pend-missing-label').textContent = label;
+    $('pend-missing-title').textContent = title;
+    $('pend-missing-text').textContent = text;
+    document.title = 'Round not found | the golden turn';
+  }
+
+  function notFound() {
+    showMissing(
+      ref ? 'There is no submitted round at this address.' : 'This address does not name a round.',
+      ref
+        ? 'The link may be cut short or mistyped. Rounds from the archive that were never '
+          + 'submitted through the site have no progress to show; find them in the recordings '
+          + 'instead. A round you submitted is listed on your account page.'
+        : 'It should end in ?ref= and the round’s address. A round you submitted is listed '
+          + 'on your account page.',
+    );
+  }
+
+  // ---------------------------------------------------------------- head
+
+  function renderHead(p: Progress) {
+    $('pend-loading').hidden = true;
+    $('pend-header').hidden = false;
+    $('pend-body').hidden = false;
+    $('pend-missing').hidden = true;
+
+    $('pend-title').textContent = p.title;
+    document.title = `${p.title} | processing | the golden turn`;
+    const where = $('pend-where');
+    where.textContent = [p.tournament, p.year].filter(Boolean).join(', ');
+    where.hidden = !where.textContent;
+
+    const line = summary(p);
+    $('pend-summary').textContent = line;
+    $('pend-summary').hidden = !line;
+    $('pend-summary').dataset.status = p.status;
+  }
+
+  /**
+   * The bar already says where the round is, so a sentence is kept only for
+   * the one thing the bar cannot say: a stage that failed and is tried again
+   * by itself. A final failure has its reason in red below, and a stalled
+   * ingest has its own line under the bar.
+   */
+  function summary(p: Progress): string {
+    if (p.failure && !p.failure.final && p.failure.stage) {
+      return `${FAILED_TITLE[p.failure.stage] ?? 'A step failed.'} It is tried again at the next run, `
+        + 'with nothing for you to do.';
+    }
+    return '';
+  }
+
+  // ---------------------------------------------------------------- next step
+
+  /**
+   * Under the status sentence, only what the reader can act on: the reason
+   * and the way to resubmit after a failure, or the way to the round once it
+   * is published.
+   */
+  function renderNext(p: Progress) {
+    const box = $('pend-next');
+    const reason = $('pend-reason');
+    const actions = $('pend-actions');
+    reason.textContent = '';
+    actions.textContent = '';
+    reason.hidden = true;
+    box.dataset.kind = '';
+
+    if (p.status === 'published') {
+      box.hidden = false;
+      box.dataset.kind = 'done';
+      const a = document.createElement('a');
+      a.className = 'btn';
+      a.href = p.page.path;
+      a.textContent = 'Open the round';
+      const redirect = document.createElement('span');
+      redirect.className = 'pend-redirect';
+      redirect.id = 'pend-redirect';
+      actions.append(a, redirect);
+      startRedirect(p.page.path);
+      return;
+    }
+
+    // A stage the next run retries is said in the status sentence alone.
+    const f = p.failure;
+    if (f && f.stage && f.final) {
+      box.hidden = false;
+      box.dataset.kind = 'failed';
+      reason.hidden = false;
+      // The first sentence says what went wrong; the button says what to do.
+      reason.textContent = f.reason.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? f.reason;
+      const again = document.createElement('a');
+      again.className = 'btn';
+      again.href = `/recordings/add?resubmit=${encodeURIComponent(p.id)}`;
+      again.textContent = 'Fix the link and resubmit';
+      actions.appendChild(again);
+      if (p.link) {
+        const a = document.createElement('a');
+        a.className = 'pend-link';
+        a.href = p.link;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = shortLink(p.link);
+        a.title = p.link;
+        actions.appendChild(a);
+      }
+      return;
+    }
+
+    box.hidden = true;
+  }
+
+  const FAILED_TITLE: Record<string, string> = {
+    audio: 'The audio could not be fetched from the link.',
+    transcript: 'The transcript could not be made this time.',
+    speeches: 'The speeches could not be marked this time.',
+    page: 'The page could not be published.',
+  };
+
+  function shortLink(link: string): string {
+    try {
+      const u = new URL(link);
+      const rest = (u.pathname + u.search).replace(/^\/$/, '');
+      return u.hostname.replace(/^www\./, '') + (rest.length > 34 ? rest.slice(0, 33) + '…' : rest);
+    } catch {
+      return link;
+    }
+  }
+
+  function startRedirect(path: string) {
+    const line = document.getElementById('pend-redirect');
+    if (!line) return;
+    if (redirectCancelled) {
+      line.textContent = '';
+      return;
+    }
+    let left = REDIRECT_S;
+    const paint = () => {
+      line.textContent = '';
+      line.append(`Taking you there in ${left} s. `);
+      const stay = document.createElement('button');
+      stay.className = 'link account-link';
+      stay.textContent = 'Stay here';
+      stay.addEventListener('click', () => {
+        redirectCancelled = true;
+        window.clearInterval(redirectTimer);
+        line.textContent = '';
+      });
+      line.appendChild(stay);
+    };
+    window.clearInterval(redirectTimer);
+    paint();
+    redirectTimer = window.setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        window.clearInterval(redirectTimer);
+        location.assign(path);
+        return;
+      }
+      paint();
+    }, 1000);
+  }
+
+  // ---------------------------------------------------------------- stepper
+
+  const SHORT: Record<string, string> = {
+    submitted: 'Submitted', audio: 'Audio', transcript: 'Transcript', speeches: 'Speeches', page: 'Page',
+  };
+
+  const STATE_WORD: Record<string, string> = {
+    done: 'done', active: 'in progress', waiting: 'waiting', failed: 'failed',
+  };
+
+  /** Five segments in one bar; under each its name and one figure. */
+  function renderSteps(p: Progress) {
+    const list = $('pend-steps');
+    list.innerHTML = '';
+    for (const s of p.stages) {
+      const li = document.createElement('li');
+      li.className = 'step';
+      li.dataset.state = s.stuck ? 'stuck' : s.state;
+
+      const seg = document.createElement('span');
+      seg.className = 'step-seg';
+      seg.setAttribute('aria-hidden', 'true');
+
+      const label = document.createElement('span');
+      label.className = 'step-label';
+      label.textContent = SHORT[s.key] ?? s.label;
+      const sr = document.createElement('span');
+      sr.className = 'sr-only';
+      sr.textContent = `: ${STATE_WORD[s.state]}`;
+      label.appendChild(sr);
+
+      const at = document.createElement('span');
+      at.className = 'step-at';
+      at.textContent = stepFigure(s, p);
+
+      li.append(seg, label, at);
+      list.appendChild(li);
+    }
+
+    const note = $('pend-progress-note');
+    const line = progressNote(p);
+    note.textContent = line.text;
+    note.dataset.tone = line.tone;
+  }
+
+  /** When it finished, or how long it usually takes while it is under way. */
+  function stepFigure(s: Stage, p: Progress): string {
+    if (s.state === 'done' && s.at) return stamp(s.at, p.now);
+    if (s.state === 'failed') return 'failed';
+    if (s.state === 'active') {
+      if (s.stuck) return 'taking longer';
+      return s.typicalSeconds ? aboutDuration(s.typicalSeconds).replace(' minutes', ' min') : '';
+    }
+    return '';
+  }
+
+  /** At most one quiet line under the bar. */
+  function progressNote(p: Progress): { text: string; tone: string } {
+    if (finished(p)) return { text: '', tone: '' };
+    if (p.pipeline.stalled) {
+      return { text: 'The ingest is not running; the site owner has been told.', tone: 'bad' };
+    }
+    if (p.stuck) {
+      return { text: 'This is taking much longer than usual; the site owner can see it.', tone: 'bad' };
+    }
+    if (p.estimatedDoneAt !== null) {
+      return {
+        text: p.estimatedDoneAt - p.now <= 60
+          ? 'Usually done any minute now'
+          : `Usually done about ${stamp(p.estimatedDoneAt, p.now)}`,
+        tone: '',
+      };
+    }
+    return { text: `Next check ${inMinutes(nextRun(p), p.now)}`, tone: '' };
+  }
+
+  function nextRun(p: Progress): number {
+    const last = p.pipeline.lastRunAt ?? p.now;
+    let next = last + RUN_EVERY;
+    while (next < p.now) next += RUN_EVERY;
+    return next;
+  }
+
+  function finished(p: Progress): boolean {
+    return p.status === 'published' || p.status === 'removed'
+      || (p.status === 'failed' && (p.failure?.final ?? true));
+  }
+
+  // ---------------------------------------------------------------- audio
+
+  const audio = $<HTMLAudioElement>('pend-audio');
+  const waveCanvas = $<HTMLCanvasElement>('pend-wave');
+  const bar = $('pend-bar');
+  const barFill = $('pend-bar-fill');
+  let wave: Waveform | null = null;
+  let peaksFor = '';
+  let audioUrl = '';
+  let pendingUrl = '';
+  let speeches: Speech[] = [];
+  let audioBroken = false;
+
+  function renderAudio(p: Progress) {
+    const player = $('pend-player');
+    const noAudio = $('pend-noaudio');
+
+    // A link that would not play stays reported until a different copy comes.
+    if (!p.audio || (audioBroken && p.audio.url === audioUrl)) {
+      player.hidden = true;
+      noAudio.hidden = false;
+      if (!p.audio) noAudio.textContent = noAudioLine(p);
+      return;
+    }
+
+    noAudio.hidden = true;
+    player.hidden = false;
+
+    // A better copy arriving mid-listen waits for a pause rather than cutting
+    // the reader off, and picks up where they were.
+    if (p.audio.url !== audioUrl) {
+      if (audioUrl && !audio.paused) {
+        pendingUrl = p.audio.url;
+      } else {
+        swapSource(p.audio.url);
+      }
+    }
+
+    const peaks = p.audio.peaksUrl;
+    if (peaks && peaks !== peaksFor) {
+      peaksFor = peaks;
+      void loadPeaks(peaks);
+    } else if (!peaks && !wave) {
+      bar.hidden = false;
+    }
+  }
+
+  function noAudioLine(p: Progress): string {
+    if (p.status === 'failed' || p.status === 'removed') return 'No audio: it was never fetched.';
+    const video = p.linkKind === 'youtube' ? 'YouTube' : p.linkKind === 'vimeo' ? 'Vimeo' : '';
+    return video
+      ? `The audio plays here once our copy of the ${video} video is stored.`
+      : 'The audio plays here as soon as it has been fetched.';
+  }
+
+  function swapSource(url: string) {
+    const at = audio.currentTime || 0;
+    const rate = audio.playbackRate;
+    audioUrl = url;
+    audioBroken = false;
+    audio.src = url;
+    if (at > 0) {
+      audio.addEventListener('loadedmetadata', () => {
+        audio.currentTime = at;
+        audio.playbackRate = rate;
+      }, { once: true });
+    }
+  }
+
+  audio.addEventListener('pause', () => {
+    if (pendingUrl) {
+      const url = pendingUrl;
+      pendingUrl = '';
+      swapSource(url);
+    }
+  });
+
+  async function loadPeaks(url: string) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(String(res.status));
+      const file = (await res.json()) as PeaksFile;
+      $('pend-wave-wrap').hidden = false;
+      bar.hidden = true;
+      wave ??= new Waveform(waveCanvas);
+      wave.setData(file);
+      paintSegments();
+      wave.position = audio.currentTime || 0;
+      wave.draw();
+    } catch {
+      // No waveform is not worth a message; the plain bar does the same job.
+      peaksFor = '';
+      bar.hidden = false;
+    }
+  }
+
+  function paintSegments() {
+    if (!wave) return;
+    wave.setSegments(speeches.filter(placed).map(s => ({
+      label: s.label, start: s.start, end: s.end, confidence: s.confidence,
+      side: AFF.has(s.label) ? 'aff' as const : 'neg' as const,
+    })));
+  }
+
+  audio.addEventListener('error', () => {
+    if (!audioUrl) return;
+    audioBroken = true;
+    $('pend-player').hidden = true;
+    const line = $('pend-noaudio');
+    line.hidden = false;
+    line.textContent = current?.audio?.source === 'submitted'
+      ? 'Your link does not play in the browser; it plays here once our copy is stored.'
+      : 'The audio did not load. Try again in a minute.';
+  });
+
+  const duration = () => (isFinite(audio.duration) ? audio.duration : 0);
+
+  function paintTime() {
+    const t = audio.currentTime || 0;
+    const d = duration();
+    $('pend-time').textContent = formatTime(t);
+    $('pend-total').textContent = formatTime(d);
+    barFill.style.width = d ? `${(t / d) * 100}%` : '0';
+    for (const slider of [bar, waveCanvas]) {
+      slider.setAttribute('aria-valuemax', String(Math.round(d)));
+      slider.setAttribute('aria-valuenow', String(Math.round(t)));
+      slider.setAttribute('aria-valuetext', formatTime(t));
+    }
+    if (wave) {
+      wave.position = t;
+      wave.draw();
+    }
+    syncTranscript(t);
+  }
+
+  let raf = 0;
+  function tick() {
+    paintTime();
+    if (!audio.paused) raf = requestAnimationFrame(tick);
+  }
+
+  audio.addEventListener('loadedmetadata', paintTime);
+  audio.addEventListener('timeupdate', paintTime);
+  audio.addEventListener('play', () => {
+    $('pend-play').textContent = 'pause';
+    $('pend-play').setAttribute('aria-label', 'Pause');
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(tick);
+  });
+  audio.addEventListener('pause', () => {
+    $('pend-play').textContent = 'play';
+    $('pend-play').setAttribute('aria-label', 'Play');
+    cancelAnimationFrame(raf);
+    paintTime();
+  });
+
+  function toggle() {
+    if (!audioUrl || audioBroken) return;
+    if (audio.paused) void audio.play().catch(() => {});
+    else audio.pause();
+  }
+
+  function seekTo(t: number) {
+    const d = duration();
+    if (!d) return;
+    audio.currentTime = Math.max(0, Math.min(d - 0.1, t));
+    paintTime();
+  }
+
+  $('pend-play').addEventListener('click', toggle);
+  document.querySelectorAll<HTMLButtonElement>('.pend-skip').forEach(btn =>
+    btn.addEventListener('click', () => seekTo(audio.currentTime + Number(btn.dataset.seek))));
+  $<HTMLSelectElement>('pend-speed').addEventListener('change', e => {
+    audio.playbackRate = Number((e.target as HTMLSelectElement).value) || 1;
+  });
+
+  function seekFromPointer(el: HTMLElement, clientX: number) {
+    const rect = el.getBoundingClientRect();
+    seekTo(((clientX - rect.left) / rect.width) * duration());
+  }
+
+  bar.addEventListener('click', e => seekFromPointer(bar, e.clientX));
+  waveCanvas.addEventListener('click', e => seekFromPointer(waveCanvas, e.clientX));
+  waveCanvas.addEventListener('mousemove', e => {
+    if (!wave) return;
+    const rect = waveCanvas.getBoundingClientRect();
+    wave.hover = wave.xToTime(e.clientX - rect.left);
+    wave.draw();
+  });
+  waveCanvas.addEventListener('mouseleave', () => {
+    if (!wave) return;
+    wave.hover = null;
+    wave.draw();
+  });
+
+  for (const slider of [bar, waveCanvas]) {
+    slider.addEventListener('keydown', e => {
+      const step = e.shiftKey ? 30 : 5;
+      if (e.key === 'ArrowLeft') { seekTo(audio.currentTime - step); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { seekTo(audio.currentTime + step); e.preventDefault(); }
+    });
+  }
+
+  // Space plays from anywhere that is not itself a control, and a modified key
+  // is always the browser's.
+  document.addEventListener('keydown', e => {
+    if (e.key !== ' ' || e.altKey || e.ctrlKey || e.metaKey) return;
+    const t = e.target as HTMLElement;
+    if (t.closest('input, textarea, select, button, a, [role="button"]')) return;
+    if (!audioUrl || audioBroken) return;
+    e.preventDefault();
+    toggle();
+  });
+
+  window.addEventListener('resize', () => wave?.resize());
+
+  // ---------------------------------------------------------------- speeches
+
+  let speechesLoaded = false;
+
+  async function loadSpeeches(p: Progress) {
+    if (speechesLoaded || !p.media.speeches) return;
+    try {
+      const res = await fetch(`${MEDIA}/speeches/${p.slug}.json`);
+      if (!res.ok) return;
+      const body = await res.json();
+      speeches = usable(body.speeches ?? []);
+      speechesLoaded = true;
+    } catch {
+      return;
+    }
+    paintSegments();
+    renderSpeechButtons();
+    renderAudio(p);
+    renderTranscript();
+  }
+
+  function renderSpeechButtons() {
+    const box = $('pend-speeches');
+    box.innerHTML = '';
+    const found = speeches.filter(placed);
+    box.hidden = found.length === 0;
+    for (const s of found) {
+      const btn = document.createElement('button');
+      btn.className = 'speech-jump';
+      btn.dataset.unsure = s.confidence < 0.6 ? '1' : '0';
+      btn.append(s.label);
+      const at = document.createElement('span');
+      at.className = 'speech-jump-at';
+      at.textContent = formatTime(s.start);
+      btn.appendChild(at);
+      btn.addEventListener('click', () => {
+        seekTo(s.start);
+        if (audio.paused) toggle();
+      });
+      box.appendChild(btn);
+    }
+  }
+
+  // ---------------------------------------------------------------- transcript
+
+  interface Word { w: string; s: number | null; e: number | null; p: number | null }
+  interface Segment { start: number; end: number; text: string; words?: Word[] }
+  interface Para { start: number; end: number; label: string | null; text: string }
+
+  let segments: Segment[] = [];
+  let transcriptLoaded = false;
+  let paraEls: HTMLElement[] = [];
+  let paras: Para[] = [];
+
+  async function loadTranscript(p: Progress) {
+    if (transcriptLoaded || !p.media.transcript) return;
+    try {
+      const res = await fetch(`${MEDIA}/transcripts/${p.slug}.json`);
+      if (!res.ok) return;
+      const body = await res.json();
+      segments = body.segments ?? [];
+      transcriptLoaded = segments.length > 0;
+    } catch {
+      return;
+    }
+    renderTranscript();
+  }
+
+  const speechAt = (t: number) => speeches.find(s => placed(s) && t >= s.start && t < s.end) ?? null;
+
+  /**
+   * Utterances merged into reading-sized paragraphs, as on the round's page:
+   * a break at a long pause, at about 55 words, and at a speech once there
+   * are speeches to break at.
+   */
+  function group(): Para[] {
+    const out: Para[] = [];
+    let cur: (Para & { words: number }) | null = null;
+    for (const seg of segments) {
+      const label = speechAt(seg.start)?.label ?? null;
+      const gap = cur ? seg.start - cur.end : 0;
+      if (!cur || label !== cur.label || gap > 4 || cur.words >= 55) {
+        cur = { start: seg.start, end: seg.end, label, text: '', words: 0 };
+        out.push(cur);
+      }
+      cur.end = seg.end;
+      const text = (seg.text ?? '').trim();
+      cur.text += (cur.text ? ' ' : '') + text;
+      cur.words += text.split(/\s+/).length;
+    }
+    return out;
+  }
+
+  function renderTranscript() {
+    const box = $('pend-tx');
+    const empty = $('pend-tx-empty');
+    const note = $('pend-tx-note');
+    const p = current;
+
+    $('pend-tx-block').hidden = !transcriptLoaded && p?.status === 'failed';
+    if (!transcriptLoaded) {
+      box.hidden = true;
+      empty.hidden = false;
+      note.textContent = '';
+      const state = p?.stages.find(s => s.key === 'transcript')?.state;
+      empty.textContent = p?.status === 'failed'
+        ? 'There is no transcript: there was no audio to make it from.'
+        : state === 'failed'
+          ? 'No transcript yet: the last attempt failed, and it is tried again at the next run.'
+          : state === 'active'
+            ? 'Being made now. It appears here as soon as it is ready, without a reload.'
+            : 'The transcript is made once the audio is in, and appears here as soon as it is.';
+      return;
+    }
+
+    empty.hidden = true;
+    box.hidden = false;
+    note.textContent = speeches.some(placed) ? '' : 'not yet divided into speeches';
+    box.innerHTML = '';
+    paras = group();
+    paraEls = [];
+    let speech: string | null | undefined;
+    const labelled = speeches.some(placed);
+
+    for (const para of paras) {
+      if (labelled && para.label !== speech) {
+        speech = para.label;
+        const divider = document.createElement('div');
+        divider.className = 'tx-divider';
+        divider.dataset.side = para.label ? (AFF.has(para.label) ? 'aff' : 'neg') : 'none';
+        divider.textContent = para.label ?? 'Between speeches';
+        box.appendChild(divider);
+      }
+      const el = document.createElement('p');
+      el.className = 'tx-para';
+      el.dataset.at = String(para.start);
+      if (para.label) el.dataset.side = AFF.has(para.label) ? 'aff' : 'neg';
+      const at = document.createElement('span');
+      at.className = 'tx-at';
+      at.textContent = formatTime(para.start);
+      el.append(at, para.text);
+      box.appendChild(el);
+      paraEls.push(el);
+    }
+  }
+
+  // Clicking a paragraph plays from it, but never while text is being selected.
+  $('pend-tx').addEventListener('click', e => {
+    if (!document.getSelection()?.isCollapsed) return;
+    const para = (e.target as Element).closest<HTMLElement>('.tx-para');
+    if (!para || !audioUrl || audioBroken) return;
+    seekTo(Number(para.dataset.at));
+    if (audio.paused) toggle();
+  });
+
+  let currentPara = -1;
+  function syncTranscript(t: number) {
+    if (!paras.length) return;
+    let idx = -1;
+    for (let i = 0; i < paras.length; i++) {
+      if (paras[i].start <= t) idx = i;
+      else break;
+    }
+    if (idx === currentPara) return;
+    paraEls[currentPara]?.classList.remove('is-current');
+    currentPara = idx;
+    const el = paraEls[idx];
+    if (!el) return;
+    el.classList.add('is-current');
+    if (!audio.paused) {
+      const box = $('pend-tx');
+      const top = el.offsetTop - box.offsetTop;
+      if (top < box.scrollTop || top + el.offsetHeight > box.scrollTop + box.clientHeight) {
+        box.scrollTop = top - box.clientHeight / 3;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- loop
+
+  function render(p: Progress) {
+    const before = current;
+    current = p;
+    if (p.status === 'removed') {
+      stopPolling();
+      showMissing(
+        'This round was removed.',
+        `${removedWhy(p.failure?.reason)} Its audio and transcript `
+          + 'were deleted with it. If it was removed by mistake, it can be submitted again.',
+        'removed',
+      );
+      return;
+    }
+
+    renderHead(p);
+    renderNext(p);
+    renderSteps(p);
+    renderAudio(p);
+    void loadTranscript(p);
+    void loadSpeeches(p);
+    if (!transcriptLoaded || before?.status !== p.status) renderTranscript();
+  }
+
+  /** The API's own sentence repeats the heading, so only a fuller one is kept. */
+  function removedWhy(reason: string | undefined): string {
+    return !reason || /^this round was removed/i.test(reason)
+      ? 'An admin took it out of the archive.'
+      : reason;
+  }
+
+  async function refresh() {
+    try {
+      const p = await getProgress(ref);
+      render(p);
+      if (finished(p)) stopPolling();
+    } catch (e) {
+      if (e instanceof NoSuchRound) {
+        stopPolling();
+        notFound();
+        return;
+      }
+      // A failed check is not news: the last good state stays on screen and
+      // the next check tries again.
+      if (!current) {
+        $('pend-loading').textContent = 'The round could not be looked up just now. Retrying.';
+      }
+    }
+  }
+
+  function stopPolling() {
+    window.clearInterval(timer);
+    timer = undefined;
+  }
+
+  function startPolling() {
+    stopPolling();
+    timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refresh();
+    }, POLL_MS);
+  }
+
+  // Back in the tab after a while: check at once rather than at the next tick.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && timer !== undefined) void refresh();
+  });
+
+  if (!ref) {
+    notFound();
+  } else {
+    startPolling();
+    void refresh();
+  }
+</script>

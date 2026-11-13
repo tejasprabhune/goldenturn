@@ -21,7 +21,8 @@ const { slug } = Astro.props;
     <p class="label label-muted">Transcript</p>
     <div class="transcript-tools">
       <input class="field transcript-search" id="tx-search" type="search"
-             placeholder="Search this round" aria-label="Search transcript" />
+             placeholder="Search this round" aria-label="Search transcript"
+             title="Enter for the next hit, Shift+Enter for the one before" />
       <span class="label label-muted" id="tx-hits"></span>
       <button class="chip" id="tx-follow" aria-pressed="true">Follow</button>
       <button class="chip" id="tx-edits-toggle" aria-expanded="false" hidden>Edits</button>
@@ -159,10 +160,15 @@ const { slug } = Astro.props;
     display: none;
   }
 
+  /* Fixed, and placed from the selection's own rectangles in viewport terms.
+     It was absolute and placed in page terms, but every child of body is
+     positioned, so it measured from the top of <main> and sat a masthead's
+     height low, on the line under the selection. */
   .tx-tip {
-    position: absolute;
+    position: fixed;
+    top: 0;
+    left: 0;
     z-index: 40;
-    transform: translate(-50%, -100%);
     display: flex;
     gap: 1px;
     background: var(--ink);
@@ -214,7 +220,7 @@ const { slug } = Astro.props;
   import { formatTime } from '../lib/waveform';
   import {
     listProposals, listRevisions, propose, vote, getUser, isAdmin, NotSignedIn,
-    addNote, track, updateProposal, deleteProposal, adminResolve,
+    addNote, track, updateProposal, deleteProposal, adminResolve, API,
     type Proposal, type Revision,
   } from '../lib/api';
   import { AFF, usable, applyBoundaries, type Speech } from '../lib/speeches';
@@ -236,18 +242,107 @@ const { slug } = Astro.props;
     const bodyEl = document.getElementById('tx-body')!;
     const audio = () => document.getElementById('audio') as HTMLAudioElement | null;
 
-    interface Para { start: number; end: number; label: string | null; words: Word[]; text: string; idx: number }
+    /** A paragraph is a run of utterances, `from` to `to` inclusive. */
+    interface Para {
+      start: number; end: number; label: string | null; words: Word[]; text: string; idx: number;
+      from: number; to: number;
+    }
+    /** An accepted correction, over the utterances it replaces. */
+    interface Fix { from: number; to: number; value: string }
     let segments: Segment[] = [];
     let paras: Para[] = [];
     let speeches: Speech[] = [];
-    const revisions = new Map<string, string>();
+    /** The speech fit as the file has it, before any timing correction. */
+    let fitSpeeches: Speech[] = [];
+    let transcriptRevisions: Revision[] = [];
+    let fixes: Fix[] = [];
     let follow = true;
     let programmatic = false;
     let currentIndex = -1;
     let duration = 0;
 
     const segId = (i: number) => `seg-${i}`;
-    const speechAt = (t: number) => speeches.find(s => t >= s.start && t < s.end) ?? null;
+    const speechIn = (list: Speech[], t: number) => list.find(s => t >= s.start && t < s.end) ?? null;
+
+    /*
+     * Where a correction belongs.
+     *
+     * Corrections used to be filed against a paragraph's position, seg-<n>.
+     * Paragraphs are regrouped whenever a speech boundary moves, so after a
+     * timing correction the n-th paragraph was a different one and the text
+     * landed on it. They are filed now against the utterances the paragraph
+     * held, segs-<first>-<last>, which come from the transcript file and never
+     * move, and the grouping keeps those utterances together.
+     */
+    const anchorOf = (from: number, to: number) => `segs-${from}-${to}`;
+
+    function words(text: string): string[] {
+      return text.toLowerCase().replace(/[^\p{L}\p{N}'\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    }
+
+    /** Share of words two texts have in common, from 0 to 1. */
+    function likeness(a: string, b: string): number {
+      const wa = words(a), wb = words(b);
+      if (!wa.length || !wb.length) return 0;
+      const bag = new Map<string, number>();
+      for (const w of wb) bag.set(w, (bag.get(w) ?? 0) + 1);
+      let shared = 0;
+      for (const w of wa) {
+        const n = bag.get(w) ?? 0;
+        if (n > 0) { shared++; bag.set(w, n - 1); }
+      }
+      return shared / Math.max(wa.length, wb.length);
+    }
+
+    /**
+     * The utterances an anchor names. An old seg-<n> anchor is read against
+     * the groupings it could have been made under (the fit as published, the
+     * fit with today's corrections, and no fit at all, which is what a visit
+     * gets when the speeches file fails) and the paragraph that reads most
+     * like the text is taken.
+     */
+    function rangeOf(anchor: string, text: string): { from: number; to: number } | null {
+      const m = anchor.match(/^segs-(\d+)-(\d+)$/);
+      if (m) {
+        const from = Number(m[1]), to = Number(m[2]);
+        return from <= to && to < segments.length ? { from, to } : null;
+      }
+      const old = anchor.match(/^seg-(\d+)$/);
+      if (!old) return null;
+      const n = Number(old[1]);
+      let best: { from: number; to: number; score: number } | null = null;
+      for (const sp of [fitSpeeches, speeches, []]) {
+        const para = groupParagraphs(sp, [])[n];
+        if (!para) continue;
+        const score = likeness(text, para.text);
+        if (!best || score > best.score) best = { from: para.from, to: para.to, score };
+      }
+      return best ? { from: best.from, to: best.to } : null;
+    }
+
+    /** Accepted corrections in the order they were accepted; a later one over
+        the same words replaces an earlier one. */
+    function resolveFixes(): Fix[] {
+      const out: Fix[] = [];
+      const inOrder = [...transcriptRevisions].sort((a, b) => (a.applied_at ?? 0) - (b.applied_at ?? 0));
+      for (const r of inOrder) {
+        const range = rangeOf(r.anchor, r.value);
+        if (!range) continue;
+        for (let i = out.length - 1; i >= 0; i--) {
+          if (out[i].from <= range.to && range.from <= out[i].to) out.splice(i, 1);
+        }
+        out.push({ ...range, value: r.value });
+      }
+      return out.sort((a, b) => a.from - b.from);
+    }
+
+    /** The paragraph now holding the utterances an anchor names. */
+    function paraFor(anchor: string, text: string): HTMLElement | null {
+      const range = rangeOf(anchor, text);
+      if (!range) return null;
+      const para = paras.find(p => p.from <= range.from && range.from <= p.to);
+      return para ? linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(para.idx))}`) : null;
+    }
 
     async function load() {
       const [txRes, revRes, spRes] = await Promise.allSettled([
@@ -259,9 +354,7 @@ const { slug } = Astro.props;
 
       const pending = document.getElementById('tx-pending')!;
       if (txRes.status !== 'fulfilled' || !txRes.value?.segments) {
-        pending.textContent =
-          'Not transcribed yet. This round is queued; the transcript and speech '
-          + 'markers appear here once it runs.';
+        pending.textContent = await missingReason();
         return;
       }
       pending.hidden = true;
@@ -269,7 +362,8 @@ const { slug } = Astro.props;
       segments = txRes.value.segments ?? [];
       duration = txRes.value.duration ?? segments[segments.length - 1]?.end ?? 0;
       if (spRes.status === 'fulfilled' && spRes.value) {
-        speeches = usable(spRes.value.speeches ?? []);
+        fitSpeeches = usable(spRes.value.speeches ?? []);
+        speeches = fitSpeeches;
       }
       if (revRes.status === 'fulfilled') {
         takeRevisions(revRes.value.revisions);
@@ -277,6 +371,35 @@ const { slug } = Astro.props;
       render();
       buildMinimap();
       void loadProposals();
+    }
+
+    /**
+     * Why there is no transcript. It used to say "queued" for every round,
+     * including ones whose audio could never be fetched and would never be
+     * transcribed. A round submitted through the site says where it is; one
+     * from the old archive says what can be known from this page.
+     */
+    async function missingReason(): Promise<string> {
+      const w = window as any;
+      w.__gtProgress ??= fetch(`${API}/rounds/${encodeURIComponent(slug)}/progress`)
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null);
+      const p = await w.__gtProgress;
+      const hosted = Boolean(audio());
+      if (p?.pipeline?.stalled && p.status !== 'failed' && p.status !== 'removed') {
+        return 'Not transcribed yet, and the ingest is not running; the site owner has been told.';
+      }
+      if (p?.status === 'failed' || p?.status === 'removed') {
+        return `No transcript. ${p.failure?.reason ?? 'The audio could not be fetched.'}`
+          + (p.failure?.final === false ? ' It will be tried again.' : '');
+      }
+      if (p?.status === 'fetching') {
+        return 'Not transcribed yet. The audio is still being fetched; the transcript follows it.';
+      }
+      if (p?.status === 'transcribing' || hosted) {
+        return 'Not transcribed yet. The transcript and speech markers appear here once it has run.';
+      }
+      return 'No transcript. There is no hosted audio for this round to transcribe.';
     }
 
     /**
@@ -307,32 +430,45 @@ const { slug } = Astro.props;
      * change or a long pause. One row per utterance produced a stack of
      * three-word fragments that was painful to read.
      */
-    function groupParagraphs(): Para[] {
+    function groupParagraphs(sp: Speech[] = speeches, keep: Fix[] = fixes): Para[] {
       const out: Para[] = [];
       const TARGET_WORDS = 55;
       let cur: Para | null = null;
+      // The utterances under a correction stay in one paragraph: its text
+      // replaces all of them and cannot be split.
+      const runs = new Map(keep.map(f => [f.from, f.to]));
 
-      segments.forEach(seg => {
-        const label = speechAt(seg.start)?.label ?? null;
+      let i = 0;
+      while (i < segments.length) {
+        const last = runs.get(i) ?? i;
+        const seg = segments[i];
+        const label = speechIn(sp, seg.start)?.label ?? null;
         const gap = cur ? seg.start - cur.end : 0;
         const wordCount = cur ? cur.words.length : 0;
         const breakHere = !cur || label !== cur.label || gap > 4 || wordCount >= TARGET_WORDS;
 
         if (breakHere) {
-          cur = { start: seg.start, end: seg.end, label, words: [], text: '', idx: out.length };
+          cur = { start: seg.start, end: seg.end, label, words: [], text: '', idx: out.length, from: i, to: last };
           out.push(cur);
         }
-        cur!.end = seg.end;
-        cur!.text += (cur!.text ? ' ' : '') + (seg.text ?? '');
-        if (seg.words?.length) cur!.words.push(...seg.words);
-      });
+        for (let k = i; k <= last; k++) {
+          const s = segments[k];
+          cur!.end = s.end;
+          cur!.text += (cur!.text ? ' ' : '') + (s.text ?? '');
+          if (s.words?.length) cur!.words.push(...s.words);
+        }
+        cur!.to = last;
+        i = last + 1;
+      }
       return out;
     }
 
     function render() {
       linesEl.innerHTML = '';
       linesEl.removeAttribute('aria-busy');
+      fixes = resolveFixes();
       paras = groupParagraphs();
+      const fixAt = new Map(fixes.map(f => [f.from, f]));
       let currentSpeech: string | null | undefined;
 
       paras.forEach(para => {
@@ -350,6 +486,8 @@ const { slug } = Astro.props;
         el.id = segId(para.idx);
         el.dataset.index = String(para.idx);
         el.dataset.at = String(para.start);
+        el.dataset.from = String(para.from);
+        el.dataset.to = String(para.to);
         if (para.label) el.dataset.side = AFF.has(para.label) ? 'aff' : 'neg';
 
         const at = document.createElement('span');
@@ -357,23 +495,31 @@ const { slug } = Astro.props;
         at.textContent = formatTime(para.start);
         el.appendChild(at);
 
-        const revised = revisions.get(segId(para.idx));
-        if (revised !== undefined) {
-          el.classList.add('is-revised');
-          el.title = 'Includes an accepted community correction';
-          el.appendChild(document.createTextNode(revised));
-        } else if (para.words.length) {
-          for (const w of para.words) {
-            const span = document.createElement('span');
-            span.className = 'tx-word';
-            span.textContent = (w.w ?? '') + ' ';
-            // WhisperX scores are alignment fit, not ASR confidence, and sit low
-            // even on correct words; 0.15 flags roughly the worst tenth.
-            if (typeof w.p === 'number' && w.p < 0.15) span.dataset.low = '1';
-            el.appendChild(span);
+        let k = para.from;
+        while (k <= para.to) {
+          const fix = fixAt.get(k);
+          if (fix) {
+            el.classList.add('is-revised');
+            el.title = 'Includes an accepted community correction';
+            el.appendChild(document.createTextNode(fix.value + (fix.to < para.to ? ' ' : '')));
+            k = fix.to + 1;
+            continue;
           }
-        } else {
-          el.appendChild(document.createTextNode(para.text));
+          const seg = segments[k];
+          if (seg.words?.length) {
+            for (const w of seg.words) {
+              const span = document.createElement('span');
+              span.className = 'tx-word';
+              span.textContent = (w.w ?? '') + ' ';
+              // WhisperX scores are alignment fit, not ASR confidence, and sit low
+              // even on correct words; 0.15 flags roughly the worst tenth.
+              if (typeof w.p === 'number' && w.p < 0.15) span.dataset.low = '1';
+              el.appendChild(span);
+            }
+          } else {
+            el.appendChild(document.createTextNode((seg.text ?? '') + ' '));
+          }
+          k++;
         }
 
         linesEl.appendChild(el);
@@ -548,24 +694,191 @@ const { slug } = Astro.props;
     let searchTrack: ReturnType<typeof setTimeout> | undefined;
     const search = document.getElementById('tx-search') as HTMLInputElement;
     const hits = document.getElementById('tx-hits')!;
+    /** The first element of each match, for stepping through them. */
+    let hitEls: HTMLElement[] = [];
+    let hitAt = -1;
+
+    /**
+     * Reduces text to what a search compares: lower case, punctuation gone
+     * (apostrophes kept), runs of space as one. `map` gives, for each
+     * character kept, where it was in the original.
+     */
+    function fold(text: string): { folded: string; map: number[] } {
+      let folded = '';
+      const map: number[] = [];
+      for (let i = 0; i < text.length; i++) {
+        let c = text[i].toLowerCase();
+        if (/\s/.test(c)) c = ' ';
+        else if (!/[\p{L}\p{N}']/u.test(c)) continue;
+        if (c === ' ' && (folded === '' || folded.endsWith(' '))) continue;
+        folded += c;
+        map.push(i);
+      }
+      return { folded, map };
+    }
+
+    function clearHits() {
+      linesEl.querySelectorAll('.tx-word.is-hit').forEach(w => w.classList.remove('is-hit'));
+      linesEl.querySelectorAll('mark.tx-hit').forEach(m => {
+        const parent = m.parentNode!;
+        m.replaceWith(document.createTextNode(m.textContent ?? ''));
+        parent.normalize();
+      });
+      hitEls = [];
+      hitAt = -1;
+    }
+
+    /**
+     * Finds the query across each paragraph's text, so a phrase spanning words
+     * is found and a paragraph carrying a correction, which is plain text
+     * rather than word spans, is searched too. Words hit are lit; plain text
+     * hit is wrapped in a mark.
+     */
+    function runTranscriptSearch(raw: string): number {
+      clearHits();
+      const q = fold(raw.trim()).folded.trim();
+      if (q.length < 2) return 0;
+      let n = 0;
+      linesEl.querySelectorAll<HTMLElement>('.tx-para').forEach(para => {
+        // The paragraph's pieces in order, with where each starts in its text.
+        const pieces: { node: Node; start: number; end: number }[] = [];
+        let text = '';
+        for (const node of [...para.childNodes]) {
+          if (node instanceof HTMLElement && node.classList.contains('tx-at')) continue;
+          const t = node.textContent ?? '';
+          pieces.push({ node, start: text.length, end: text.length + t.length });
+          text += t;
+        }
+        const { folded, map } = fold(text);
+        const marks: { node: Text; from: number; to: number }[] = [];
+        let from = folded.indexOf(q);
+        while (from !== -1) {
+          n++;
+          const a = map[from];
+          const b = map[from + q.length - 1] + 1;
+          let first: HTMLElement | null = null;
+          for (const pc of pieces) {
+            if (pc.end <= a || pc.start >= b) continue;
+            if (pc.node instanceof HTMLElement) {
+              pc.node.classList.add('is-hit');
+              first ??= pc.node;
+            } else if (pc.node instanceof Text) {
+              marks.push({ node: pc.node, from: Math.max(a, pc.start) - pc.start, to: Math.min(b, pc.end) - pc.start });
+            }
+          }
+          if (first) hitEls.push(first);
+          from = folded.indexOf(q, from + q.length);
+        }
+        // Wrapped last to first, so earlier offsets in the same node hold.
+        for (const m of marks.reverse()) {
+          const range = document.createRange();
+          range.setStart(m.node, m.from);
+          range.setEnd(m.node, m.to);
+          const mark = document.createElement('mark');
+          mark.className = 'tx-hit';
+          range.surroundContents(mark);
+          hitEls.push(mark);
+        }
+      });
+      hitEls.sort((x, y) => (x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+      return n;
+    }
+
+    function stepHit(by: number) {
+      if (!hitEls.length) return;
+      hitAt = (hitAt + by + hitEls.length) % hitEls.length;
+      setFollow(false);
+      scrollLinesTo(hitEls[hitAt], 'center');
+      hits.textContent = `${hitAt + 1} of ${hitEls.length}`;
+    }
+
     search?.addEventListener('input', () => {
       const q = search.value.trim().toLowerCase();
-      let n = 0;
-      linesEl.querySelectorAll<HTMLElement>('.tx-word').forEach(w => {
-        const on = q.length > 1 && w.textContent!.toLowerCase().includes(q);
-        w.classList.toggle('is-hit', on);
-        if (on) n++;
-      });
+      const n = runTranscriptSearch(search.value);
       hits.textContent = q.length > 1 ? `${n} hit${n === 1 ? '' : 's'}` : '';
       if (q.length > 2) {
         clearTimeout(searchTrack);
         searchTrack = setTimeout(() => track('transcript.search', slug, { q, hits: n }), 600);
       }
-      const hit = linesEl.querySelector<HTMLElement>('.is-hit');
-      if (hit) scrollLinesTo(hit);
+      if (hitEls[0]) scrollLinesTo(hitEls[0]);
+    });
+    // Enter steps to the next hit, Shift+Enter to the one before.
+    search?.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      stepHit(e.shiftKey ? -1 : 1);
     });
 
     const tip = document.getElementById('tx-tip')!;
+    // Fixed, so it has to sit outside the page's stacking context or the
+    // footer, a later sibling, paints over it (as with the player's bar).
+    document.body.appendChild(tip);
+    const coarse = window.matchMedia('(pointer: coarse)');
+
+    /**
+     * Puts the tooltip beside the selection, in viewport terms, from the
+     * rectangles of the lines actually selected.
+     *
+     * Above with a mouse. Below on a touch screen, where the system's own
+     * copy menu takes the space above and the selection handles hang a little
+     * under the last line, hence the wider gap. Either way it flips when the
+     * side it wants is off screen, is kept inside the viewport at the edges,
+     * and hides once the selection scrolls out of the transcript's box.
+     */
+    function placeTip(): boolean {
+      const sel = document.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) { tip.hidden = true; return false; }
+      // One box per line: a range reports a rectangle for every word span it
+      // touches, and the tooltip is centred on a line, not on its first word.
+      const rects: { top: number; bottom: number; left: number; right: number }[] = [];
+      for (const r of sel.getRangeAt(0).getClientRects()) {
+        if (!r.width || !r.height) continue;
+        const line = rects.find(l => Math.abs(l.top - r.top) < r.height / 2);
+        if (line) {
+          line.left = Math.min(line.left, r.left);
+          line.right = Math.max(line.right, r.right);
+          line.bottom = Math.max(line.bottom, r.bottom);
+        } else {
+          rects.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+        }
+      }
+      rects.sort((x, y) => x.top - y.top);
+      if (!rects.length) { tip.hidden = true; return false; }
+      const top = Math.min(...rects.map(r => r.top));
+      const bottom = Math.max(...rects.map(r => r.bottom));
+      const box = linesEl.getBoundingClientRect();
+      if (bottom <= box.top || top >= box.bottom) { tip.hidden = true; return false; }
+
+      tip.hidden = false;
+      const w = tip.offsetWidth;
+      const h = tip.offsetHeight;
+      const EDGE = 8;
+      const ABOVE = 8;
+      const BELOW = coarse.matches ? 28 : 8;
+      const fitsAbove = top - ABOVE - h >= EDGE;
+      const fitsBelow = bottom + BELOW + h <= window.innerHeight - EDGE;
+      const below = coarse.matches ? (fitsBelow || !fitsAbove) : (!fitsAbove && fitsBelow);
+
+      // Centred on the line it sits against: the first line from above, the
+      // last from below.
+      const line = below ? rects[rects.length - 1] : rects[0];
+      const x = Math.min(Math.max((line.left + line.right) / 2 - w / 2, EDGE), window.innerWidth - EDGE - w);
+      const y = below ? bottom + BELOW : top - ABOVE - h;
+      tip.style.left = `${Math.round(x)}px`;
+      tip.style.top = `${Math.round(y)}px`;
+      return true;
+    }
+
+    let tipFrame = 0;
+    const followTip = () => {
+      if (tip.hidden && !pendingSel) return;
+      cancelAnimationFrame(tipFrame);
+      tipFrame = requestAnimationFrame(() => { placeTip(); });
+    };
+    linesEl.addEventListener('scroll', followTip, { passive: true });
+    window.addEventListener('scroll', followTip, { passive: true });
+    window.addEventListener('resize', followTip);
+
     /**
      * A correction is written against a passage: the selection plus a little
      * either side. What gets stored is still the whole paragraph, with that
@@ -617,11 +930,7 @@ const { slug } = Astro.props;
       if (!para || !linesEl.contains(para)) { tip.hidden = true; return; }
 
       const range = sel.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      if (!rect.width) { tip.hidden = true; return; }
-      tip.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
-      tip.style.top = `${rect.top + window.scrollY - 6}px`;
-      tip.hidden = false;
+      if (!placeTip()) return;
       setFollow(false);
 
       const { text, start, end } = offsetsIn(para as HTMLElement, range);
@@ -632,7 +941,7 @@ const { slug } = Astro.props;
       const win = windowAround(text, from, to);
 
       pendingSel = {
-        anchor: segId(Number((para as HTMLElement).dataset.index)),
+        anchor: anchorOf(Number((para as HTMLElement).dataset.from), Number((para as HTMLElement).dataset.to)),
         paraText: text,
         winStart: win.start,
         winEnd: win.end,
@@ -720,10 +1029,7 @@ const { slug } = Astro.props;
      * dividers, the tinting and the minimap with them.
      */
     function takeRevisions(list: Revision[]) {
-      revisions.clear();
-      for (const r of list) {
-        if (r.kind === 'transcript') revisions.set(r.anchor, r.value);
-      }
+      transcriptRevisions = list.filter(r => r.kind === 'transcript');
       speeches = applyBoundaries(speeches, list);
     }
 
@@ -754,13 +1060,13 @@ const { slug } = Astro.props;
       const me = getUser();
       for (const p of proposals) {
         // Mark the affected paragraph so a reader can see it was touched.
-        linesEl.querySelector(`#${CSS.escape(p.anchor)}`)?.classList.add('has-proposal');
+        paraFor(p.anchor, p.original)?.classList.add('has-proposal');
 
         const li = document.createElement('li');
         li.className = p.status === 'accepted' ? 'proposal is-accepted' : 'proposal';
 
         // Hovering an edit points at the passage it changes.
-        const target = () => linesEl.querySelector<HTMLElement>(`#${CSS.escape(p.anchor)}`);
+        const target = () => paraFor(p.anchor, p.original);
         li.addEventListener('pointerenter', () => {
           const el = target();
           if (!el) return;
@@ -777,7 +1083,7 @@ const { slug } = Astro.props;
 
         // The round's own audio is right here, so hearing the passage is a
         // seek rather than a second stream.
-        const at = p.start_s ?? paras[Number(p.anchor.replace('seg-', ''))]?.start ?? null;
+        const at = p.start_s ?? (Number(target()?.dataset.at) || null);
         if (at !== null && audio()) {
           const listen = document.createElement('button');
           listen.className = 'chip proposal-listen';
