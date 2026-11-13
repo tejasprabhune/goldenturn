@@ -360,7 +360,9 @@ try {
       const p = await call('GET', '/rounds/anything/progress');
       assert.equal(p.status, 500);
       assert.deepEqual(Object.keys(p.data).sort(), ['error', 'requestId']);
-      assert.doesNotMatch(JSON.stringify(p.data), /column|table|D1|SQL/i);
+      // The error text only: the request id is random hex, and one that happens to
+      // hold "d1" is not the Worker saying anything about its database.
+      assert.doesNotMatch(String(p.data.error), /column|table|D1|SQL/i);
       assert.equal(await tick(), 200, 'the cron tick is caught, not thrown');
     } finally { await stopWorker(); }
   });

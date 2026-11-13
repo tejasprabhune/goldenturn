@@ -119,6 +119,20 @@ async function main() {
   const client = r2();
   let changed = false;
 
+  // Asked before any round is touched. With a storage key the bucket refuses,
+  // every upload fails, and each round would be marked as failed for a fault
+  // that is ours and not its link's. Stopping here leaves them pending, so the
+  // run after the key is fixed takes them with nothing else to do.
+  try {
+    await client.send(new ListObjectsV2Command({ Bucket: BUCKET, MaxKeys: 1 }));
+  } catch (err) {
+    const why = errorText(err).slice(0, 200);
+    console.error(`the storage bucket refused the ingest's key: ${why}\nNothing done.`);
+    await reportEvents([{ stage: 'run', state: 'failed', note: `storage: the bucket refused the ingest's key (${why})` }]);
+    process.exitCode = 1;
+    return;
+  }
+
   // 1. Audio for anything submitted and not yet pulled.
   const pending = await fetchWithin(`${API}/recordings/pending`)
     .then(r => r.json() as Promise<{ pending: Array<{ slug: string; title: string }> }>)

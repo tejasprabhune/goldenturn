@@ -836,10 +836,21 @@ async function ingestEventsFor(env: Env, slugs: string[], each: number): Promise
   return out;
 }
 
-/** When the ingest run last reported in, and whether its silence is a problem. */
+/**
+ * When the ingest run last reported in while able to work. A run that stopped
+ * at once because it was not configured, or because storage refused its key,
+ * reported in but could not have taken any round, so it does not count:
+ * rounds waiting behind it are stalled, and are said to be.
+ */
 async function lastIngestRun(env: Env): Promise<number | null> {
   const row = await env.DB.prepare(
-    `SELECT MAX(created_at) AS at FROM ingest_events WHERE stage = 'run'`
+    `SELECT MAX(e.created_at) AS at FROM ingest_events e
+      WHERE e.stage = 'run' AND e.state != 'failed'
+        AND NOT EXISTS (
+          SELECT 1 FROM ingest_events f
+           WHERE f.id = (SELECT MIN(n.id) FROM ingest_events n WHERE n.stage = 'run' AND n.id > e.id)
+             AND f.state = 'failed'
+             AND (f.note LIKE 'storage:%' OR f.note LIKE 'not configured:%'))`
   ).first<{ at: number | null }>();
   return row?.at ?? null;
 }
@@ -917,10 +928,14 @@ function plainReason(note: string | null): string {
   if (/took longer than|download stalled/i.test(n)) {
     return 'The download from that link stalled or took far too long, so it was stopped. Check the link opens and downloads at a normal speed; an admin can retry it, or submit the round again with another link.';
   }
+  // Ours, not the link's: the ingest could not write to its own storage.
+  if (/signature we calculated|SignatureDoesNotMatch|InvalidAccessKeyId|AccessDenied|ExpiredToken/i.test(n)) {
+    return 'Our storage refused the upload, so nothing is wrong with your link. Tejas can see the error; the round is fetched again once that is fixed.';
+  }
   if (/timed? ?out|ETIMEDOUT|ECONNRESET|ENOTFOUND|fetch failed|network/i.test(n)) {
     return 'The link could not be reached from our server. It may have been a passing fault; an admin can retry it.';
   }
-  return 'The recording could not be fetched from the link. The site owner can see the exact error and retry it; submitting the round again with a different link also works.';
+  return 'The recording could not be fetched from the link. Tejas can see the exact error and retry it; submitting the round again with a different link also works.';
 }
 
 /**
@@ -1597,7 +1612,7 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
         // account nobody has used since and not for one that carries admin.
         if (existing.is_admin || isReserved(email, env)) {
           await refuse('no_password');
-          return json({ error: 'this account has no password yet; ask the site owner to set one' }, { status: 403 });
+          return json({ error: 'this account has no password yet; ask Tejas to set one' }, { status: 403 });
         }
         await env.DB.prepare(`UPDATE users SET password_hash = ?1 WHERE id = ?2`)
           .bind(await hashPassword(password), existing.id).run();
@@ -2341,7 +2356,7 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
         : (count?.day ?? 0) >= perDay ? `${perDay} rounds in a day` : null;
       if (over) {
         return json(
-          { error: `One account can send in at most ${over}. Try again later, or ask the site owner if you have more to add.` },
+          { error: `One account can send in at most ${over}. Try again later, or ask Tejas if you have more to add.` },
           { status: 429 }, { 'Retry-After': (count?.hour ?? 0) >= perHour ? '3600' : '86400' },
         );
       }
