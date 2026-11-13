@@ -169,7 +169,8 @@ import '../styles/pending.css';
     isAdmin, NotSignedIn,
   } from '../lib/api';
   import { formatTime } from '../lib/waveform';
-  import { listMySubmissions, pendingHref, ago, STATUS_WORD } from '../lib/progress';
+  import { listMySubmissions, getProgress, pendingHref, ago, STATUS_WORD } from '../lib/progress';
+  import { followHref } from '../lib/progressview';
   import { ownStarsHtml } from '../lib/stars';
 
   const title = document.getElementById('me-title')!;
@@ -311,9 +312,13 @@ import '../styles/pending.css';
       const li = document.createElement('li');
       const a = document.createElement('a');
       a.className = 'row';
-      // A published round has its page; anything else is followed where it is
-      // being processed, which also explains a failure or a removal.
+      // A published round has its page. Anything else is followed on its page
+      // as soon as that exists, which shows its progress in place, and on the
+      // pending page until then; a removal is explained there too.
       a.href = s.status === 'published' ? `/recordings/${s.slug}` : pendingHref(s.object_id);
+      if (s.status !== 'published' && s.status !== 'removed') {
+        void getProgress(s.object_id).then(p => { a.href = followHref(p); }).catch(() => {});
+      }
 
       const idx = document.createElement('span');
       idx.className = 'row-index';

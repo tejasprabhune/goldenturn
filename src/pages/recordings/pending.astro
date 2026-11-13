@@ -1,6 +1,6 @@
 ---
 /**
- * Where a submitted round lives until its own page is built.
+ * Where a submitted round is followed until its own page is built.
  *
  * Round pages are made at deploy time, one per record in the index, so a
  * round submitted a minute ago has no page and will not have one until the
@@ -9,13 +9,15 @@
  * (`?ref=` a slug or an objectID) and renders everything in the browser from
  * the Worker's progress record, polling while anything is still moving: the
  * audio as soon as there is any, the transcript as soon as it is made, the
- * speech labels once they are marked, and a way on to the real page when it
- * exists. When a stage fails it says which, why, and what the submitter can
+ * speech labels once they are marked. As soon as the round's own page exists
+ * it sends the reader there, since that page shows the same progress in
+ * place. When a stage fails it says which, why, and what the submitter can
  * do about it, which until now nobody was ever told.
  */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 // Plain CSS rather than a scoped block: nearly everything here is built in
 // the browser, where scoped selectors never match.
+import '../../styles/progress.css';
 import '../../styles/pending.css';
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -124,16 +126,17 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 <script>
   import {
-    getProgress, NoSuchRound, inMinutes, stamp, aboutDuration, RUN_EVERY,
-    type Progress, type Stage,
+    getProgress, NoSuchRound, type Progress,
   } from '../../lib/progress';
+  import {
+    renderSteps as drawSteps, progressNote, finished, firstSentence, resubmitHref, poller,
+    FAILED_TITLE,
+  } from '../../lib/progressview';
   import { Waveform, formatTime, type PeaksFile } from '../../lib/waveform';
   import { AFF, placed, usable, type Speech } from '../../lib/speeches';
 
   const MEDIA = 'https://media.goldenturn.org';
-  /** The ingest moves every 15 minutes; checking every 20 seconds is plenty. */
-  const POLL_MS = 20_000;
-  /** How long the published notice waits before taking the reader on. */
+  /** How long the notice that the page exists waits before taking the reader on. */
   const REDIRECT_S = 8;
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -141,7 +144,6 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   const ref = new URLSearchParams(location.search).get('ref')?.trim() ?? '';
 
   let current: Progress | null = null;
-  let timer: number | undefined;
   let redirectTimer: number | undefined;
   let redirectCancelled = false;
 
@@ -207,9 +209,10 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   // ---------------------------------------------------------------- next step
 
   /**
-   * Under the status sentence, only what the reader can act on: the reason
-   * and the way to resubmit after a failure, or the way to the round once it
-   * is published.
+   * Under the status sentence, only what the reader can act on: the way to
+   * the round as soon as its page exists, which shows the rest of the
+   * progress in place, or else the reason and the way to resubmit after a
+   * failure.
    */
   function renderNext(p: Progress) {
     const box = $('pend-next');
@@ -220,7 +223,7 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     reason.hidden = true;
     box.dataset.kind = '';
 
-    if (p.status === 'published') {
+    if (p.page.exists) {
       box.hidden = false;
       box.dataset.kind = 'done';
       const a = document.createElement('a');
@@ -242,10 +245,10 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
       box.dataset.kind = 'failed';
       reason.hidden = false;
       // The first sentence says what went wrong; the button says what to do.
-      reason.textContent = f.reason.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? f.reason;
+      reason.textContent = firstSentence(f.reason);
       const again = document.createElement('a');
       again.className = 'btn';
-      again.href = `/recordings/add?resubmit=${encodeURIComponent(p.id)}`;
+      again.href = resubmitHref(p);
       again.textContent = 'Fix the link and resubmit';
       actions.appendChild(again);
       if (p.link) {
@@ -263,13 +266,6 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     box.hidden = true;
   }
-
-  const FAILED_TITLE: Record<string, string> = {
-    audio: 'The audio could not be fetched from the link.',
-    transcript: 'The transcript could not be made this time.',
-    speeches: 'The speeches could not be marked this time.',
-    page: 'The page could not be published.',
-  };
 
   function shortLink(link: string): string {
     try {
@@ -317,90 +313,13 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
   // ---------------------------------------------------------------- stepper
 
-  const SHORT: Record<string, string> = {
-    submitted: 'Submitted', audio: 'Audio', transcript: 'Transcript', speeches: 'Speeches', page: 'Page',
-  };
-
-  const STATE_WORD: Record<string, string> = {
-    done: 'done', active: 'in progress', waiting: 'waiting', failed: 'failed',
-  };
-
-  /** Five segments in one bar; under each its name and one figure. */
+  /** Five segments in one bar, and at most one quiet line under it. */
   function renderSteps(p: Progress) {
-    const list = $('pend-steps');
-    list.innerHTML = '';
-    for (const s of p.stages) {
-      const li = document.createElement('li');
-      li.className = 'step';
-      li.dataset.state = s.stuck ? 'stuck' : s.state;
-
-      const seg = document.createElement('span');
-      seg.className = 'step-seg';
-      seg.setAttribute('aria-hidden', 'true');
-
-      const label = document.createElement('span');
-      label.className = 'step-label';
-      label.textContent = SHORT[s.key] ?? s.label;
-      const sr = document.createElement('span');
-      sr.className = 'sr-only';
-      sr.textContent = `: ${STATE_WORD[s.state]}`;
-      label.appendChild(sr);
-
-      const at = document.createElement('span');
-      at.className = 'step-at';
-      at.textContent = stepFigure(s, p);
-
-      li.append(seg, label, at);
-      list.appendChild(li);
-    }
-
+    drawSteps($('pend-steps'), p);
     const note = $('pend-progress-note');
     const line = progressNote(p);
     note.textContent = line.text;
     note.dataset.tone = line.tone;
-  }
-
-  /** When it finished, or how long it usually takes while it is under way. */
-  function stepFigure(s: Stage, p: Progress): string {
-    if (s.state === 'done' && s.at) return stamp(s.at, p.now);
-    if (s.state === 'failed') return 'failed';
-    if (s.state === 'active') {
-      if (s.stuck) return 'taking longer';
-      return s.typicalSeconds ? aboutDuration(s.typicalSeconds).replace(' minutes', ' min') : '';
-    }
-    return '';
-  }
-
-  /** At most one quiet line under the bar. */
-  function progressNote(p: Progress): { text: string; tone: string } {
-    if (finished(p)) return { text: '', tone: '' };
-    if (p.pipeline.stalled) {
-      return { text: 'The ingest is not running; the site owner has been told.', tone: 'bad' };
-    }
-    if (p.stuck) {
-      return { text: 'This is taking much longer than usual; the site owner can see it.', tone: 'bad' };
-    }
-    if (p.estimatedDoneAt !== null) {
-      return {
-        text: p.estimatedDoneAt - p.now <= 60
-          ? 'Usually done any minute now'
-          : `Usually done about ${stamp(p.estimatedDoneAt, p.now)}`,
-        tone: '',
-      };
-    }
-    return { text: `Next check ${inMinutes(nextRun(p), p.now)}`, tone: '' };
-  }
-
-  function nextRun(p: Progress): number {
-    const last = p.pipeline.lastRunAt ?? p.now;
-    let next = last + RUN_EVERY;
-    while (next < p.now) next += RUN_EVERY;
-    return next;
-  }
-
-  function finished(p: Progress): boolean {
-    return p.status === 'published' || p.status === 'removed'
-      || (p.status === 'failed' && (p.failure?.final ?? true));
   }
 
   // ---------------------------------------------------------------- audio
@@ -803,7 +722,7 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     const before = current;
     current = p;
     if (p.status === 'removed') {
-      stopPolling();
+      poll.stop();
       showMissing(
         'This round was removed.',
         `${removedWhy(p.failure?.reason)} Its audio and transcript `
@@ -833,10 +752,10 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     try {
       const p = await getProgress(ref);
       render(p);
-      if (finished(p)) stopPolling();
+      if (finished(p)) poll.stop();
     } catch (e) {
       if (e instanceof NoSuchRound) {
-        stopPolling();
+        poll.stop();
         notFound();
         return;
       }
@@ -848,27 +767,12 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
     }
   }
 
-  function stopPolling() {
-    window.clearInterval(timer);
-    timer = undefined;
-  }
-
-  function startPolling() {
-    stopPolling();
-    timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh();
-    }, POLL_MS);
-  }
-
-  // Back in the tab after a while: check at once rather than at the next tick.
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && timer !== undefined) void refresh();
-  });
+  const poll = poller(refresh);
 
   if (!ref) {
     notFound();
   } else {
-    startPolling();
+    poll.start();
     void refresh();
   }
 </script>

@@ -12,8 +12,12 @@ import {
   youtubeId,
   vimeoId,
   directMediaUrl,
+  submittedAt,
   type Recording,
 } from '../../lib/recordings';
+// The bar a processing round shows in place of its transcript, shared with
+// the pending page and built in the browser.
+import '../../styles/progress.css';
 
 export async function getStaticPaths() {
   const [recordings, media] = await Promise.all([fetchAllRecordings(), fetchMediaIndex()]);
@@ -24,6 +28,7 @@ export async function getStaticPaths() {
       props: {
         entry, slug,
         hasMedia: media.playable.has(slug),
+        transcribed: media.transcribed.has(slug),
       },
     };
   });
@@ -33,9 +38,17 @@ interface Props {
   entry: Recording;
   slug: string;
   hasMedia: boolean;
+  transcribed: boolean;
 }
 
-const { entry, slug, hasMedia } = Astro.props;
+const { entry, slug, hasMedia, transcribed } = Astro.props;
+
+// A round that came in through the submit form and was missing its audio or
+// its transcript when this page was built is shown here while it is
+// processed: the player as soon as anything plays, and its progress where the
+// transcript will be. Everything else is settled at build, so a finished
+// round and a round from the old archive never ask the progress endpoint.
+const processing = submittedAt(entry.objectID) !== null && !(hasMedia && transcribed);
 
 const kind = mediaKind(entry.link);
 const ytId = kind === 'youtube' ? youtubeId(entry.link) : null;
@@ -79,7 +92,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
     })();
   </script>
 
-  <div class="rec-page" id="rec-page">
+  <div class="rec-page" id="rec-page" data-slug={slug} data-processing={processing ? '1' : undefined}>
     <div class="shell page-head rec-page-head">
       <div>
         <nav class="crumbs" aria-label="Breadcrumb">
@@ -125,6 +138,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
               slug={slug}
               title={entry.title}
               hasMedia={hasMedia}
+              processing={processing}
               videoEmbed={videoEmbed}
               videoFile={videoFile}
               sourceLink={entry.link}
@@ -176,7 +190,7 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 
       <div class="rec-area-right">
         <div class="rec-area-tx">
-          <Transcript slug={slug} />
+          <Transcript slug={slug} processing={processing} />
         </div>
 
         <div class="rec-area-notes">
@@ -434,6 +448,46 @@ if (entry.neg) facts.push(['neg', entry.neg]);
 
 <script>
   import { mountRating } from '../../lib/stars';
+  import { getProgress, NoSuchRound, type Progress } from '../../lib/progress';
+  import { finished, poller } from '../../lib/progressview';
+  import { getToken } from '../../lib/api';
+
+  /*
+   * A round still being processed follows its progress record, as the pending
+   * page does, and hands each reading to the player and the transcript as a
+   * gt:progress event: the player swaps itself in once there is audio, the
+   * transcript panel draws the steps until there is a transcript. The latest
+   * reading is also kept on window for a part that starts listening late.
+   */
+  const page = document.getElementById('rec-page');
+  if (page?.dataset.processing === '1' && page.dataset.slug) {
+    const ref = page.dataset.slug;
+    // Whether the reader is the submitter (or an admin) is asked once: only
+    // they are given what was sent in, and only they can resubmit it.
+    let submitted: Progress['submitted'] = null;
+    let asked = false;
+    const refresh = async () => {
+      let p: Progress;
+      try {
+        const ask = !asked && Boolean(getToken());
+        p = await getProgress(ref, { submitted: ask });
+        if (ask) submitted = p.submitted ?? null;
+        asked = true;
+      } catch (e) {
+        // A failed check is not news; the last reading stays and the next
+        // check tries again. A round with no record has nothing to follow.
+        if (e instanceof NoSuchRound) poll.stop();
+        return;
+      }
+      p.submitted = submitted;
+      (window as any).__gtProgressNow = p;
+      document.dispatchEvent(new CustomEvent('gt:progress', { detail: p }));
+      if (finished(p)) poll.stop();
+    };
+    const poll = poller(refresh);
+    poll.start();
+    void refresh();
+  }
 
   const ratingHost = document.getElementById('rec-rating');
   if (ratingHost?.dataset.slug) mountRating(ratingHost, ratingHost.dataset.slug);

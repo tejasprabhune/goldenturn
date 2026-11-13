@@ -7,10 +7,7 @@
  * content scanner cannot always see.
  *
  * One column and as little prose as will do: a title, a sentence, a thin bar
- * of five segments, then the audio and the transcript. State is carried by
- * the fill of a segment and the ink of a word, never by badges or dots. Gold
- * is the one accent, for what is moving now; the diff red, already the
- * site's colour for a failed ingest, is kept for what stopped.
+ * of five segments (styles/progress.css), then the audio and the transcript.
  */
 
 /* ------------------------------------------------------------------ head */
@@ -114,91 +111,6 @@
   margin-bottom: 2.5rem;
 }
 
-/* Five equal segments of one thin bar, with a hairline gap between them. The
-   state is the fill: ink done, gold moving, pale waiting, red stopped. */
-.pend-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  column-gap: 3px;
-}
-
-.step {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.step-seg {
-  display: block;
-  height: 4px;
-  background: rgba(23, 21, 15, 0.1);
-}
-
-.step[data-state='done'] .step-seg { background: var(--ink); }
-.step[data-state='active'] .step-seg { background: var(--gold); }
-.step[data-state='failed'] .step-seg,
-.step[data-state='stuck'] .step-seg { background: var(--diff-del); }
-
-.step-label {
-  font-size: 0.8125rem;
-  line-height: 1.3;
-  margin-top: 0.6rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.step[data-state='waiting'] .step-label {
-  color: rgba(23, 21, 15, 0.4);
-}
-
-.step[data-state='failed'] .step-label,
-.step[data-state='stuck'] .step-label {
-  color: var(--diff-del);
-}
-
-.step-at {
-  font-size: 0.75rem;
-  line-height: 1.3;
-  margin-top: 0.15rem;
-  min-height: 1.3em;
-  color: rgba(23, 21, 15, 0.45);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.step[data-state='failed'] .step-at,
-.step[data-state='stuck'] .step-at {
-  color: var(--diff-del);
-}
-
-.pend-progress-note {
-  font-size: 0.8125rem;
-  color: rgba(23, 21, 15, 0.5);
-  margin: 0.9rem 0 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.pend-progress-note:empty {
-  display: none;
-}
-
-.pend-progress-note[data-tone='bad'] {
-  color: var(--diff-del);
-}
-
-/* A phone keeps all five segments; the names shrink, and only a stage that
-   is moving or stopped keeps its figure. */
-@media (max-width: 560px) {
-  .pend-steps { column-gap: 2px; }
-  .step-label { font-size: 0.6875rem; }
-  .step-at { font-size: 0.625rem; }
-  .step[data-state='done'] .step-at { visibility: hidden; }
-}
-
 /* A label over a rule, with a quiet note at the far end of the same line. */
 .pend-section-head {
   display: flex;
@@ -219,18 +131,6 @@
   font-weight: 400;
   letter-spacing: 0;
   text-align: right;
-}
-
-/* What stands in for a part that is not there yet. */
-.pend-quiet {
-  font-size: 0.875rem;
-  line-height: 1.55;
-  color: rgba(23, 21, 15, 0.5);
-  margin: 0;
-}
-
-.pend-quiet[hidden] {
-  display: none;
 }
 
 .pend-audio {

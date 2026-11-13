@@ -555,6 +555,7 @@ const tournamentVocab = [...new Set(
   // convention used to live in a placeholder nobody was obliged to follow.
   import { getUser, FieldErrors, NotSignedIn, AlreadySubmitted, submitRecording } from '../../lib/api';
   import { getProgress, pendingHref, type Progress } from '../../lib/progress';
+  import { followHref } from '../../lib/progressview';
   import { attachAutocomplete } from '../../lib/autocomplete';
   import {
     composeAff, composeDecision, composeNeg, composeTitle, parseAff, parseDecision, parseNeg,
@@ -891,6 +892,9 @@ const tournamentVocab = [...new Set(
         + 'it says what and how to fix it. The round is also listed on your account page.';
       const open = document.getElementById('success-round') as HTMLAnchorElement;
       open.href = pendingHref(res.slug);
+      // A resubmitted round usually has its page already, which shows the
+      // progress in place; the pending page sends a reader on when it does.
+      void followRound(res.slug, open);
     } catch (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Submit a recording';
@@ -924,6 +928,16 @@ const tournamentVocab = [...new Set(
     a.textContent = existing.status === 'pending' ? 'Follow its progress' : 'Open it';
     line.appendChild(a);
     line.hidden = false;
+    if (existing.status === 'pending') void followRound(existing.slug, a);
+  }
+
+  /** Points a link at the round's own page once that exists. */
+  async function followRound(ref: string, a: HTMLAnchorElement) {
+    try {
+      a.href = followHref(await getProgress(ref));
+    } catch {
+      // The pending page is right for any round, and it was set already.
+    }
   }
 
   /**

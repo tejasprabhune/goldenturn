@@ -54,6 +54,19 @@ export function recordingHref(hit: { title?: string; objectID: string; slug?: st
   return `/recordings/${recordingSlug(hit)}`;
 }
 
+/**
+ * When a round came in through the submit form, read from its id.
+ *
+ * Submitted ids carry the worker's clock in milliseconds: `sub-<ms>-<random>`
+ * before the slug fix and `<random>-sub-<ms>` after it. Rounds from the old
+ * archive have no such part (one is `GTYytv-sub0`, hence the thirteen digits)
+ * and answer null.
+ */
+export function submittedAt(objectID: string): number | null {
+  const m = objectID.match(/(?:^|-)sub-(\d{13})(?:-|$)/);
+  return m ? Number(m[1]) : null;
+}
+
 /** Tags are stored with a leading '#'; strip it for display. */
 export function tagLabel(tag: string): string {
   return tag.replace(/^#/, '');

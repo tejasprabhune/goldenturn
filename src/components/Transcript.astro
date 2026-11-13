@@ -9,14 +9,20 @@
  * Whether a transcript exists is probed at runtime rather than baked in at
  * build time, so a round transcribed after the last deploy shows up without
  * needing the site rebuilt.
+ *
+ * A submitted round still being processed shows its steps here instead, from
+ * the page's progress readings, until its transcript exists; then the
+ * transcript replaces them in place.
  */
 interface Props {
   slug: string;
+  processing?: boolean;
 }
-const { slug } = Astro.props;
+const { slug, processing = false } = Astro.props;
 ---
 
-<section class="transcript" data-slug={slug}>
+<section class="transcript" data-slug={slug}
+  data-processing={processing ? '1' : undefined} data-waiting={processing ? '1' : undefined}>
   <div class="transcript-head">
     <p class="label label-muted">Transcript</p>
     <div class="transcript-tools">
@@ -43,6 +49,16 @@ const { slug } = Astro.props;
   </div>
 
   <p class="page-lede transcript-pending" id="tx-pending">Checking for a transcript</p>
+
+  {processing && (
+    <!-- The round's steps, without the page step, since this is the page.
+         Built in the browser by lib/progressview.ts; styles/progress.css. -->
+    <div class="tx-progress" id="tx-progress" aria-label="Progress" aria-live="polite" hidden>
+      <ol class="pend-steps" id="tx-steps"></ol>
+      <p class="pend-progress-note" id="tx-progress-note"></p>
+      <p class="progress-actions" id="tx-progress-actions" hidden></p>
+    </div>
+  )}
 </section>
 
 <div class="tx-tip" id="tx-tip" hidden>
@@ -214,18 +230,35 @@ const { slug } = Astro.props;
   .transcript-pending {
     margin-top: 0;
   }
+
+  .transcript-pending[hidden],
+  .tx-progress[hidden] {
+    display: none;
+  }
+
+  /* Nothing to search, follow or expand until there is a transcript. */
+  .transcript[data-waiting] .transcript-tools {
+    display: none;
+  }
+
+  /* The bar takes the place of the words, under the panel's own label. */
+  .tx-progress {
+    padding: 0.35rem 0 1.25rem;
+  }
 </style>
 
 <script>
   import { formatTime } from '../lib/waveform';
   import {
     listProposals, listRevisions, propose, vote, getUser, isAdmin, NotSignedIn,
-    addNote, track, updateProposal, deleteProposal, adminResolve, API,
+    addNote, track, updateProposal, deleteProposal, adminResolve,
     type Proposal, type Revision,
   } from '../lib/api';
   import { AFF, usable, applyBoundaries, type Speech } from '../lib/speeches';
   import { windowAround } from '../lib/textdiff';
   import { renderDiff } from '../lib/diffview';
+  import { renderSteps, statusLine, resubmitHref } from '../lib/progressview';
+  import type { Progress } from '../lib/progress';
 
   interface Word { w: string; s: number | null; e: number | null; p: number | null }
   interface Segment {
@@ -344,20 +377,39 @@ const { slug } = Astro.props;
       return para ? linesEl.querySelector<HTMLElement>(`#${CSS.escape(segId(para.idx))}`) : null;
     }
 
-    async function load() {
+    const processing = root.dataset.processing === '1';
+    let loaded = false;
+    let loading = false;
+
+    /**
+     * `speechesToo` false skips asking for the speech markers, for a round being
+     * processed whose progress says they are not made yet; the player passes
+     * them on once they are.
+     */
+    async function load(speechesToo = true) {
+      loading = true;
       const [txRes, revRes, spRes] = await Promise.allSettled([
         fetch(`${MEDIA}/${(window as any).__TX_PREFIX__ ?? 'transcripts'}/${slug}.json`)
           .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
         listRevisions(slug),
-        fetch(`${MEDIA}/speeches/${slug}.json`).then(r => (r.ok ? r.json() : null)),
+        speechesToo
+          ? fetch(`${MEDIA}/speeches/${slug}.json`).then(r => (r.ok ? r.json() : null))
+          : Promise.resolve(null),
       ]);
+      loading = false;
 
       const pending = document.getElementById('tx-pending')!;
       if (txRes.status !== 'fulfilled' || !txRes.value?.segments) {
-        pending.textContent = await missingReason();
+        // A round being processed keeps showing its steps; the next reading
+        // tries again.
+        if (!processing) pending.textContent = missingReason();
         return;
       }
+      loaded = true;
       pending.hidden = true;
+      delete root!.dataset.waiting;
+      const steps = document.getElementById('tx-progress');
+      if (steps) steps.hidden = true;
       bodyEl.hidden = false;
       segments = txRes.value.segments ?? [];
       duration = txRes.value.duration ?? segments[segments.length - 1]?.end ?? 0;
@@ -374,32 +426,48 @@ const { slug } = Astro.props;
     }
 
     /**
-     * Why there is no transcript. It used to say "queued" for every round,
-     * including ones whose audio could never be fetched and would never be
-     * transcribed. A round submitted through the site says where it is; one
-     * from the old archive says what can be known from this page.
+     * Why there is no transcript, for a round that is not being processed:
+     * one from the old archive, which has no progress record to ask, or a
+     * submitted one whose transcript has gone missing since.
      */
-    async function missingReason(): Promise<string> {
-      const w = window as any;
-      w.__gtProgress ??= fetch(`${API}/rounds/${encodeURIComponent(slug)}/progress`)
-        .then(r => (r.ok ? r.json() : null))
-        .catch(() => null);
-      const p = await w.__gtProgress;
-      const hosted = Boolean(audio());
-      if (p?.pipeline?.stalled && p.status !== 'failed' && p.status !== 'removed') {
-        return 'Not transcribed yet, and the ingest is not running; the site owner has been told.';
+    function missingReason(): string {
+      return audio()
+        ? 'Not transcribed yet. The transcript and speech markers appear here once it has run.'
+        : 'No transcript. There is no hosted audio for this round to transcribe.';
+    }
+
+    /**
+     * Where a round being processed has got to, until its transcript exists:
+     * the steps, and at most one line under them, which after a failure a new
+     * link can fix carries the way to resubmit for the person who sent it.
+     */
+    function showProgress(p: Progress) {
+      if (loaded) return;
+      if (p.media.transcript) {
+        if (!loading) void load(p.media.speeches);
+        return;
       }
-      if (p?.status === 'failed' || p?.status === 'removed') {
-        return `No transcript. ${p.failure?.reason ?? 'The audio could not be fetched.'}`
-          + (p.failure?.final === false ? ' It will be tried again.' : '');
+      document.getElementById('tx-pending')!.hidden = true;
+      const box = document.getElementById('tx-progress')!;
+      box.hidden = false;
+      renderSteps(document.getElementById('tx-steps')!, p, ['page']);
+
+      const line = statusLine(p);
+      const note = document.getElementById('tx-progress-note')!;
+      note.textContent = line.text;
+      note.dataset.tone = line.tone;
+
+      const actions = document.getElementById('tx-progress-actions')!;
+      actions.textContent = '';
+      // `submitted` is only given to the round's submitter and to admins.
+      actions.hidden = !(line.resubmit && p.submitted);
+      if (!actions.hidden) {
+        const again = document.createElement('a');
+        again.className = 'btn';
+        again.href = resubmitHref(p);
+        again.textContent = 'Fix the link and resubmit';
+        actions.appendChild(again);
       }
-      if (p?.status === 'fetching') {
-        return 'Not transcribed yet. The audio is still being fetched; the transcript follows it.';
-      }
-      if (p?.status === 'transcribing' || hosted) {
-        return 'Not transcribed yet. The transcript and speech markers appear here once it has run.';
-      }
-      return 'No transcript. There is no hosted audio for this round to transcribe.';
     }
 
     /**
@@ -1183,6 +1251,12 @@ const { slug } = Astro.props;
       }
     }
 
-    void load();
+    if (processing) {
+      document.addEventListener('gt:progress', e => showProgress((e as CustomEvent<Progress>).detail));
+      const now = (window as any).__gtProgressNow as Progress | undefined;
+      if (now) showProgress(now);
+    } else {
+      void load();
+    }
   }
 </script>

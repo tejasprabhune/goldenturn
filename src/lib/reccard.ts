@@ -8,7 +8,7 @@
  * than merely intended.
  */
 
-import { recordingHref, recordingSlug } from './recordings';
+import { recordingHref, recordingSlug, submittedAt } from './recordings';
 import { Waveform, formatTime, type PeaksFile } from './waveform';
 import { getRatings, listRevisions } from './api';
 import { ratingHtml } from './stars';
@@ -30,19 +30,6 @@ export function escapeHtml(str: string): string {
 function text(hit: Hit, key: string): string {
   const v = hit[key];
   return typeof v === 'string' ? v : '';
-}
-
-/**
- * When a round came in through the submit form, read from its id.
- *
- * Submitted ids carry the worker's clock in milliseconds: `sub-<ms>-<random>`
- * before the slug fix and `<random>-sub-<ms>` after it. Rounds from the old
- * archive have no such part (one is `GTYytv-sub0`, hence the thirteen digits)
- * and answer null.
- */
-export function submittedAt(objectID: string): number | null {
-  const m = objectID.match(/(?:^|-)sub-(\d{13})(?:-|$)/);
-  return m ? Number(m[1]) : null;
 }
 
 export interface CardRenderOptions {

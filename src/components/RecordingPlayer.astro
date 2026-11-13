@@ -16,9 +16,21 @@ interface Props {
    */
   videoFile?: string | null;
   sourceLink: string;
+  /**
+   * A submitted round still being processed. The player is laid out as for
+   * a finished round and filled in from the progress record (the page's
+   * gt:progress events) as soon as there is anything to play, which until
+   * the stored copy exists is the submitted link when it is a plain file.
+   */
+  processing?: boolean;
 }
 
-const { slug, title, hasMedia, videoEmbed = null, videoFile = null, sourceLink } = Astro.props;
+const {
+  slug, title, hasMedia, videoEmbed = null, videoFile = null, sourceLink, processing = false,
+} = Astro.props;
+// The full player is in the markup whenever it is or may soon be wanted; for
+// a processing round without audio it waits hidden until it has some.
+const live = hasMedia || processing;
 const MEDIA = 'https://media.goldenturn.org';
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -26,7 +38,7 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 // as the card on the list already does. A video link is left to the embed or
 // the checked video above, since an unchecked one can be a dead link to a
 // file of several hundred megabytes.
-const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLink) === 'audio'
+const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) === 'audio'
   ? directMediaUrl(sourceLink)
   : null;
 ---
@@ -36,6 +48,7 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
   data-slug={slug}
   data-media={hasMedia ? `${MEDIA}/audio/${slug}.m4a` : ''}
   data-peaks={hasMedia ? `${MEDIA}/peaks/${slug}.json` : ''}
+  data-processing={processing ? '1' : undefined}
 >
   {videoEmbed && (
     <div class="player-video" id="player-video">
@@ -47,7 +60,7 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
       <iframe
         id="player-iframe"
         src={videoEmbed.kind === 'youtube'
-          ? `https://www.youtube.com/embed/${videoEmbed.id}${hasMedia ? '?enablejsapi=1&rel=0&playsinline=1' : ''}`
+          ? `https://www.youtube.com/embed/${videoEmbed.id}${live ? '?enablejsapi=1&rel=0&playsinline=1' : ''}`
           : `https://player.vimeo.com/video/${videoEmbed.id}`}
         title={`Video of ${title}`}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -78,8 +91,11 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
     </div>
   )}
 
-  {hasMedia ? (
+  {live ? (
     <>
+      <!-- display: contents, so a finished round lays out exactly as it did
+           before this wrapper existed. -->
+      <div class="player-live" id="player-live" hidden={!hasMedia}>
       <div class="wave-wrap">
         <canvas
           id="wave"
@@ -138,7 +154,8 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
               {BOOST_LEVELS.map(b => <option value={b}>{boostLabel(b)}</option>)}
             </select>
           </label>
-          <a class="chip" id="download" href={`${MEDIA}/audio/${slug}.m4a`} download={`${slug}.m4a`}>download</a>
+          <a class="chip" id="download" href={`${MEDIA}/audio/${slug}.m4a`} download={`${slug}.m4a`}
+            hidden={!hasMedia}>download</a>
         </div>
       </div>
 
@@ -191,8 +208,12 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
       <!-- crossorigin so the volume boost can route this through Web Audio;
            R2 sends the headers, and asking after the file has loaded is too
            late. -->
-      <audio id="audio" preload="metadata" crossorigin="anonymous"
-        src={`${MEDIA}/audio/${slug}.m4a`}></audio>
+      {hasMedia ? (
+        <audio id="audio" preload="metadata" crossorigin="anonymous"
+          src={`${MEDIA}/audio/${slug}.m4a`}></audio>
+      ) : (
+        <audio id="audio" preload="metadata"></audio>
+      )}
 
       <!--
         On a phone the player scrolls away the moment you start reading the
@@ -212,6 +233,10 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
           <button class="nowbar-btn" data-seek="speech-next" aria-label="Next speech">&#9197;</button>
         </div>
       </div>
+      </div>
+
+      <!-- Until there is anything to play: one quiet line in its place. -->
+      {processing && <p class="player-wait" id="player-wait" hidden></p>}
     </>
   ) : (
     <>
@@ -232,8 +257,6 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
         hidden={Boolean(videoEmbed || videoFile || sourceAudio)}>
         No hosted audio for this round yet.
       </p>
-      <!-- Where a submitted round has got to, from the progress endpoint. -->
-      <p class="label label-muted player-progress" id="player-progress" hidden></p>
     </>
   )}
 </section>
@@ -743,8 +766,22 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
     margin: 0.5rem 0 0;
   }
 
-  .player-progress {
-    margin: 0.75rem 0 0;
+  .player-live {
+    display: contents;
+  }
+
+  .player-live[hidden],
+  .player-wait[hidden],
+  #download[hidden] {
+    display: none;
+  }
+
+  /* The same quiet line the pending page puts where its player will be. */
+  .player-wait {
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: rgba(23, 21, 15, 0.5);
+    margin: 0;
   }
 </style>
 
@@ -752,8 +789,9 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
   import { Waveform, formatTime, type PeaksFile } from '../lib/waveform';
   import {
     track, propose, listRevisions, listProposals, vote, getUser, isAdmin,
-    adminResolve, NotSignedIn, API, type Proposal,
+    adminResolve, NotSignedIn, type Proposal,
   } from '../lib/api';
+  import type { Progress } from '../lib/progress';
   import {
     sideOf, usable, placed, byTime, applyBoundaries, parseSpan, withSpans,
     conflicts, SPEECH_SETS, formatOf, type Speech, type Span,
@@ -791,25 +829,129 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
     return pressable && (e.key === ' ' || e.key === 'Enter') && !pointerFocus;
   }
 
-  /**
-   * How far a round submitted through the site has got. Anonymous, and asked
-   * once per page however many parts of it want to know.
-   */
-  function roundProgress(slug: string): Promise<any | null> {
-    const w = window as any;
-    w.__gtProgress ??= fetch(`${API}/rounds/${encodeURIComponent(slug)}/progress`)
-      .then(r => (r.ok ? r.json() : null))
-      .catch(() => null);
-    return w.__gtProgress;
-  }
-
   const root = document.querySelector<HTMLElement>('.player');
   const audio = document.getElementById('audio') as HTMLAudioElement | null;
   const canvas = document.getElementById('wave') as HTMLCanvasElement | null;
 
-  if (root && audio && canvas) {
+  // A round with nothing hosted is still a round somebody opened, and
+  // counting only the hosted ones skewed "most opened" towards them.
+  if (root) track('round.view', root.dataset.slug!);
+
+  /** Something the player can play: the stored copy, or the submitted link. */
+  interface Source { url: string; peaksUrl: string | null; stored: boolean }
+
+  interface PlayerOptions {
+    /** The waveform file, when there is one to fetch now. */
+    peaksUrl: string | null;
+    /** Whether to ask for the speech markers now rather than when told to. */
+    fit: boolean;
+    /** In place of the line that says the file will not load. */
+    onFail?: () => void;
+  }
+
+  interface Player {
+    /** Plays this copy, keeping the place; a new one waits for a pause. */
+    use(src: Source): void;
+    /** Asks for the speech markers and draws them. */
+    loadFit(): void;
+  }
+
+  if (root && audio && canvas && root.dataset.processing !== '1') {
+    initPlayer(root, audio, canvas, { peaksUrl: root.dataset.peaks || null, fit: true });
+  } else if (root && audio && canvas) {
+    followProgress(root, audio, canvas);
+  } else if (root) {
+    const none = document.getElementById('player-none');
+    const source = document.getElementById('player-source-audio') as HTMLAudioElement | null;
+    // The original link can be gone or not a recording after all.
+    source?.addEventListener('error', () => {
+      document.getElementById('player-source')?.setAttribute('hidden', '');
+      if (none) none.hidden = false;
+    });
+  }
+
+  /**
+   * A submitted round still being processed. Its player is in the markup,
+   * hidden until there is something to play, and is filled in from the
+   * page's progress readings: the submitted link while it is the only copy
+   * and the browser can play it, the stored copy as soon as that exists, and
+   * the speech markers once they are made. Until then one quiet line stands
+   * in its place.
+   */
+  function followProgress(root: HTMLElement, audio: HTMLAudioElement, canvas: HTMLCanvasElement) {
+    const live = document.getElementById('player-live')!;
+    const wait = document.getElementById('player-wait')!;
+    let player: Player | null = null;
+    let using: Source | null = null;
+    // A link that would not play stays reported until a different copy comes.
+    let broken = '';
+    let fitAsked = false;
+
+    const onFail = () => {
+      if (using?.stored) return void failedAudio(root);
+      broken = using?.url ?? '';
+      audio.pause();
+      live.hidden = true;
+      wait.hidden = false;
+      wait.textContent = 'Your link does not play in the browser; it plays here once our copy is stored.';
+    };
+
+    // Hosted when the page was built: the player starts now, as on a finished
+    // round, and only the speech markers wait to be told they exist.
+    if (root.dataset.media) {
+      using = { url: root.dataset.media, peaksUrl: root.dataset.peaks || null, stored: true };
+      player = initPlayer(root, audio, canvas, { peaksUrl: using.peaksUrl, fit: false, onFail });
+    }
+
+    const take = (p: Progress) => {
+      const src = p.audio && p.audio.url !== broken ? p.audio : null;
+      if (src) {
+        wait.hidden = true;
+        live.hidden = false;
+        using = { url: src.url, peaksUrl: src.peaksUrl, stored: src.source === 'stored' };
+        // Started only once it is on screen: it measures itself, and it
+        // watches whether the waveform has scrolled away.
+        player ??= initPlayer(root, audio, canvas, { peaksUrl: null, fit: false, onFail });
+        player.use(using);
+      } else if (!player || live.hidden) {
+        live.hidden = true;
+        wait.hidden = false;
+        if (!broken) wait.textContent = noAudioLine(p);
+      }
+      if (player && p.media.speeches && !fitAsked) {
+        fitAsked = true;
+        player.loadFit();
+      }
+    };
+
+    document.addEventListener('gt:progress', e => take((e as CustomEvent<Progress>).detail));
+    const now = (window as any).__gtProgressNow as Progress | undefined;
+    if (now) take(now);
+  }
+
+  /**
+   * A file the index lists can still be missing, and a play button that
+   * does nothing says nothing. The controls make way for a line that does.
+   */
+  function failedAudio(root: HTMLElement) {
+    root.dataset.audioFailed = '1';
+    document.getElementById('player-missing')!.hidden = false;
+    document.getElementById('nowbar')?.remove();
+    document.body.style.paddingBottom = '';
+  }
+
+  function noAudioLine(p: Progress): string {
+    if (p.status === 'failed' || p.status === 'removed') return 'No audio: it was never fetched.';
+    const video = p.linkKind === 'youtube' ? 'YouTube' : p.linkKind === 'vimeo' ? 'Vimeo' : '';
+    return video
+      ? `The audio plays here once our copy of the ${video} video is stored.`
+      : 'The audio plays here as soon as it has been fetched.';
+  }
+
+  function initPlayer(
+    root: HTMLElement, audio: HTMLAudioElement, canvas: HTMLCanvasElement, opts: PlayerOptions,
+  ): Player {
     const slug = root.dataset.slug!;
-    const peaksUrl = root.dataset.peaks!;
     const wave = new Waveform(canvas);
     const playBtn = document.getElementById('play')!;
     const playIcon = document.getElementById('play-icon')!;
@@ -825,7 +967,6 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
     const toggleVideo = document.getElementById('toggle-video');
 
     const positionKey = `gt:pos:${slug}`;
-    track('round.view', slug);
 
     // A speed is how somebody listens, not a property of one round, so it is
     // kept across rounds and reloads. defaultPlaybackRate as well, because
@@ -848,29 +989,41 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
       audio!.currentTime = Math.max(0, Math.min(audio!.duration || 1e9, audio!.currentTime + by));
     }
 
-    /**
-     * A file the index lists can still be missing, and a play button that
-     * does nothing says nothing. The controls make way for a line that does.
-     */
-    const audioFailed = () => {
-      root!.dataset.audioFailed = '1';
-      document.getElementById('player-missing')!.hidden = false;
-      document.getElementById('nowbar')?.remove();
-      document.body.style.paddingBottom = '';
-    };
-    audio.addEventListener('error', audioFailed);
-    // The load starts with the markup, so it can fail before this runs.
-    if (audio.error || audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) audioFailed();
+    if (opts.onFail) {
+      audio.addEventListener('error', () => { if (audio.getAttribute('src')) opts.onFail!(); });
+    } else {
+      audio.addEventListener('error', () => failedAudio(root));
+      // The load starts with the markup, so it can fail before this runs.
+      if (audio.error || audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) failedAudio(root);
+    }
 
-    fetch(peaksUrl)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
-      .then((file: PeaksFile) => {
-        wave.setData(file);
-        totalEl.textContent = formatTime(file.duration);
-        loading.hidden = true;
-        applyDeepLink(file.duration);
-      })
-      .catch(() => { loading.textContent = 'waveform unavailable'; });
+    // Which file the waveform is drawn from, so a copy that has none (the
+    // submitted link) is drawn flat and one that arrives later replaces it.
+    let peaksFor = '';
+    function loadPeaks(url: string) {
+      peaksFor = url;
+      fetch(url)
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+        .then((file: PeaksFile) => {
+          if (peaksFor !== url) return;
+          wave.setData(file);
+          totalEl.textContent = formatTime(file.duration);
+          loading.hidden = true;
+          applyDeepLink(file.duration);
+        })
+        .catch(() => { loading.textContent = 'waveform unavailable'; });
+    }
+    if (opts.peaksUrl) loadPeaks(opts.peaksUrl);
+
+    // No waveform file: an even band the length of the recording, so the
+    // played part, the playhead and seeking work as they do over a real one.
+    audio.addEventListener('loadedmetadata', () => {
+      if (peaksFor || !isFinite(audio.duration) || !audio.duration) return;
+      const buckets = 400;
+      wave.setData({ slug, duration: audio.duration, buckets, peaks: new Array(buckets).fill(6) });
+      loading.hidden = true;
+      applyDeepLink(audio.duration);
+    });
 
     function applyDeepLink(duration: number) {
       const t = Number(new URLSearchParams(location.search).get('t'));
@@ -1234,7 +1387,7 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
       });
     }
 
-    Promise.allSettled([
+    const loadFit = () => Promise.allSettled([
       fetch(`${MEDIA}/speeches/${slug}.json`).then(r => (r.ok ? r.json() : null)),
       listRevisions(slug),
     ]).then(([fitRes, revRes]) => {
@@ -1253,6 +1406,7 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
       if (fix) fix.hidden = false;
       void loadTimingProposals();
     });
+    if (opts.fit) void loadFit();
 
     canvas.addEventListener('keydown', e => {
       if (e.key === 'Home') { e.preventDefault(); audio.currentTime = 0; }
@@ -1788,55 +1942,48 @@ const sourceAudio = !hasMedia && !videoEmbed && !videoFile && mediaKind(sourceLi
 
     const ro = new ResizeObserver(() => wave.resize());
     ro.observe(canvas);
-  } else if (root) {
-    // A round with nothing hosted is still a round somebody opened, and
-    // counting only the hosted ones skewed "most opened" towards them.
-    const slug = root.dataset.slug!;
-    track('round.view', slug);
 
-    const none = document.getElementById('player-none');
-    const source = document.getElementById('player-source-audio') as HTMLAudioElement | null;
-    // The original link can be gone or not a recording after all.
-    source?.addEventListener('error', () => {
-      document.getElementById('player-source')?.setAttribute('hidden', '');
-      if (none) none.hidden = false;
-    });
+    let current = audio.getAttribute('src') ?? '';
+    let next: Source | null = null;
 
-    /*
-     * A round submitted through the site says where it has got to rather than
-     * only that nothing is here. Rounds from the old archive have no progress
-     * record and keep the plain line.
-     */
-    const line = document.getElementById('player-progress');
-    void roundProgress(slug).then(p => {
-      if (!p || !line) return;
-      const ago = (at: number | null) => {
-        if (!at) return '';
-        const mins = Math.max(0, Math.round(((p.now ?? Date.now() / 1000) - at) / 60));
-        if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
-        const hours = Math.round(mins / 60);
-        if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-        const days = Math.round(hours / 24);
-        return `${days} days ago`;
-      };
-      let text = '';
-      if (p.status === 'failed' || p.status === 'removed') {
-        text = p.failure?.reason ?? 'The audio could not be fetched.';
-      } else if (p.status === 'fetching') {
-        text = p.pipeline?.stalled
-          ? 'Submitted ' + ago(p.submittedAt) + '. The ingest is not running; the site owner has been told.'
-          : 'Submitted ' + ago(p.submittedAt) + '. The audio is being fetched.';
-      } else if (p.media?.audio) {
-        text = 'The audio is in and this page is being rebuilt with the player.';
+    function swap(src: Source) {
+      const at = audio.currentTime || 0;
+      current = src.url;
+      delete root.dataset.audioFailed;
+      // Only the stored copy is served with CORS, which the volume boost
+      // needs; asking for it from a link that does not send the headers
+      // would refuse to play it at all.
+      if (src.stored) audio.crossOrigin = 'anonymous';
+      else audio.removeAttribute('crossorigin');
+      audio.src = src.url;
+      if (at > 0) {
+        audio.addEventListener('loadedmetadata', () => { audio.currentTime = at; }, { once: true });
       }
-      if (!text) return;
-      line.textContent = text + ' ';
-      const a = document.createElement('a');
-      a.className = 'link';
-      a.href = `/recordings/pending/?ref=${encodeURIComponent(slug)}`;
-      a.textContent = 'Follow its progress';
-      line.append(a, '.');
-      line.hidden = false;
+      if (download) download.hidden = !src.stored;
+      peaksFor = '';
+      if (src.peaksUrl) loadPeaks(src.peaksUrl);
+      else loading.hidden = true;
+    }
+
+    // A better copy arriving mid-listen waits for a pause rather than cutting
+    // the reader off, and picks up where they were.
+    audio.addEventListener('pause', () => {
+      if (!next) return;
+      const src = next;
+      next = null;
+      swap(src);
     });
+
+    return {
+      use(src: Source) {
+        if (src.url === current) {
+          if (src.peaksUrl && !peaksFor) loadPeaks(src.peaksUrl);
+          return;
+        }
+        if (current && !audio.paused) next = src;
+        else swap(src);
+      },
+      loadFit() { void loadFit(); },
+    };
   }
 </script>
