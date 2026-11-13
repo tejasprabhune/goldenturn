@@ -58,7 +58,6 @@
   padding: 1.25rem 0 4rem 2.5rem;
 }
 
-/* ---- the box ---- */
 
 .prep-bar {
   display: flex;
@@ -105,7 +104,6 @@
   color: var(--gold-deep);
 }
 
-/* ---- filters ---- */
 
 .prep-filters {
   display: flex;
@@ -141,8 +139,9 @@
 
 .prep-status {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: 0 1.1rem;
   min-height: 1.6rem;
   margin: 0;
   padding: 0.3rem 0;
@@ -152,6 +151,7 @@
   color: rgba(23, 21, 15, 0.5);
 }
 
+.prep-status a,
 .prep-status button {
   background: none;
   border: none;
@@ -164,11 +164,14 @@
   text-underline-offset: 2px;
 }
 
+.prep-status a:hover {
+  text-decoration-color: var(--ink);
+}
+
 .prep-status [data-tone='warn'] {
   color: var(--gold-deep);
 }
 
-/* ---- the list ---- */
 
 .prep-list {
   flex: 1;
@@ -236,11 +239,17 @@
   margin-right: 0.45rem;
 }
 
+/* The words a search matched: a soft underline under the ink, so the row
+   still reads as text rather than as a highlighter pass. */
 .prep-row mark,
 .prep-doc mark {
   background: none;
   color: inherit;
-  box-shadow: inset 0 -0.38em 0 var(--gold);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(23, 21, 15, 0.35);
+  text-underline-offset: 0.2em;
+  text-decoration-skip-ink: none;
 }
 
 .prep-family {
@@ -283,8 +292,25 @@
   color: rgba(23, 21, 15, 0.55);
 }
 
-.prep-row--file .prep-row-use {
-  -webkit-line-clamp: 1;
+/* A file's counts by type; each one opens the file with that type picked. */
+.prep-row-counts {
+  grid-column: 2 / 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.85rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.prep-count-part {
+  color: rgba(23, 21, 15, 0.6);
+  text-decoration: none;
+  transition: color 60ms linear;
+}
+
+.prep-count-part:hover {
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--ink);
 }
 
 .prep-count {
@@ -295,7 +321,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.prep-dot {
+.prep-sep {
   margin: 0 0.35rem;
   color: rgba(23, 21, 15, 0.3);
 }
@@ -329,7 +355,6 @@ kbd {
   margin-right: 0.25rem;
 }
 
-/* ---- the block ---- */
 
 .prep-view-head {
   display: flex;
@@ -343,6 +368,10 @@ kbd {
 }
 
 .prep-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 1.1rem;
   margin: 0;
   font-size: 0.75rem;
   color: rgba(23, 21, 15, 0.55);
@@ -355,7 +384,7 @@ kbd {
 }
 
 .prep-crumbs a:hover {
-  background: var(--gold);
+  box-shadow: inset 0 -1px 0 var(--ink);
 }
 
 .prep-actions {
@@ -496,13 +525,35 @@ kbd {
   line-height: 1.1;
 }
 
+.prep-dash {
+  display: inline-block;
+  margin: 0 0.04em;
+}
+
+.prep-toc-none {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
 .prep-toc-family {
   margin: 1.1rem 0 0.3rem;
   font-family: 'Neue Montreal', system-ui, sans-serif;
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.04em;
+}
+
+.prep-toc-family-link {
   color: rgba(23, 21, 15, 0.45);
+  text-decoration: none;
+  transition: color 60ms linear;
+}
+
+.prep-toc-family-link:hover,
+.prep-toc-family-link[data-on='true'] {
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--ink);
 }
 
 .prep-toc-list {
@@ -513,11 +564,35 @@ kbd {
 
 .prep-toc-list li {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.6rem;
-  padding: 0.22rem 0;
   border-top: 1px solid var(--rule-soft);
   font-size: 0.875rem;
+}
+
+/* The tag is its own link (it picks that side), the rest of the row opens
+   the block. */
+a.prep-side {
+  flex: none;
+  text-decoration: none;
+  transition: border-color 60ms linear;
+}
+
+a.prep-side:hover,
+a.prep-side[data-on='true'] {
+  border-color: var(--ink);
+}
+
+.prep-toc-link {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem 0.3rem 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.prep-toc-link:hover {
+  background: rgba(23, 21, 15, 0.03);
 }
 
 .prep-hint {
@@ -613,5 +688,15 @@ kbd {
 
   .prep-back {
     display: inline-flex;
+  }
+
+  /* A file's overview already lists its blocks; on one column the list
+     above it would say the same thing twice. */
+  .prep-app[data-level='overview'] .prep-list {
+    display: none;
+  }
+
+  .prep-app[data-level='overview'] .prep-right {
+    margin-top: 0;
   }
 }

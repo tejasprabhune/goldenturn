@@ -4,7 +4,61 @@
  * redraws the list and this is the cheapest way to do it.
  */
 import type { PrepHit } from './search';
-import { SIDE_LABELS, TYPE_LABELS, type PrepRecord, type PrepType } from './types';
+import { SIDE_LABELS, TYPE_LABELS, type PrepRecord, type PrepSide, type PrepType } from './types';
+
+/**
+ * Where the reader is on the page, as the URL holds it, so every step is a
+ * history entry that can be reloaded or shared:
+ * `?q=econ&side=aff&types=uq,link&file=<slug>&block=<objectID>`.
+ */
+export interface PrepView {
+  q: string;
+  side: PrepSide | null;
+  types: PrepType[];
+  file: string | null;
+  block: string | null;
+}
+
+export const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘' : 'Ctrl';
+
+export const NO_VIEW: PrepView = { q: '', side: null, types: [], file: null, block: null };
+
+const TYPE_ORDER: PrepType[] = ['uq', 'link', 'il', 'impact', 'answer', 'other'];
+
+export function readView(search: string): PrepView {
+  const p = new URLSearchParams(search);
+  const side = p.get('side');
+  const types = (p.get('types') ?? '').split(',').filter((t): t is PrepType => (TYPE_ORDER as string[]).includes(t));
+  return {
+    q: (p.get('q') ?? '').trim(),
+    side: side === 'aff' || side === 'neg' ? side : side === 'both' ? 'either' : null,
+    types: TYPE_ORDER.filter(t => types.includes(t)),
+    file: p.get('file') || null,
+    // `b` is the link Copy link made before blocks had their own URL.
+    block: p.get('block') || p.get('b') || null,
+  };
+}
+
+/** The query string for a view, empty for the bare page. */
+export function viewQuery(v: PrepView): string {
+  const p = new URLSearchParams();
+  if (v.q) p.set('q', v.q);
+  if (v.side) p.set('side', v.side === 'either' ? 'both' : v.side);
+  if (v.types.length) p.set('types', v.types.join(','));
+  if (v.file) p.set('file', v.file);
+  if (v.block) p.set('block', v.block);
+  const qs = p.toString().replace(/%2C/g, ',');
+  return qs ? `?${qs}` : '';
+}
+
+export function viewHref(v: PrepView): string {
+  return `/prep/${viewQuery(v)}`;
+}
+
+/** True when a block shows under the side filter: one side includes the blocks either side reads. */
+export function sideMatches(side: PrepSide, filter: PrepSide | null): boolean {
+  return !filter || side === filter || (filter !== 'either' && side === 'either');
+}
 
 export function escapeHtml(s: string): string {
   return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -12,9 +66,10 @@ export function escapeHtml(s: string): string {
 
 /**
  * Algolia's highlight value is the attribute escaped with <mark> around the
- * matched words. Only those tags are let through.
+ * matched words (the index sets highlightPreTag to <mark>). Only those tags
+ * are let through.
  */
-function highlighted(hit: PrepHit, attr: 'title' | 'use'): string {
+function highlighted(hit: PrepHit, attr: 'title' | 'use' | 'file'): string {
   const value = hit._highlightResult?.[attr]?.value;
   if (!value) return escapeHtml(hit[attr]);
   return escapeHtml(value.replace(/<mark>/g, '\u0001').replace(/<\/mark>/g, '\u0002'))
@@ -27,18 +82,26 @@ export function sideMark(side: PrepRecord['side']): string {
   return `<span class="prep-side prep-side--${side}" title="${side === 'either' ? 'either side' : side}">${SIDE_LABELS[side]}</span>`;
 }
 
-/** "11/13" from "2026-11-13", for the quiet freshness note. */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Nov 13" from "2026-11-13", for the quiet freshness note. */
 export function shortDate(iso: string | null): string {
   if (!iso) return '';
   const [, m, d] = iso.split('-');
-  return `${Number(m)}/${Number(d)}`;
+  const month = MONTHS[Number(m) - 1];
+  return month ? `${month} ${Number(d)}` : '';
+}
+
+/** A link the page follows itself; a modified click still opens a new tab. */
+function navLink(cls: string, v: PrepView, label: string, attrs = ''): string {
+  return `<a class="${cls}" href="${escapeHtml(viewHref(v))}" data-nav${attrs ? ` ${attrs}` : ''}>${label}</a>`;
 }
 
 export function rowHtml(hit: PrepHit, index: number, selected: boolean, showFile = true): string {
   return `<li class="prep-row" role="option" id="prep-opt-${index}" data-index="${index}" aria-selected="${selected}">
     ${sideMark(hit.side)}
     <span class="prep-row-title">${highlighted(hit, 'title')}</span>
-    ${showFile ? `<span class="prep-row-file">${escapeHtml(hit.file)}</span>` : ''}
+    ${showFile ? `<span class="prep-row-file">${highlighted(hit, 'file')}</span>` : ''}
     <span class="prep-row-use"><span class="prep-row-type">${TYPE_LABELS[hit.type]}</span>${highlighted(hit, 'use')}</span>
   </li>`;
 }
@@ -56,8 +119,6 @@ export interface FileSummary {
   blocks: PrepRecord[];
 }
 
-const TYPE_ORDER: PrepType[] = ['uq', 'link', 'il', 'impact', 'answer', 'other'];
-
 export function summarise(records: PrepRecord[]): FileSummary[] {
   const files = new Map<string, FileSummary>();
   for (const r of records) {
@@ -72,39 +133,77 @@ export function summarise(records: PrepRecord[]): FileSummary[] {
   return [...files.values()].sort((a, b) => a.title.localeCompare(b.title));
 }
 
-export function fileRowHtml(f: FileSummary, index: number, selected: boolean): string {
+/** A file in the index. Each count opens the file with that type picked. */
+export function fileRowHtml(f: FileSummary, index: number, selected: boolean, v: PrepView): string {
   const counts = TYPE_ORDER
     .map(t => [t, f.blocks.filter(b => b.type === t).length] as const)
     .filter(([, n]) => n > 0)
-    .map(([t, n]) => `${n} ${TYPE_LABELS[t]}`)
-    .join('<span class="prep-dot">·</span>');
+    .map(([t, n]) => navLink('prep-count-part', { ...v, q: '', file: f.slug, types: [t], block: null }, `${n} ${TYPE_LABELS[t]}`,
+      `title="${escapeHtml(`${f.title}, ${TYPE_LABELS[t]} blocks`)}"`))
+    .join('');
   return `<li class="prep-row prep-row--file" role="option" id="prep-opt-${index}" data-index="${index}" aria-selected="${selected}">
     <span class="prep-count">${f.blocks.length}</span>
     <span class="prep-row-title">${escapeHtml(f.title)}</span>
-    ${f.freshness ? `<span class="prep-row-file">checked ${shortDate(f.freshness)}</span>` : '<span class="prep-row-file"></span>'}
-    <span class="prep-row-use">${counts}</span>
+    <span class="prep-row-file">${f.freshness ? `checked ${shortDate(f.freshness)}` : ''}</span>
+    <span class="prep-row-counts">${counts}</span>
   </li>`;
 }
 
-/** The right-hand pane for a file in the index: its blocks as a table of contents. */
-export function tocHtml(f: FileSummary): string {
+/**
+ * A file title for the serif heading. PP Editorial New draws its em dash as a
+ * bare 1.2em rule with no side bearings, which next to its narrow word spaces
+ * reads as a doubled dash at heading size. The heading shows an en dash
+ * instead; the title itself is unchanged.
+ */
+function headingTitle(title: string): string {
+  return escapeHtml(title).replace(/ \u2014 /g, ' <span class="prep-dash">\u2013</span> ');
+}
+
+/**
+ * The right-hand pane for a file: its blocks as a table of contents. `open`
+ * is false while the file is only previewed from the index, so the links
+ * there open it. Every part is a link: a row opens its block, a family
+ * heading picks that type, a side tag picks that side, and clicking a picked
+ * one again clears it.
+ */
+export function tocHtml(f: FileSummary, v: PrepView, open: boolean): string {
+  const at: PrepView = { ...v, q: '', file: f.slug, block: null };
+  const shown = f.blocks.filter(b => sideMatches(b.side, v.side) && (!v.types.length || v.types.includes(b.type)));
   const groups = new Map<string, PrepRecord[]>();
-  for (const b of f.blocks) groups.set(b.family, [...(groups.get(b.family) ?? []), b]);
+  for (const b of shown) groups.set(b.family, [...(groups.get(b.family) ?? []), b]);
+  const narrowed = shown.length !== f.blocks.length;
   return `<div class="prep-view-head">
-      <p class="prep-crumbs">${f.blocks.length} blocks${f.freshness ? ` <span class="prep-dot">·</span> checked ${shortDate(f.freshness)}` : ''}</p>
+      <p class="prep-crumbs">
+        ${narrowed ? `<span>${shown.length} shown</span>` : ''}
+        ${navLink('prep-crumb-link', { ...at, side: null, types: [] }, `${narrowed ? 'all ' : ''}${f.blocks.length} blocks`)}
+        ${f.freshness ? `<span>checked ${shortDate(f.freshness)}</span>` : ''}
+      </p>
       <div class="prep-actions">
-        <button class="prep-act" type="button" data-act="open-file">Show blocks <kbd>↵</kbd></button>
-        ${f.docUrl ? `<a class="prep-act" href="${escapeHtml(f.docUrl)}" target="_blank" rel="noopener">Open doc <kbd>⌘↵</kbd></a>` : ''}
+        <button class="prep-act" type="button" data-act="${open ? 'first-block' : 'open-file'}">Show blocks <kbd>↵</kbd></button>
+        ${f.docUrl ? `<a class="prep-act" href="${escapeHtml(f.docUrl)}" target="_blank" rel="noopener">Open doc <kbd>${MOD}↵</kbd></a>` : ''}
       </div>
     </div>
     <article class="prep-doc prep-doc--toc">
-      <h2 class="prep-toc-title">${escapeHtml(f.title)}</h2>
-      ${[...groups].map(([family, blocks]) => `
-        <h3 class="prep-toc-family">${escapeHtml(family)}</h3>
+      <h2 class="prep-toc-title">${headingTitle(f.title)}</h2>
+      ${shown.length ? '' : '<p class="prep-toc-none">No blocks here with these filters.</p>'}
+      ${[...groups].map(([family, blocks]) => {
+        const type = blocks[0].type;
+        const on = v.types.length === 1 && v.types[0] === type;
+        return `
+        <h3 class="prep-toc-family">${navLink('prep-toc-family-link', { ...at, types: on ? [] : [type] }, escapeHtml(family),
+          `data-on="${on}" title="${on ? 'Show every type' : `Only ${escapeHtml(TYPE_LABELS[type])} blocks`}"`)}</h3>
         <ol class="prep-toc-list">
-          ${blocks.map(b => `<li>${sideMark(b.side)}<span>${escapeHtml(b.title)}</span></li>`).join('')}
-        </ol>`).join('')}
+          ${blocks.map(b => `<li>${sideLink(b.side, at)}${navLink('prep-toc-link', { ...at, block: b.objectID }, escapeHtml(b.title))}</li>`).join('')}
+        </ol>`;
+      }).join('')}
     </article>`;
+}
+
+function sideLink(side: PrepSide, at: PrepView): string {
+  const on = at.side === side;
+  const label = side === 'either' ? 'blocks either side reads' : `${side} blocks`;
+  return navLink(`prep-side prep-side--${side}`, { ...at, side: on ? null : side }, SIDE_LABELS[side],
+    `data-on="${on}" title="${on ? 'Show both sides' : `Only ${label}`}"`);
 }
 
 const ALLOWED = new Set(['OL', 'UL', 'LI', 'P', 'A', 'B', 'I', 'STRONG', 'EM', 'BR']);
@@ -141,16 +240,13 @@ export function safeHtml(html: string): string {
   return box.innerHTML;
 }
 
-const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘' : 'Ctrl';
-
 /** The block as it reads in the doc, under the controls for taking it. */
-export function viewHtml(rec: PrepRecord): string {
+export function viewHtml(rec: PrepHit, v: PrepView): string {
+  const file: PrepView = { ...v, q: '', file: rec.file_slug, block: null };
   return `<div class="prep-view-head">
       <p class="prep-crumbs">
-        ${rec.doc_url ? `<a href="${escapeHtml(rec.doc_url)}" target="_blank" rel="noopener">${escapeHtml(rec.file)}</a>` : escapeHtml(rec.file)}
-        <span class="prep-dot">/</span>${escapeHtml(rec.family)}
-        <span class="prep-dot">/</span>${rec.position} of ${rec.file_blocks}
-        ${rec.freshness ? `<span class="prep-dot">·</span>checked ${shortDate(rec.freshness)}` : ''}
+        <span class="prep-path">${navLink('prep-crumb-link', file, escapeHtml(rec.file), 'data-up')}<span class="prep-sep">/</span>${navLink('prep-crumb-link', { ...file, types: [rec.type] }, escapeHtml(rec.family))}<span class="prep-sep">/</span>${rec.position} of ${rec.file_blocks}</span>
+        ${rec.freshness ? `<span>checked ${shortDate(rec.freshness)}</span>` : ''}
       </p>
       <div class="prep-actions">
         <button class="prep-act prep-act--copy" type="button" data-act="copy">Copy block <kbd>↵</kbd></button>
@@ -159,10 +255,9 @@ export function viewHtml(rec: PrepRecord): string {
       </div>
     </div>
     <article class="prep-doc" id="prep-doc">
-      <h3 class="prep-doc-title">${sideMark(rec.side)}${escapeHtml(rec.title)}</h3>
-      ${rec.use ? `<p class="prep-doc-use">${escapeHtml(rec.use)}</p>` : ''}
+      <h3 class="prep-doc-title">${sideMark(rec.side)}<span>${highlighted(rec, 'title')}</span></h3>
+      ${rec.use ? `<p class="prep-doc-use">${highlighted(rec, 'use')}</p>` : ''}
       <div class="prep-doc-body">${safeHtml(rec.html)}</div>
     </article>`;
 }
 
-export { MOD };

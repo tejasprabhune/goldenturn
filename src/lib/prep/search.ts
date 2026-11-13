@@ -13,15 +13,18 @@ import type { PrepKey, PrepRecord, PrepSide, PrepType } from './types';
 type Client = ReturnType<typeof algoliasearch>;
 
 export interface PrepFilters {
-  /** Empty means both. A side includes the blocks either side can read. */
-  sides: Set<Exclude<PrepSide, 'either'>>;
+  /**
+   * Empty means both. aff or neg includes the blocks either side can read;
+   * either alone means only those.
+   */
+  sides: Set<PrepSide>;
   /** Empty means every type. */
   types: Set<PrepType>;
   file: string | null;
 }
 
 export type PrepHit = PrepRecord & {
-  _highlightResult?: Partial<Record<'title' | 'use', { value: string }>>;
+  _highlightResult?: Partial<Record<'title' | 'use' | 'file', { value: string }>>;
 };
 
 export interface SearchResult {
@@ -46,7 +49,7 @@ export function facetFilters(f: PrepFilters): string[][] {
   // the same as neither.
   if (f.sides.size === 1) {
     const [side] = [...f.sides];
-    out.push([`side:${side}`, 'side:either']);
+    out.push(side === 'either' ? ['side:either'] : [`side:${side}`, 'side:either']);
   }
   if (f.types.size) out.push([...f.types].map(t => `type:${t}`));
   if (f.file) out.push([`file_slug:${f.file}`]);
@@ -106,7 +109,7 @@ export class PrepSearch {
           hitsPerPage: 30,
           facetFilters: facetFilters(filters),
           attributesToRetrieve: LIST_ATTRIBUTES,
-          attributesToHighlight: ['title', 'use'],
+          attributesToHighlight: ['title', 'use', 'file'],
         },
       });
       return { hits: res.hits as PrepHit[], nbHits: res.nbHits ?? res.hits.length, ms: performance.now() - t0 };

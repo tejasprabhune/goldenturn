@@ -56,6 +56,8 @@ import '../styles/prep.css';
 
         <p class="prep-keys" aria-hidden="true">
           <span><kbd>↑↓</kbd>move</span>
+          <span><kbd>→</kbd>open</span>
+          <span><kbd>←</kbd>up</span>
           <span><kbd>↵</kbd>copy</span>
           <span><kbd>⇧↵</kbd>copy link</span>
           <span><kbd class="js-mod">⌘</kbd><kbd>↵</kbd>open doc</span>
@@ -76,10 +78,10 @@ import '../styles/prep.css';
   import { PrepSearch, type PrepFilters, type PrepHit } from '../lib/prep/search';
   import { blockHtml, blockText, copyPlain, copyRich } from '../lib/prep/clipboard';
   import {
-    escapeHtml, familyHead, fileRowHtml, rowHtml, summarise, tocHtml, viewHtml, MOD,
-    type FileSummary,
+    escapeHtml, familyHead, fileRowHtml, readView, rowHtml, summarise, tocHtml, viewHref, viewHtml, viewQuery,
+    MOD, NO_VIEW, type FileSummary, type PrepView,
   } from '../lib/prep/render';
-  import type { PrepRecord, PrepType } from '../lib/prep/types';
+  import type { PrepRecord, PrepSide, PrepType } from '../lib/prep/types';
 
   const gate = document.getElementById('prep-gate') as HTMLParagraphElement;
   const app = document.getElementById('prep-app') as HTMLDivElement;
@@ -106,18 +108,127 @@ import '../styles/prep.css';
   /** What the list shows: the file index, or blocks (a file's, or a search's). */
   type Item = { kind: 'file'; file: FileSummary } | { kind: 'block'; hit: PrepHit };
   let items: Item[] = [];
+  /** The highlighted row; -1 on a file's overview, where no row is picked yet. */
   let selected = 0;
   let files: FileSummary[] = [];
   let seq = 0;
   let offline = false;
   let lastQuery = '';
-  let returnTo: string | null = null;
+  /** Where the reader is. The URL always says the same. */
+  let cur: PrepView = { ...NO_VIEW };
+  /** The block in the right pane when one is open. */
+  let openHit: PrepHit | null = null;
 
-  // ---- gate ----
+  /*
+   * Moving around: the index, a search, a file's overview and an open block
+   * are each a history entry, so Back returns to the last of them and a URL
+   * reopens it. Up and down within a level (the next block, a filter) replace
+   * the entry rather than adding one. Each entry remembers the one before it,
+   * so going up (← or a link to the parent) can step back when that entry is
+   * the parent, which keeps ← and Back the same and history from growing.
+   */
+  interface Entry { prep: true; prev: string | null }
+
+  function entry(): Entry | null {
+    const s = history.state as Entry | null;
+    return s?.prep ? s : null;
+  }
+
+  function writeHistory(v: PrepView, how: 'push' | 'replace') {
+    const url = `${location.pathname}${viewQuery(v)}`;
+    if (how === 'push' && viewQuery(v) !== location.search) {
+      history.pushState({ prep: true, prev: location.search } satisfies Entry, '', url);
+    } else {
+      history.replaceState({ prep: true, prev: entry()?.prev ?? null } satisfies Entry, '', url);
+    }
+  }
+
+  /** 0 the index or a search, 1 a file, 2 a block. */
+  const depth = (v: PrepView) => v.block ? 2 : v.file ? 1 : 0;
+  const same = (a: PrepView, b: PrepView) => viewQuery(a) === viewQuery(b);
+
+  function prevView(): PrepView | null {
+    const prev = entry()?.prev;
+    return prev == null ? null : readView(prev);
+  }
+
+  function parentOf(v: PrepView): PrepView | null {
+    if (v.block) {
+      const file = openHit?.objectID === v.block ? openHit.file_slug : v.file;
+      return file ? { ...v, q: '', file, block: null } : null;
+    }
+    if (v.file) return { ...v, file: null };
+    return null;
+  }
+
+  /**
+   * Go to a view. Deeper, or another file, is a new entry; the same level is
+   * a replacement. Shallower steps back when the entry before is that view,
+   * or, going up, any view at that level of the same file: a block's parent
+   * is its file whether the reader came from its overview or a search in it.
+   */
+  function navigate(t: PrepView, up = false) {
+    endTyping();
+    const dt = depth(t);
+    const dc = depth(cur);
+    if (dt < dc) {
+      const prev = prevView();
+      const isParent = prev && (up ? depth(prev) === dt && prev.file === t.file && !prev.block : same(prev, t));
+      if (isParent) history.back();
+      else go(t, 'replace');
+      return;
+    }
+    go(t, dt > dc || t.file !== cur.file ? 'push' : 'replace');
+  }
+
+  function goUp(): boolean {
+    const p = parentOf(cur);
+    if (!p) return false;
+    navigate(p, true);
+    return true;
+  }
+
+  function go(t: PrepView, how: 'push' | 'replace' | 'none', opts: RenderOpts = {}) {
+    if (how !== 'none') writeHistory(t, how);
+    const from = cur;
+    cur = t;
+    filters.sides = new Set(t.side ? [t.side] : []);
+    filters.types = new Set(t.types);
+    filters.file = t.file;
+    syncControls();
+    if (input.value.trim() !== t.q) input.value = t.q;
+    void render(from, opts);
+  }
+
+  window.addEventListener('popstate', () => {
+    if (app.hidden) return;
+    endTyping();
+    go(readView(location.search), 'none');
+  });
+
+  /*
+   * Typing: the first key after a pause or a move adds one entry, the rest of
+   * that query replace it, so one Back undoes one query however it was typed.
+   */
+  let typing = false;
+  let typingTimer: ReturnType<typeof setTimeout> | undefined;
+  function endTyping() {
+    typing = false;
+    clearTimeout(typingTimer);
+  }
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (q === cur.q && !cur.block) return;
+    go({ ...cur, q, block: null }, typing ? 'replace' : 'push');
+    typing = true;
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => { typing = false; }, 1200);
+  });
 
   const GATE: Record<PrepRefusalReason, string> = {
     signed_out: 'Prep is private. <button class="link account-link" type="button" data-signin>Sign in</button> with an account that has access.',
-    not_allowed: 'This account does not have prep access. Ask the site owner to add it.',
+    not_allowed: 'This account does not have prep access. Ask Tejas to add it.',
     not_configured: 'Prep search is not set up yet.',
     offline: 'You are offline. Prep opens when the connection is back.',
     error: 'Prep could not reach the server. Try again in a moment.',
@@ -133,6 +244,7 @@ import '../styles/prep.css';
     list.innerHTML = '';
     view.innerHTML = '';
     items = [];
+    openHit = null;
   }
 
   async function start() {
@@ -146,10 +258,6 @@ import '../styles/prep.css';
     app.hidden = false;
     setTop();
     input.focus();
-
-    const params = new URLSearchParams(location.search);
-    input.value = params.get('q') ?? '';
-    filters.file = params.get('file');
     statusEl.textContent = 'Loading the index…';
 
     try {
@@ -159,27 +267,11 @@ import '../styles/prep.css';
     }
     fileSelect.innerHTML = '<option value="">all files</option>' +
       files.map(f => `<option value="${escapeHtml(f.slug)}">${escapeHtml(f.title)}</option>`).join('');
-    syncControls();
 
-    const linked = params.get('b');
-    if (linked) await openLinked(linked);
-    else await update();
-  }
-
-  /** A link copied with ⇧↵: search for its title and land on it. */
-  async function openLinked(id: string) {
-    try {
-      const hit = await search.block(id);
-      if (!hit) {
-        await update();
-        flashStatus('That block is no longer in the files.');
-        return;
-      }
-      input.value = hit.title;
-      await update(hit.objectID);
-    } catch (e) {
-      handleFailure(e);
-    }
+    // A reload keeps the entry's link to the one before it.
+    const v = readView(location.search);
+    writeHistory(v, 'replace');
+    go(v, 'none');
   }
 
   /** True when the failure ended the page (the gate is up). */
@@ -197,68 +289,110 @@ import '../styles/prep.css';
     if (on) {
       rtt.textContent = 'no answer';
       rtt.dataset.slow = 'true';
-      statusEl.innerHTML = `<span data-tone="warn">${navigator.onLine ? 'Search is not answering.' : 'Offline.'}</span> Showing the last results; they refresh when the connection is back.`;
+      statusEl.innerHTML = `<span><span data-tone="warn">${navigator.onLine ? 'Search is not answering.' : 'Offline.'}</span> Showing the last results; they refresh when the connection is back.</span>`;
     }
   }
 
-  window.addEventListener('online', () => { if (offline) void update(currentId()); });
+  window.addEventListener('online', () => { if (offline) void render(cur, { keepId: currentId() }); });
   window.addEventListener('offline', () => setOffline(true));
-
-  // ---- searching ----
 
   function currentId(): string | undefined {
     const item = items[selected];
     return item?.kind === 'block' ? item.hit.objectID : undefined;
   }
 
-  function writeUrl(q: string) {
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    if (filters.file) params.set('file', filters.file);
-    const qs = params.toString();
-    history.replaceState(null, '', `${location.pathname}${qs ? `?${qs}` : ''}`);
+  interface RenderOpts {
+    /** Keep this block picked in a search if it is still there. */
+    keepId?: string;
+    /** A filter changed: an open block it hides closes rather than being fetched. */
+    fromFilter?: boolean;
   }
 
   /**
-   * Every keypress runs this with no debounce. Answers can come back out of
-   * order, so each carries a sequence number and only the newest is drawn.
+   * Draws `cur`. Every keypress runs this with no debounce. Answers can come
+   * back out of order, so each carries a sequence number and only the newest
+   * is drawn.
    */
-  async function update(keepId?: string) {
-    const q = input.value.trim();
+  async function render(from: PrepView, opts: RenderOpts = {}) {
     const mine = ++seq;
-    writeUrl(q);
+    const v = cur;
+    app.dataset.level = v.block ? 'block' : v.q ? 'results' : v.file ? 'overview' : 'files';
 
-    if (!q && !filters.file) {
+    if (!v.q && !v.file && !v.block) {
       offline = false;
       rtt.textContent = '';
+      openHit = null;
       items = files.map(file => ({ kind: 'file', file }));
       // Back out of a file lands on that file, not the top of the index.
-      const back = files.findIndex(f => f.slug === returnTo);
-      selected = back >= 0 ? back : lastQuery ? 0 : Math.min(selected, Math.max(items.length - 1, 0));
-      returnTo = null;
+      const back = files.findIndex(f => f.slug === from.file);
+      selected = back >= 0 ? back : lastQuery ? 0 : Math.max(0, Math.min(selected, items.length - 1));
       const total = files.reduce((n, f) => n + f.blocks.length, 0);
-      statusEl.innerHTML = `${files.length} files<span class="prep-dot">·</span>${total} blocks<span class="prep-dot">·</span>type to search, or pick a file`;
+      statusEl.innerHTML = `<span>${files.length} files</span><span>${total} blocks</span><span>type to search, or pick a file</span>`;
       lastQuery = '';
       renderList();
       return;
     }
 
     try {
-      const res = filters.file && !q ? await search.file(filters.file, filters) : await search.search(q, filters);
+      let fetched: PrepHit | null = null;
+      // A block's URL from a copied link names no file; its file is its list.
+      if (v.block && !v.q && !v.file) {
+        fetched = await search.block(v.block);
+        if (mine !== seq) return;
+        if (!fetched) return missingBlock();
+        cur = { ...v, file: fetched.file_slug };
+        filters.file = cur.file;
+        syncControls();
+        writeHistory(cur, 'replace');
+      }
+      const res = cur.q ? await search.search(cur.q, filters) : await search.file(cur.file!, filters);
       if (mine !== seq) return;
       offline = false;
-      const fresh = q !== lastQuery;
-      lastQuery = q;
+      const fresh = cur.q !== lastQuery;
+      lastQuery = cur.q;
       items = res.hits.map(hit => ({ kind: 'block', hit }));
-      const keep = keepId ? items.findIndex(i => i.kind === 'block' && i.hit.objectID === keepId) : -1;
-      selected = keep >= 0 ? keep : fresh ? 0 : Math.min(selected, Math.max(items.length - 1, 0));
+      openHit = null;
+
+      if (cur.block) {
+        const id = cur.block;
+        const i = items.findIndex(it => it.kind === 'block' && it.hit.objectID === id);
+        if (i >= 0) {
+          selected = i;
+          openHit = (items[i] as { hit: PrepHit }).hit;
+        } else if (opts.fromFilter) {
+          cur = { ...cur, block: null };
+          writeHistory(cur, 'replace');
+          app.dataset.level = cur.q ? 'results' : 'overview';
+        } else {
+          openHit = fetched ?? await search.block(id);
+          if (mine !== seq) return;
+          if (!openHit) return missingBlock();
+          selected = -1;
+        }
+      }
+      if (!cur.block) {
+        if (!cur.q) {
+          selected = -1;
+        } else {
+          const keepId = opts.keepId ?? from.block;
+          const keep = keepId ? items.findIndex(it => it.kind === 'block' && it.hit.objectID === keepId) : -1;
+          selected = keep >= 0 ? keep : fresh ? 0 : Math.max(0, Math.min(selected, items.length - 1));
+        }
+      }
       showRtt(res.ms);
-      renderStatus(q, res.nbHits);
+      renderStatus(cur.q, res.nbHits);
       renderList();
     } catch (e) {
       if (mine !== seq) return;
       handleFailure(e);
     }
+  }
+
+  function missingBlock() {
+    flashStatus('That block is no longer in the files.');
+    const v: PrepView = { ...cur, block: null };
+    writeHistory(v, 'replace');
+    go(v, 'none');
   }
 
   function showRtt(ms: number) {
@@ -269,34 +403,35 @@ import '../styles/prep.css';
   }
 
   function renderStatus(q: string, n: number) {
-    const file = files.find(f => f.slug === filters.file);
+    const file = files.find(f => f.slug === cur.file);
     const parts: string[] = [];
-    if (file) parts.push(`<button type="button" data-clear-file>all files</button><span class="prep-dot">/</span>${escapeHtml(file.title)}`);
-    parts.push(q ? `${n} block${n === 1 ? '' : 's'}` : `${n} blocks in reading order`);
-    statusEl.innerHTML = parts.join('<span class="prep-dot">·</span>');
-    statusEl.querySelector('[data-clear-file]')?.addEventListener('click', () => setFile(null));
+    if (file) {
+      const up = escapeHtml(viewHref({ ...cur, file: null, block: null }));
+      parts.push(`<span class="prep-path"><a href="${up}" data-nav data-up>all files</a><span class="prep-sep">/</span>${escapeHtml(file.title)}</span>`);
+    }
+    parts.push(`<span>${q ? `${n} block${n === 1 ? '' : 's'}` : `${n} blocks in reading order`}</span>`);
+    statusEl.innerHTML = parts.join('');
   }
-
-  // ---- drawing ----
 
   function renderList() {
     if (items.length === 0) {
-      const q = input.value.trim();
+      const q = cur.q;
       const narrowed = filters.sides.size || filters.types.size || filters.file;
-      list.innerHTML = `<li class="prep-empty">Nothing for “${escapeHtml(q)}”${narrowed ? ' with these filters' : ''}.
-        ${narrowed ? '<br><button class="link account-link" type="button" data-clear-filters>Clear the filters</button> or try fewer words.' : 'Try fewer words, or shorthand like “econ uq” or “a2 heg bad”.'}</li>`;
+      const what = q ? `Nothing for “${escapeHtml(q)}”` : 'No blocks in this file';
+      list.innerHTML = `<li class="prep-empty">${what}${narrowed ? ' with these filters' : ''}.
+        ${narrowed ? '<br><button class="link account-link" type="button" data-clear-filters>Clear the filters</button>' + (q ? ' or try fewer words.' : '.') : 'Try fewer words, or shorthand like “econ uq” or “a2 heg bad”.'}</li>`;
       list.querySelector('[data-clear-filters]')?.addEventListener('click', clearFilters);
       input.setAttribute('aria-activedescendant', '');
       renderView();
       return;
     }
 
-    const inFile = Boolean(filters.file) && !input.value.trim();
+    const inFile = Boolean(cur.file) && !cur.q;
     let html = '';
     let family = '';
     items.forEach((item, i) => {
       if (item.kind === 'file') {
-        html += fileRowHtml(item.file, i, i === selected);
+        html += fileRowHtml(item.file, i, i === selected, cur);
         return;
       }
       if (inFile && item.hit.family !== family) {
@@ -306,17 +441,22 @@ import '../styles/prep.css';
       html += rowHtml(item.hit, i, i === selected, !inFile);
     });
     list.innerHTML = html;
-    input.setAttribute('aria-activedescendant', `prep-opt-${selected}`);
+    input.setAttribute('aria-activedescendant', selected >= 0 ? `prep-opt-${selected}` : '');
+    list.querySelector<HTMLElement>(`#prep-opt-${selected}`)?.scrollIntoView({ block: 'nearest' });
     renderView();
   }
 
   function renderView() {
-    const item = items[selected];
-    if (!item) {
-      view.innerHTML = files.length ? hintHtml() : '';
-      return;
+    if (openHit) {
+      view.innerHTML = viewHtml(openHit, cur);
+    } else if (cur.file && !cur.q) {
+      const f = files.find(x => x.slug === cur.file);
+      view.innerHTML = f ? tocHtml(f, cur, true) : '';
+    } else {
+      const item = items[selected];
+      if (!item) view.innerHTML = files.length ? hintHtml() : '';
+      else view.innerHTML = item.kind === 'file' ? tocHtml(item.file, cur, false) : viewHtml(item.hit, cur);
     }
-    view.innerHTML = item.kind === 'file' ? tocHtml(item.file) : viewHtml(item.hit);
     view.scrollTop = 0;
   }
 
@@ -325,20 +465,54 @@ import '../styles/prep.css';
       <kbd>↑</kbd> <kbd>↓</kbd> to move, <kbd>↵</kbd> to copy the block into your doc.</p>`;
   }
 
-  function select(i: number, scroll = true) {
-    if (!items.length) return;
-    const next = Math.max(0, Math.min(items.length - 1, i));
-    if (next === selected) return;
+  /** Moves the highlight without drawing the list again. */
+  function setSelected(i: number, scroll = true) {
     list.querySelector(`#prep-opt-${selected}`)?.setAttribute('aria-selected', 'false');
-    selected = next;
+    selected = i;
     const row = list.querySelector<HTMLElement>(`#prep-opt-${selected}`);
     row?.setAttribute('aria-selected', 'true');
     if (scroll) row?.scrollIntoView({ block: 'nearest' });
-    input.setAttribute('aria-activedescendant', `prep-opt-${selected}`);
+    input.setAttribute('aria-activedescendant', row ? `prep-opt-${selected}` : '');
+  }
+
+  /** Opens a row: a file as its overview, a block in the pane. */
+  function openRow(i: number, how: 'push' | 'replace') {
+    const item = items[i];
+    if (!item) return;
+    if (item.kind === 'file') {
+      navigate({ ...cur, q: '', file: item.file.slug, block: null });
+      return;
+    }
+    endTyping();
+    cur = { ...cur, block: item.hit.objectID };
+    writeHistory(cur, how);
+    openHit = item.hit;
+    app.dataset.level = 'block';
+    setSelected(i);
     renderView();
   }
 
-  // ---- taking a block ----
+  function openFirst() {
+    const i = items.findIndex(it => it.kind === 'block');
+    if (i >= 0) openRow(i, 'push');
+  }
+
+  function move(delta: number) {
+    if (!items.length) return;
+    // From a file's overview, down opens its first block.
+    if (selected < 0) {
+      if (delta > 0) openFirst();
+      return;
+    }
+    const next = Math.max(0, Math.min(items.length - 1, selected + delta));
+    if (next === selected) return;
+    if (cur.block) {
+      openRow(next, 'replace');
+      return;
+    }
+    setSelected(next);
+    renderView();
+  }
 
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   function flashStatus(html: string) {
@@ -365,6 +539,7 @@ import '../styles/prep.css';
   }
 
   function currentBlock(): PrepRecord | null {
+    if (openHit) return openHit;
     const item = items[selected];
     return item?.kind === 'block' ? item.hit : null;
   }
@@ -385,7 +560,7 @@ import '../styles/prep.css';
   function copyLink() {
     const rec = currentBlock();
     if (!rec) return;
-    const url = `${location.origin}/prep/?b=${encodeURIComponent(rec.objectID)}`;
+    const url = `${location.origin}${viewHref({ ...NO_VIEW, file: rec.file_slug, block: rec.objectID })}`;
     copyPlain(url)
       .then(() => {
         markDone('link');
@@ -395,95 +570,92 @@ import '../styles/prep.css';
   }
 
   function openDoc() {
+    const rec = currentBlock();
     const item = items[selected];
-    const url = item?.kind === 'block' ? item.hit.doc_url : item?.kind === 'file' ? item.file.docUrl : null;
+    const file = !rec && item?.kind === 'file' ? item.file : files.find(f => f.slug === cur.file);
+    const url = rec ? rec.doc_url : file?.docUrl;
     if (url) window.open(url, '_blank', 'noopener');
     else flashStatus('This file has no Google Doc yet.');
   }
 
-  // ---- filters ----
-
   function syncControls() {
     document.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b =>
-      b.setAttribute('aria-pressed', String(filters.sides.has(b.dataset.side as 'aff' | 'neg'))));
+      b.setAttribute('aria-pressed', String(filters.sides.has(b.dataset.side as PrepSide))));
     document.querySelectorAll<HTMLButtonElement>('[data-type]').forEach(b =>
       b.setAttribute('aria-pressed', String(filters.types.has(b.dataset.type as PrepType))));
     fileSelect.value = filters.file ?? '';
     fileSelect.dataset.active = String(Boolean(filters.file));
   }
 
-  function setFile(slug: string | null) {
-    if (!slug) returnTo = filters.file;
-    filters.file = slug;
-    selected = 0;
-    syncControls();
-    void update();
+  /** A filter is part of where the reader is, but a refinement of it: it replaces the entry. */
+  function refine(t: PrepView) {
+    go(t, 'replace', { fromFilter: true, keepId: currentId() });
     input.focus();
   }
 
   function clearFilters() {
-    filters.sides.clear();
-    filters.types.clear();
-    filters.file = null;
-    syncControls();
-    void update();
+    navigate({ ...cur, side: null, types: [], file: null, block: null });
     input.focus();
   }
 
   document.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.addEventListener('click', () => {
-    const side = b.dataset.side as 'aff' | 'neg';
+    const side = b.dataset.side as PrepSide;
     // A side is a choice, not a set: picking neg while aff is on swaps them.
-    const on = filters.sides.has(side);
-    filters.sides.clear();
-    if (!on) filters.sides.add(side);
-    syncControls();
-    void update(currentId());
-    input.focus();
+    refine({ ...cur, side: cur.side === side ? null : side });
   }));
 
   document.querySelectorAll<HTMLButtonElement>('[data-type]').forEach(b => b.addEventListener('click', () => {
     const t = b.dataset.type as PrepType;
-    if (filters.types.has(t)) filters.types.delete(t);
-    else filters.types.add(t);
-    syncControls();
-    void update(currentId());
-    input.focus();
+    const types = cur.types.includes(t) ? cur.types.filter(x => x !== t) : [...cur.types, t];
+    refine({ ...cur, types });
   }));
 
-  fileSelect.addEventListener('change', () => setFile(fileSelect.value || null));
+  fileSelect.addEventListener('change', () => {
+    navigate({ ...cur, file: fileSelect.value || null, block: null }, !fileSelect.value);
+    input.focus();
+  });
 
-  // ---- input ----
-
-  input.addEventListener('input', () => { void update(); });
+  // Links the page follows itself. A modified or middle click is left to the
+  // browser, so any of them opens in a new tab.
+  app.addEventListener('click', e => {
+    const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[data-nav]');
+    if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(readView(new URL(a.href).search), a.hasAttribute('data-up'));
+  }, { capture: true });
 
   list.addEventListener('click', e => {
     const row = (e.target as HTMLElement).closest<HTMLElement>('.prep-row');
     if (!row) return;
     const i = Number(row.dataset.index);
     const item = items[i];
-    if (item?.kind === 'file') {
-      setFile(item.file.slug);
-      return;
-    }
-    select(i, false);
+    if (!item) return;
+    // A block already open swaps for this one; otherwise this is a step in.
+    openRow(i, cur.block ? 'replace' : 'push');
     // One column: the block is under the list, so take the reader to it.
-    if (window.matchMedia('(max-width: 899px)').matches) view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (item.kind === 'block' && window.matchMedia('(max-width: 899px)').matches) {
+      view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   });
 
   view.addEventListener('click', e => {
     const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
     if (act === 'copy') copyBlock();
     else if (act === 'link') copyLink();
-    else if (act === 'open-file') {
-      const item = items[selected];
-      if (item?.kind === 'file') setFile(item.file.slug);
-    }
+    else if (act === 'open-file') openRow(selected, 'push');
+    else if (act === 'first-block') openFirst();
   });
 
   /**
    * Keys are caught on the window before anything else sees them, so `/` here
    * means the prep box rather than the site-wide search the layout opens.
    * Only keys this page uses are stopped.
+   *
+   * ← goes up a level and → opens the picked row. In the search box they
+   * still move the caret: ← only acts when the box is empty or the caret is
+   * at the start with nothing selected, → when the box is empty or the caret
+   * is at the end, where the arrow would do nothing.
    */
   window.addEventListener('keydown', e => {
     if (app.hidden) return;
@@ -492,8 +664,12 @@ import '../styles/prep.css';
     const inOther = !inBox && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
     const onControl = !inBox && /^(BUTTON|A)$/.test(target.tagName);
     if (document.querySelector('dialog[open]')) return;
+    if (e.isComposing) return;
 
     const stop = () => { e.preventDefault(); e.stopPropagation(); };
+    const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+    const caret = (at: 'start' | 'end') => !inBox || !input.value ||
+      (input.selectionStart === input.selectionEnd && input.selectionStart === (at === 'start' ? 0 : input.value.length));
 
     if (e.key === '/' && !inBox && !inOther) {
       stop();
@@ -509,40 +685,56 @@ import '../styles/prep.css';
       } else if (input.value) {
         // First escape selects what was typed, so the next word replaces it.
         if (input.selectionStart === 0 && input.selectionEnd === input.value.length) {
-          input.value = '';
-          void update();
+          endTyping();
+          go({ ...cur, q: '', block: null }, 'push');
         } else {
           input.select();
         }
-      } else if (filters.file) {
-        setFile(null);
+      } else {
+        goUp();
       }
       return;
     }
     if (inOther) return;
 
+    if (e.key === 'ArrowLeft' && plain && caret('start')) {
+      if (goUp()) stop();
+      return;
+    }
+    if (e.key === 'ArrowRight' && plain && caret('end') && !cur.block) {
+      stop();
+      if (selected < 0) openFirst();
+      else openRow(selected, 'push');
+      return;
+    }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       stop();
-      select(selected + (e.key === 'ArrowDown' ? 1 : -1));
+      move(e.key === 'ArrowDown' ? 1 : -1);
       return;
     }
     if (e.key === 'PageDown' || e.key === 'PageUp') {
       if (!inBox) return;
       stop();
-      select(selected + (e.key === 'PageDown' ? 8 : -8));
+      move(e.key === 'PageDown' ? 8 : -8);
       return;
     }
-    if (e.key === 'Backspace' && inBox && !input.value && filters.file) {
+    if (e.key === 'Backspace' && inBox && !input.value && cur.file) {
       stop();
-      setFile(null);
+      goUp();
       return;
     }
     if (e.key === 'Enter' && !onControl) {
       stop();
+      if (e.metaKey || e.ctrlKey) {
+        openDoc();
+        return;
+      }
+      if (selected < 0 && !openHit) {
+        openFirst();
+        return;
+      }
       const item = items[selected];
-      if (!item) return;
-      if (e.metaKey || e.ctrlKey) openDoc();
-      else if (item.kind === 'file') setFile(item.file.slug);
+      if (item?.kind === 'file') openRow(selected, 'push');
       else if (e.shiftKey) copyLink();
       else copyBlock();
     }
