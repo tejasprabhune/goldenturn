@@ -230,12 +230,16 @@ async function main() {
     // second GPU, and this runs on a schedule: with a backlog and no check,
     // every run would stack more paid GPUs on top of the ones already going.
     const signedIn = azSignedIn();
+    console.log(`\nstarting transcription for ${untranscribed.length} round(s)`);
     const free: string[] = [];
     // Jobs whose last execution failed a short while ago, and when it ended.
     const resting: Array<{ job: string; at: number }> = [];
     let busy = 0;
     for (const job of signedIn ? TX_JOBS : []) {
       const runs = executions(job);
+      // What each job last did, in the log: "started" every run and nothing
+      // to show for it was all there was to go on when the jobs were failing.
+      console.log(`  ${job}: ${runs ? (runs[0] ? `last run ${runs[0].status}, ${clock(runs[0].start)} to ${clock(runs[0].end)}` : 'never run') : 'could not be asked'}`);
       if (!runs || runs.some(r => r.status === 'Running' || r.status === 'Processing')) busy++;
       else if (runs[0]?.status === 'Failed' && Date.now() - runs[0].end < TX_REST_MS) {
         resting.push({ job, at: runs[0].end });
@@ -246,7 +250,6 @@ async function main() {
     const stopped = resting.length >= 2;
     const idle = stopped ? [] : free;
     const resumeAt = resting.length ? Math.max(...resting.map(r => r.at)) + TX_REST_MS : 0;
-    console.log(`\nstarting transcription for ${untranscribed.length} round(s)`);
     if (!signedIn) {
       console.log('  not signed in to Azure, so no transcription job can be started');
     } else if (busy) {
