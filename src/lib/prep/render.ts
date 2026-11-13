@@ -142,7 +142,6 @@ export function fileRowHtml(f: FileSummary, index: number, selected: boolean, v:
       `title="${escapeHtml(`${f.title}, ${TYPE_LABELS[t]} blocks`)}"`))
     .join('');
   return `<li class="prep-row prep-row--file" role="option" id="prep-opt-${index}" data-index="${index}" aria-selected="${selected}">
-    <span class="prep-count">${f.blocks.length}</span>
     <span class="prep-row-title">${escapeHtml(f.title)}</span>
     <span class="prep-row-file">${f.freshness ? `checked ${shortDate(f.freshness)}` : ''}</span>
     <span class="prep-row-counts">${counts}</span>
@@ -240,6 +239,43 @@ export function safeHtml(html: string): string {
   return box.innerHTML;
 }
 
+/**
+ * Marks the query's words in a block's body. Search highlights only the fields
+ * it searches, and the body is not one, so this is done here: a word is marked
+ * when it starts with a query word, or equals it when the query word is short.
+ * It works on text nodes only, so links and lists are left as they are, and
+ * copying is unaffected because a copy is built from the record.
+ */
+export function markTerms(html: string, q: string): string {
+  const terms = [...new Set(q.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(t => t.length >= 2))];
+  if (!terms.length) return html;
+  const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = terms.map(t => (t.length < 4 ? `${escape(t)}(?![\\p{L}\\p{N}])` : `${escape(t)}[\\p{L}\\p{N}]*`));
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${parts.join('|')})`, 'giu');
+  const box = document.createElement('div');
+  box.innerHTML = html;
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+  for (const node of nodes) {
+    const text = node.data;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const m of text.matchAll(re)) {
+      frag.append(text.slice(last, m.index));
+      const mark = document.createElement('mark');
+      mark.textContent = m[0];
+      frag.append(mark);
+      last = (m.index ?? 0) + m[0].length;
+    }
+    if (last) {
+      frag.append(text.slice(last));
+      node.replaceWith(frag);
+    }
+  }
+  return box.innerHTML;
+}
+
 /** The block as it reads in the doc, under the controls for taking it. */
 export function viewHtml(rec: PrepHit, v: PrepView): string {
   const file: PrepView = { ...v, q: '', file: rec.file_slug, block: null };
@@ -257,7 +293,7 @@ export function viewHtml(rec: PrepHit, v: PrepView): string {
     <article class="prep-doc" id="prep-doc">
       <h3 class="prep-doc-title">${sideMark(rec.side)}<span>${highlighted(rec, 'title')}</span></h3>
       ${rec.use ? `<p class="prep-doc-use">${highlighted(rec, 'use')}</p>` : ''}
-      <div class="prep-doc-body">${safeHtml(rec.html)}</div>
+      <div class="prep-doc-body">${markTerms(safeHtml(rec.html), v.q)}</div>
     </article>`;
 }
 
