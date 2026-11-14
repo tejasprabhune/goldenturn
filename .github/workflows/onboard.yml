@@ -105,8 +105,6 @@ jobs:
           # Azure's GPUs are no longer available to this account, so nothing is
           # started there. Remove once transcription runs somewhere else.
           TX_PAUSED: '1'
-          # One run's worth: lists what exists in Azure, for the move off it.
-          AZ_INVENTORY: '1'
         run: pnpm exec tsx scripts/ingest/auto.ts
 
       # Only when a round actually changed: a rebuild every twenty minutes
