@@ -102,6 +102,11 @@ jobs:
           # Every GPU job, not the five the script defaults to. They are only
           # paid for while they run, and there are four hundred rounds waiting.
           TX_JOBS: 'gt-rx-2,gt-rx-3,gt-rx-4,gt-rx-5,gt-rx-6,gt-rx-7,gt-rx-8,gt-rx-9,gt-rx-10,gt-rx-11'
+          # Azure's GPUs are no longer available to this account, so nothing is
+          # started there. Remove once transcription runs somewhere else.
+          TX_PAUSED: '1'
+          # One run's worth: lists what exists in Azure, for the move off it.
+          AZ_INVENTORY: '1'
         run: pnpm exec tsx scripts/ingest/auto.ts
 
       # Only when a round actually changed: a rebuild every twenty minutes

@@ -172,6 +172,40 @@ const STORAGE_KEY_ENV = [
 
 const clock = (ms: number) => `${new Date(ms).toISOString().slice(11, 16)} UTC`;
 
+/**
+ * What exists in the Azure account, sent to the API's event log and nowhere
+ * else. Asked for once, to plan the move off Azure; the names are kept out of
+ * this run's own log, which anyone can read.
+ */
+async function azureInventory(): Promise<void> {
+  const ask = (args: string[]): unknown => {
+    try {
+      return JSON.parse(sh('az', [...args, '-o', 'json']));
+    } catch (err) {
+      return { failed: errorText(err).slice(0, 160) };
+    }
+  };
+  const found = {
+    resources: ask(['resource', 'list', '--query', '[].{n:name,t:type,g:resourceGroup,l:location,sku:sku.name}']),
+    jobs: ask(['containerapp', 'job', 'list', '--query',
+      '[].{n:name,g:resourceGroup,image:properties.template.containers[0].image,res:properties.template.containers[0].resources,profile:properties.workloadProfileName,trigger:properties.configuration.triggerType,timeout:properties.configuration.replicaTimeout,env:properties.template.containers[0].env[].name}']),
+    apps: ask(['containerapp', 'list', '--query',
+      '[].{n:name,g:resourceGroup,image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}']),
+    environments: ask(['containerapp', 'env', 'list', '--query',
+      '[].{n:name,g:resourceGroup,l:location,profiles:properties.workloadProfiles}']),
+    registries: ask(['acr', 'list', '--query', '[].{n:name,g:resourceGroup,sku:sku.name,server:loginServer}']),
+  };
+  const text = JSON.stringify(found);
+  const size = 900;
+  const parts = Math.ceil(text.length / size);
+  const events = Array.from({ length: parts }, (_, i) => ({
+    stage: 'index' as const, state: 'skipped' as const,
+    note: `azure-inventory ${String(i + 1).padStart(3, '0')}/${parts} ${text.slice(i * size, (i + 1) * size)}`,
+  }));
+  const sent = await reportEvents(events);
+  console.log(`azure inventory: ${parts} part(s), ${sent}`);
+}
+
 async function slugsUnder(client: S3Client, prefix: string, suffix: string): Promise<Set<string>> {
   const out = new Set<string>();
   let token: string | undefined;
@@ -212,6 +246,8 @@ async function main() {
 
   const client = r2();
   let changed = false;
+
+  if (process.env.AZ_INVENTORY === '1' && azSignedIn()) await azureInventory();
 
   // Asked before any round is touched. With a storage key the bucket refuses,
   // every upload fails, and each round would be marked as failed for a fault
@@ -263,7 +299,20 @@ async function main() {
   const playable = [...audio].filter(s => peaks.has(s));
   const owed = playable.filter(s => !transcripts.has(s));
 
-  if (owed.length) {
+  // Switched off while transcription moves off Azure, whose GPUs are no longer
+  // available: a job started there waits for a machine that never comes. The
+  // rounds stay owed, and the first run after it is switched back on finds
+  // them.
+  const txPaused = process.env.TX_PAUSED === '1';
+  if (owed.length && txPaused) {
+    console.log(`\ntranscription owed for ${owed.length} round(s); it is paused, so none is started`);
+    await reportEvents(owed.slice(0, 200).map(slug => ({
+      stage: 'transcript' as const, state: 'skipped' as const, slug,
+      note: 'transcription is paused while it moves to new machines',
+    })));
+  }
+
+  if (owed.length && !txPaused) {
     // A job that is still working is not asked to take more on. Starting it
     // again does not queue behind the first, it runs a second replica on a
     // second GPU, and this runs on a schedule: with a backlog and no check,
