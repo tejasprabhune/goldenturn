@@ -121,7 +121,8 @@ def sweep():
 @app.function(
     image=gpu_image,
     gpu="T4",
-    cpu=8,
+    # Modal counts physical cores, so this is the eight vCPUs the Azure jobs had.
+    cpu=4,
     memory=16384,
     timeout=GPU_TIMEOUT_S,
     secrets=[secret],
