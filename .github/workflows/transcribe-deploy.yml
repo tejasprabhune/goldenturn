@@ -1,0 +1,70 @@
+name: deploy transcription
+
+# Puts scripts/transcribe/modal_app.py on Modal, where it runs on its own
+# schedule. It also copies the storage key and the Hugging Face token into the
+# Modal secret the app reads, so after either is replaced in this repository's
+# secrets, run this by hand once.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/transcribe/**'
+      - '.github/workflows/transcribe-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_S3_KEY: ${{ secrets.CLOUDFLARE_S3_KEY }}
+      CLOUDFLARE_S3_SECRET: ${{ secrets.CLOUDFLARE_S3_SECRET }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Says which secret is missing and stops, instead of deploying an app
+      # that fails on its first run. Without the Hugging Face token the
+      # transcripts come back with no speaker labels, which the speech fitter
+      # cannot work from.
+      - name: check what the app needs is set
+        id: have
+        run: |
+          missing=""
+          for name in MODAL_TOKEN_ID MODAL_TOKEN_SECRET CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_S3_KEY CLOUDFLARE_S3_SECRET HF_TOKEN; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "not deployed: these repository secrets are not set:$missing"
+          else
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.have.outputs.ok == '1'
+        with:
+          python-version: '3.12'
+
+      - name: install the Modal client
+        if: steps.have.outputs.ok == '1'
+        run: pip install --quiet modal==1.6.4
+
+      - name: give Modal the storage key and the Hugging Face token
+        if: steps.have.outputs.ok == '1'
+        run: |
+          modal secret create goldenturn-transcribe \
+            CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
+            CLOUDFLARE_S3_KEY="$CLOUDFLARE_S3_KEY" \
+            CLOUDFLARE_S3_SECRET="$CLOUDFLARE_S3_SECRET" \
+            HF_TOKEN="$HF_TOKEN" \
+            --force > /dev/null
+
+      - name: deploy
+        if: steps.have.outputs.ok == '1'
+        run: modal deploy scripts/transcribe/modal_app.py

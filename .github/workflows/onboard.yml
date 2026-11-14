@@ -103,7 +103,9 @@ jobs:
           # paid for while they run, and there are four hundred rounds waiting.
           TX_JOBS: 'gt-rx-2,gt-rx-3,gt-rx-4,gt-rx-5,gt-rx-6,gt-rx-7,gt-rx-8,gt-rx-9,gt-rx-10,gt-rx-11'
           # Azure's GPUs are no longer available to this account, so nothing is
-          # started there. Remove once transcription runs somewhere else.
+          # started there. Transcription is moving to Modal, where it runs on
+          # its own schedule (scripts/transcribe/modal_app.py) and needs
+          # nothing from this run but the audio in the bucket.
           TX_PAUSED: '1'
         run: pnpm exec tsx scripts/ingest/auto.ts
 
