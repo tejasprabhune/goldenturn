@@ -61,7 +61,7 @@ function azSignedIn(): boolean {
   }
 }
 
-interface Execution { status: string; start: number; end: number }
+interface Execution { name: string; status: string; start: number; end: number | null }
 
 /**
  * A job's executions, newest first, or null when Azure could not be asked.
@@ -73,27 +73,66 @@ interface Execution { status: string; start: number; end: number }
 function executions(job: string): Execution[] | null {
   try {
     const out = sh('az', ['containerapp', 'job', 'execution', 'list', '-n', job, '-g', RG,
-      '--query', '[].{status:properties.status,start:properties.startTime,end:properties.endTime}',
+      '--query', '[].{name:name,status:properties.status,start:properties.startTime,end:properties.endTime}',
       '-o', 'json']);
-    const rows = JSON.parse(out) as Array<{ status?: string; start?: string; end?: string }>;
+    const rows = JSON.parse(out) as Array<{ name?: string; status?: string; start?: string; end?: string }>;
     return rows
       .map(r => {
         const start = Date.parse(r.start ?? '') || 0;
-        return { status: r.status ?? 'Unknown', start, end: Date.parse(r.end ?? '') || start };
+        const end = Date.parse(r.end ?? '') || 0;
+        // An execution that has not ended is given no end, or a placeholder.
+        return { name: r.name ?? '', status: r.status ?? 'Unknown', start, end: end > start ? end : null };
       })
-      .sort((a, b) => b.start - a.start);
+      .sort((x, y) => y.start - x.start);
   } catch {
     return null;
+  }
+}
+
+const ENDED = new Set(['Succeeded', 'Failed', 'Stopped', 'Degraded']);
+const underWay = (r: Execution) => r.status === 'Running' || r.status === 'Processing';
+/**
+ * Started and not over, whether or not it has got as far as running.
+ *
+ * Only "Running" used to count. An execution waiting on a GPU is "Unknown"
+ * for as long as it waits, so its job looked free, and every run started
+ * another execution of it for the same rounds on top of the ones waiting.
+ */
+const inFlight = (r: Execution) => underWay(r) || (!ENDED.has(r.status) && r.end === null);
+
+/**
+ * How long an execution may take to start running before it is given up on.
+ * A GPU node can take a while to arrive; one that has not come in this long
+ * is not coming, and the execution is stopped so it cannot start later
+ * alongside its replacement.
+ */
+const TX_START_MS = Math.max(1, Number(process.env.TX_START_MIN ?? '45')) * 60_000;
+
+/** The rounds a job was last given, or null when Azure could not be asked. */
+function slugsGiven(job: string): string[] | null {
+  try {
+    const out = sh('az', ['containerapp', 'job', 'show', '-n', job, '-g', RG,
+      '--query', "properties.template.containers[0].env[?name=='SLUGS'].value | [0]", '-o', 'tsv']);
+    return out.split(/[\s,]+/).filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+function stopExecution(job: string, name: string): void {
+  try {
+    sh('az', ['containerapp', 'job', 'stop', '-n', job, '-g', RG, '--job-execution-name', name, '-o', 'none']);
+  } catch (err) {
+    console.log(`  ${job}: ${name} could not be stopped (${errorText(err).slice(0, 160)})`);
   }
 }
 
 /**
  * How long a job is left alone after an execution of it failed.
  *
- * A job that fails is not a job that is free. Started again by every run, one
- * with a storage key the bucket refuses transcribed the same three rounds on a
- * GPU every fifteen minutes and threw each result away at the upload, and
- * every one of those runs reported that transcription had started.
+ * A job that fails is not a job that is free: started again by every run, it
+ * fails four times an hour, on a GPU each time if it gets as far as one, and
+ * every one of those runs reports that transcription has started.
  */
 const TX_REST_MS = Math.max(0, Number(process.env.TX_REST_MIN ?? '60')) * 60_000;
 
@@ -222,28 +261,67 @@ async function main() {
   // 2. Transcribe anything playable that has no transcript. Discovered rather
   //    than remembered, so a round half-done last run is finished this one.
   const playable = [...audio].filter(s => peaks.has(s));
-  const untranscribed = playable.filter(s => !transcripts.has(s)).slice(0, TX_LIMIT);
+  const owed = playable.filter(s => !transcripts.has(s));
 
-  if (untranscribed.length) {
+  if (owed.length) {
     // A job that is still working is not asked to take more on. Starting it
     // again does not queue behind the first, it runs a second replica on a
     // second GPU, and this runs on a schedule: with a backlog and no check,
     // every run would stack more paid GPUs on top of the ones already going.
     const signedIn = azSignedIn();
-    console.log(`\nstarting transcription for ${untranscribed.length} round(s)`);
+    console.log(`\ntranscription owed for ${owed.length} round(s)`);
     const free: string[] = [];
-    // Jobs whose last execution failed a short while ago, and when it ended.
-    const resting: Array<{ job: string; at: number }> = [];
+    // Jobs left alone for now, since when, and what happened to them.
+    const resting: Array<{ job: string; at: number; why: string }> = [];
+    // Rounds a job in flight already has. Without this a round that takes
+    // longer than the gap between runs is handed to a second job as well.
+    const held = new Set<string>();
+    let holdAll = false;
     let busy = 0;
     for (const job of signedIn ? TX_JOBS : []) {
       const runs = executions(job);
-      // What each job last did, in the log: "started" every run and nothing
-      // to show for it was all there was to go on when the jobs were failing.
-      console.log(`  ${job}: ${runs ? (runs[0] ? `last run ${runs[0].status}, ${clock(runs[0].start)} to ${clock(runs[0].end)}` : 'never run') : 'could not be asked'}`);
-      if (!runs || runs.some(r => r.status === 'Running' || r.status === 'Processing')) busy++;
-      else if (runs[0]?.status === 'Failed' && Date.now() - runs[0].end < TX_REST_MS) {
-        resting.push({ job, at: runs[0].end });
+      if (!runs) {
+        console.log(`  ${job}: could not be asked`);
+        busy++;
+        holdAll = true;
+        continue;
+      }
+      // What each job has been doing, in the log: "started" every run and
+      // nothing to show for it was all there was to go on when they failed.
+      console.log(`  ${job}: ${runs.slice(0, 6).map(r =>
+        `${r.status} ${clock(r.start)}${r.end ? ` to ${clock(r.end)}` : ''}`).join(', ') || 'never run'}`);
+      // Nothing outlives a job's own time limit, so an old execution with no
+      // end is one Azure lost track of, not one still going.
+      const live = runs.filter(r => inFlight(r) && Date.now() - r.start < 6 * 3600_000);
+      for (const old of live.slice(1)) {
+        console.log(`  ${job}: stopping ${old.name}, started at ${clock(old.start)} and since started again`);
+        stopExecution(job, old.name);
+      }
+      const now = live[0];
+      if (now && !underWay(now) && Date.now() - now.start > TX_START_MS) {
+        const mins = Math.round((Date.now() - now.start) / 60_000);
+        console.log(`  ${job}: stopping ${now.name}, not running ${mins} minutes after it was started`);
+        stopExecution(job, now.name);
+        resting.push({ job, at: Date.now(), why: `had not started running after ${mins} minutes` });
+        problems.push(`transcription job ${job} had not started running after ${mins} minutes and was stopped`);
+      } else if (now) {
+        busy++;
+        const slugs = slugsGiven(job);
+        if (slugs) slugs.forEach(s => held.add(s));
+        else holdAll = true;
+      } else if ((runs[0]?.status === 'Failed' || runs[0]?.status === 'Stopped')
+          && Date.now() - (runs[0].end ?? runs[0].start) < TX_REST_MS) {
+        const at = runs[0].end ?? runs[0].start;
+        const failed = runs[0].status === 'Failed';
+        resting.push({ job, at, why: failed ? 'failed its last run' : 'was stopped' });
+        // Said once, on the run that finds it, since a run that ends in error
+        // is what reaches a person and four an hour would be noise.
+        if (failed && Date.now() - at < 20 * 60_000) problems.push(`transcription job ${job} failed its last run`);
       } else free.push(job);
+    }
+    const untranscribed = owed.filter(s => !holdAll && !held.has(s)).slice(0, TX_LIMIT);
+    if (untranscribed.length < owed.length) {
+      console.log(`  ${owed.length - untranscribed.length} round(s) are with a job already`);
     }
     // One job failing may be that job. Two is the thing they share, and the
     // rest would fail the same way, each on a GPU of its own.
@@ -256,14 +334,11 @@ async function main() {
       console.log(`  ${busy} job(s) still busy from a previous run`);
     }
     for (const r of resting) {
-      console.log(`  ${r.job} failed its last run at ${clock(r.at)} and is left alone until ${clock(r.at + TX_REST_MS)}`);
-      // Said once, on the run that finds it, since a run that ends in error
-      // is what reaches a person and four an hour would be noise.
-      if (Date.now() - r.at < 20 * 60_000) problems.push(`transcription job ${r.job} failed its last run`);
+      console.log(`  ${r.job} ${r.why} and is left alone until ${clock(r.at + TX_REST_MS)}`);
     }
     if (stopped) {
-      console.log(`  ${resting.length} jobs failed, so none is started until ${clock(resumeAt)}`);
-    } else if (signedIn && !idle.length) {
+      console.log(`  ${resting.length} jobs went wrong, so none is started until ${clock(resumeAt)}`);
+    } else if (signedIn && !idle.length && untranscribed.length) {
       console.log('  every job is busy; the rest wait for the next run');
     }
     const handed = new Set<string>();
@@ -299,10 +374,10 @@ async function main() {
     if (waiting.length) {
       // Failed rather than skipped when it is a failure they wait on: the
       // round's page then says the step went wrong and is tried again.
-      const failedJobs = resting.map(r => r.job).join(', ');
+      const wrong = resting.map(r => `${r.job} ${r.why}`).join(', ');
       await reportEvents(waiting.map(slug => (stopped || (resting.length && !free.length && !busy)
         ? { stage: 'transcript' as const, state: 'failed' as const, slug,
-            note: `${failedJobs} failed the last run; transcription is tried again after ${clock(resumeAt)}` }
+            note: `${wrong}; transcription is tried again after ${clock(resumeAt)}` }
         : { stage: 'transcript' as const, state: 'skipped' as const, slug,
             note: signedIn ? 'every transcription job was busy' : 'not signed in to Azure' })));
     }
