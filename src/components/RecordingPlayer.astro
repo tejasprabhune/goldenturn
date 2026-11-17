@@ -72,22 +72,32 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
   {videoFile && !videoEmbed && (
     <!--
       Only rendered for links already known to answer, which is settled at
-      ingest rather than discovered here: finding out in the browser meant
-      loading metadata from a file of several hundred megabytes on every visit,
-      whether or not anybody wanted to watch it.
+      ingest rather than discovered here. The file is several hundred megabytes
+      on somebody's Dropbox, so nothing of it is asked for until the picture is
+      switched on and the round is playing, and it is let go of again when
+      nobody is watching (lib/videosync.ts). It has no controls of its own: the
+      sound comes from R2, and the waveform and transport below drive both.
     -->
-    <div class="player-video" id="player-video">
-      <!-- Muted and following the audio: the sound comes from R2, which is the
-           copy that cannot be moved or deleted out from under the page. -->
-      <video
-        id="player-file"
-        src={videoFile}
-        preload="none"
-        playsinline
-        muted
-        controls
-        title={`Video of ${title}`}
-      ></video>
+    <div class="player-video video-file" id="player-video" data-src={videoFile} data-state="off">
+      <button type="button" class="video-facade" id="video-facade">
+        <span class="video-facade-label">Show video</span>
+        <span class="label label-muted">follows the audio, and loads only while it plays</span>
+      </button>
+      <div class="video-frame" id="video-frame" hidden>
+        <video
+          id="player-file"
+          preload="none"
+          playsinline
+          muted
+          tabindex="-1"
+          aria-label={`Video of ${title}`}
+        ></video>
+        <canvas class="video-still" id="video-still" aria-hidden="true" hidden></canvas>
+        <button type="button" class="video-surface" id="video-surface" aria-label="Play or pause">
+          <span class="video-note label" id="video-note">plays with the audio</span>
+        </button>
+        <button type="button" class="chip video-full" id="video-full">full screen</button>
+      </div>
     </div>
   )}
 
@@ -140,7 +150,9 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
 
         <div class="transport-right">
           {(videoEmbed || videoFile) && (
-            <button id="toggle-video" class="chip" aria-pressed="true">video on</button>
+            <button id="toggle-video" class="chip" aria-pressed={videoEmbed ? 'true' : 'false'}>
+              {videoEmbed ? 'video on' : 'video off'}
+            </button>
           )}
           <label class="speed">
             <span class="label label-muted">speed</span>
@@ -270,11 +282,102 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
     margin-bottom: 1.25rem;
   }
 
-  .player-video video {
-    display: block;
+  .video-facade {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
     width: 100%;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--rule);
+    background: var(--paper-raised);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .video-facade:hover,
+  .video-facade:focus-visible {
+    border-color: var(--ink);
+  }
+
+  .video-facade-label {
+    font-weight: 600;
+  }
+
+  .video-file:not([data-state='off']) .video-facade {
+    display: none;
+  }
+
+  .video-frame {
+    position: relative;
     aspect-ratio: 16 / 9;
     background: var(--ink);
+    overflow: hidden;
+  }
+
+  .video-frame[hidden] {
+    display: none;
+  }
+
+  .video-frame video,
+  .video-still {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .video-still[hidden] {
+    display: none;
+  }
+
+  /* The whole picture is the play button, as it is on any video. */
+  .video-surface {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .video-note {
+    padding: 0.3rem 0.6rem;
+    background: color-mix(in srgb, var(--ink) 70%, transparent);
+    color: var(--paper);
+  }
+
+  .video-file[data-state='playing'] .video-note {
+    display: none;
+  }
+
+  /* Always there, not only under a pointer: a phone has no hover. */
+  .video-full {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    background: color-mix(in srgb, var(--ink) 70%, transparent);
+    color: var(--paper);
+    border-color: color-mix(in srgb, var(--paper) 45%, transparent);
+  }
+
+  .player-video:fullscreen {
+    margin: 0;
+    background: var(--ink);
+    display: flex;
+    align-items: center;
+  }
+
+  .player-video:fullscreen .video-frame {
+    width: 100%;
+    max-height: 100%;
   }
 
   .player-video iframe {
@@ -796,7 +899,7 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
     sideOf, usable, placed, byTime, applyBoundaries, parseSpan, withSpans,
     conflicts, SPEECH_SETS, formatOf, type Speech, type Span,
   } from '../lib/speeches';
-  import { syncYouTube, syncVideoElement, type VideoSync } from '../lib/videosync';
+  import { syncYouTube, syncVideoFile, type VideoSync } from '../lib/videosync';
   import { applyBoost, readBoost, saveBoost } from '../lib/boost';
 
   // The frontmatter MEDIA constant is server-side only; the client needs its own.
@@ -1140,35 +1243,85 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
 
     /**
      * The video follows the audio, and the audio follows anyone who scrubs the
-     * video. Only for YouTube, which is every embedded round but one, and only
-     * where the audio exists to be the clock.
+     * video. For a YouTube embed and for a video file, and only where the
+     * audio exists to be the clock.
      */
     let sync: VideoSync | null = null;
     const videoFileEl = document.getElementById('player-file') as HTMLVideoElement | null;
-    if (iframe && iframe.src.includes('youtube.com') && iframe.src.includes('enablejsapi')) {
-      sync = syncYouTube(iframe, audio, () => Number(speed?.value ?? 1));
-    } else if (videoFileEl) {
-      sync = syncVideoElement(videoFileEl, audio);
-      // A link checked at ingest can still have gone since; losing the picture
-      // is better than a broken player sitting above the waveform.
-      videoFileEl.addEventListener('error', () => {
-        if (videoWrap) videoWrap.hidden = true;
-        toggleVideo?.setAttribute('hidden', '');
-      });
-    }
+    // Whether the picture is wanted is how somebody watches, not a property
+    // of one round, so like the speed it is kept across rounds. A file starts
+    // off until it has been asked for once; an embed starts on, as it always
+    // has, unless it has been switched off.
+    const VIDEO_KEY = 'gt:video';
+    const videoPref = localStorage.getItem(VIDEO_KEY);
 
-    toggleVideo?.addEventListener('click', () => {
-      const on = toggleVideo.getAttribute('aria-pressed') === 'true';
-      toggleVideo.setAttribute('aria-pressed', String(!on));
-      toggleVideo.textContent = on ? 'video off' : 'video on';
-      if (videoWrap) videoWrap.hidden = on;
+    function showVideo(on: boolean, remember = true) {
+      if (!toggleVideo) return;
+      toggleVideo.setAttribute('aria-pressed', String(on));
+      toggleVideo.textContent = on ? 'video on' : 'video off';
+      if (remember) localStorage.setItem(VIDEO_KEY, on ? '1' : '0');
+      if (videoFileEl && videoWrap) {
+        videoWrap.dataset.state = on ? 'idle' : 'off';
+        document.getElementById('video-frame')!.hidden = !on;
+      } else if (videoWrap) {
+        videoWrap.hidden = !on;
+      }
       if (sync) {
         // Reloading the iframe to stop it would throw away the player this is
         // driving, so a synced video is told to stop instead.
-        if (on) sync.detach(); else sync.reattach();
-      } else if (on && iframe) {
+        if (on) sync.reattach(); else sync.detach();
+      } else if (!on && iframe) {
         iframe.src = iframe.src; // an embed we cannot drive stops by reloading
       }
+    }
+
+    if (iframe && iframe.src.includes('youtube.com') && iframe.src.includes('enablejsapi')) {
+      sync = syncYouTube(iframe, audio, () => Number(speed?.value ?? 1));
+      if (videoPref === '0') showVideo(false, false);
+    } else if (videoFileEl && videoWrap) {
+      const note = document.getElementById('video-note')!;
+      sync = syncVideoFile({
+        video: videoFileEl,
+        audio,
+        src: videoWrap.dataset.src!,
+        wrap: videoWrap,
+        still: document.getElementById('video-still') as HTMLCanvasElement | null,
+        onState(state) {
+          if (videoWrap.dataset.state === 'off') return;
+          videoWrap.dataset.state = state;
+          note.textContent = state === 'loading' ? 'loading video' : 'plays with the audio';
+        },
+        // A link checked at ingest can still have gone since; losing the
+        // picture is better than a broken box sitting above the waveform.
+        onError() {
+          sync?.detach();
+          videoWrap.hidden = true;
+          toggleVideo?.setAttribute('hidden', '');
+        },
+      });
+      sync.detach();
+      if (videoPref === '1') showVideo(true, false);
+
+      // Asking for the picture is asking to watch, so it starts the round.
+      document.getElementById('video-facade')?.addEventListener('click', () => {
+        showVideo(true);
+        play();
+      });
+      const surface = document.getElementById('video-surface')!;
+      surface.addEventListener('click', toggle);
+      function fullScreen() {
+        if (document.fullscreenElement) { void document.exitFullscreen(); return; }
+        if (videoWrap!.requestFullscreen) { void videoWrap!.requestFullscreen().catch(() => {}); return; }
+        // A phone will only show the video element itself full screen, with
+        // its own controls, which the sync listens to.
+        (videoFileEl as any).webkitEnterFullscreen?.();
+      }
+      surface.addEventListener('dblclick', fullScreen);
+      document.getElementById('video-full')?.addEventListener('click', fullScreen);
+    }
+
+    toggleVideo?.addEventListener('click', () => {
+      showVideo(toggleVideo.getAttribute('aria-pressed') !== 'true');
     });
 
     function seekFromEvent(e: PointerEvent) {

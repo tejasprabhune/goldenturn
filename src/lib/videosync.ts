@@ -47,37 +47,145 @@ const SCRUB = 2.5;
 /** How long after our own seek to disregard what the video reports. */
 const SETTLE_MS = 900;
 
+/** What the picture is doing, for the page to show the right thing over it. */
+export type VideoFileState = 'idle' | 'loading' | 'playing';
+
+export interface VideoFileOptions {
+  video: HTMLVideoElement;
+  audio: HTMLAudioElement;
+  /** The file itself. Not on the element: it is attached only while wanted. */
+  src: string;
+  /** The box the picture sits in, watched to know whether anyone can see it. */
+  wrap: HTMLElement;
+  /** Where the last frame is kept while the file is let go of. */
+  still?: HTMLCanvasElement | null;
+  onState?: (state: VideoFileState) => void;
+  onError?: () => void;
+}
+
+/** How long after the audio stops before the file is let go of. */
+const IDLE_MS = 45_000;
+/** How long the picture may be out of sight before the file is let go of. */
+const UNSEEN_MS = 4_000;
+
 /**
  * The same arrangement for a video file we can address directly, which is the
- * Dropbox mp4s and movs a third of the parli rounds were recorded as. Far less
- * work than an embed: a media element has a clock that can simply be read and
- * written, so there is nothing to poll and nothing to guess about.
+ * Dropbox mp4s and movs a third of the parli rounds were recorded as.
+ *
+ * These files are several hundred megabytes and sit on somebody's Dropbox, so
+ * the picture is fetched only while it is being watched: the audio is playing,
+ * the box is on screen and the tab is in front. A browser given a plain file
+ * decides for itself how far ahead to read and cannot be told to read less,
+ * but it cannot read a file it has been told to forget. So when the audio has
+ * been stopped for a while, or the picture is scrolled away, or the tab is
+ * behind another (which is how most of a round is listened to), the source is
+ * taken off the element and the connection goes with it. The last frame is
+ * kept in a canvas so the box does not go blank, and the file is asked for
+ * again, from the place the audio has reached, when it is next wanted.
  */
-export function syncVideoElement(video: HTMLVideoElement, audio: HTMLAudioElement): VideoSync {
+export function syncVideoFile(opts: VideoFileOptions): VideoSync {
+  const { video, audio, src, wrap, still = null } = opts;
   let attached = true;
+  let loaded = false;
+  let inView = true;
   let settleUntil = 0;
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  let unseen: ReturnType<typeof setTimeout> | undefined;
   const now = () => performance.now();
-  const ours = () => { settleUntil = now() + 250; };
+  const ours = () => { settleUntil = now() + 400; };
+  const state = (s: VideoFileState) => opts.onState?.(s);
 
   // Silent, so the round is not heard twice, and so it may follow the audio
   // into playing without a gesture of its own.
   video.muted = true;
+  video.preload = 'none';
 
-  const place = () => {
-    if (!attached) return;
+  const wanted = () => attached && inView && !document.hidden;
+
+  function keepFrame() {
+    if (!still || !video.videoWidth || video.readyState < 2) return;
+    try {
+      still.width = video.videoWidth;
+      still.height = video.videoHeight;
+      still.getContext('2d')?.drawImage(video, 0, 0);
+      still.hidden = false;
+    } catch {
+      // A frame that cannot be drawn is a box that goes dark, nothing worse.
+    }
+  }
+
+  function release() {
+    clearTimeout(idle);
+    clearTimeout(unseen);
+    if (!loaded) return;
+    keepFrame();
     ours();
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    loaded = false;
+    state('idle');
+  }
+
+  function load() {
+    if (loaded) return;
+    loaded = true;
+    ours();
+    video.src = src;
+    video.load();
+    state('loading');
+  }
+
+  function place() {
+    if (!loaded || video.readyState < 1) return;
     if (Math.abs(video.currentTime - audio.currentTime) > DRIFT) {
+      ours();
       video.currentTime = audio.currentTime;
     }
-  };
+  }
 
-  audio.addEventListener('play', () => { if (attached) { place(); void video.play().catch(() => {}); } });
-  audio.addEventListener('pause', () => { if (attached) video.pause(); });
-  audio.addEventListener('seeking', () => { if (attached) { ours(); video.currentTime = audio.currentTime; } });
-  audio.addEventListener('timeupdate', place);
+  /** Brings the picture to where the audio is and sets it going, if wanted. */
+  function follow() {
+    clearTimeout(idle);
+    if (!wanted() || audio.paused) return;
+    load();
+    place();
+    ours();
+    void video.play().catch(() => {});
+  }
+
+  video.addEventListener('loadedmetadata', () => {
+    ours();
+    video.playbackRate = audio.playbackRate;
+    if (audio.currentTime > 0.5) video.currentTime = audio.currentTime;
+  });
+  video.addEventListener('playing', () => {
+    if (still) still.hidden = true;
+    state('playing');
+  });
+  video.addEventListener('waiting', () => { if (loaded) state('loading'); });
+  video.addEventListener('error', () => {
+    if (!loaded) return; // taking the source off reports an error of its own
+    loaded = false;
+    opts.onError?.();
+  });
+
+  audio.addEventListener('play', follow);
+  audio.addEventListener('pause', () => {
+    if (!loaded) return;
+    ours();
+    video.pause();
+    clearTimeout(idle);
+    idle = setTimeout(release, IDLE_MS);
+  });
+  audio.addEventListener('seeking', () => {
+    if (loaded && video.readyState >= 1) { ours(); video.currentTime = audio.currentTime; }
+  });
+  audio.addEventListener('timeupdate', () => { if (loaded) place(); else follow(); });
   audio.addEventListener('ratechange', () => { video.playbackRate = audio.playbackRate; });
 
-  // Someone using the video's own controls moves the audio instead.
+  // Only reached where the picture has controls of its own, which is a phone
+  // showing it full screen: someone using those moves the audio instead.
   video.addEventListener('seeked', () => {
     if (!attached || now() < settleUntil) return;
     if (Math.abs(video.currentTime - audio.currentTime) > SCRUB) audio.currentTime = video.currentTime;
@@ -86,13 +194,26 @@ export function syncVideoElement(video: HTMLVideoElement, audio: HTMLAudioElemen
     if (attached && audio.paused && now() >= settleUntil) void audio.play().catch(() => {});
   });
   video.addEventListener('pause', () => {
-    if (attached && !audio.paused && now() >= settleUntil) audio.pause();
+    if (attached && loaded && !audio.paused && now() >= settleUntil) audio.pause();
   });
+
+  function seen() {
+    clearTimeout(unseen);
+    if (wanted()) follow();
+    else if (loaded) unseen = setTimeout(() => { if (!wanted()) release(); }, UNSEEN_MS);
+  }
+  document.addEventListener('visibilitychange', seen);
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(entries => {
+      inView = entries[entries.length - 1].isIntersecting || document.fullscreenElement === wrap;
+      seen();
+    }, { threshold: 0.1 }).observe(wrap);
+  }
 
   return {
     get active() { return attached; },
-    detach() { attached = false; video.pause(); },
-    reattach() { attached = true; place(); if (!audio.paused) void video.play().catch(() => {}); },
+    detach() { attached = false; release(); },
+    reattach() { attached = true; follow(); },
   };
 }
 

@@ -2544,6 +2544,15 @@ const routes: Record<string, (req: Request, env: Env, url: URL, user: User | nul
     ).bind(status, kept, now(), status === 'pending' ? 0 : 1, objectID).run();
     await recordIngest(env, objectID, row.slug, 'audio',
       status === 'ingested' ? 'done' : status === 'failed' ? 'failed' : 'queued', kept);
+    // A link that is itself a video file has just been fetched whole, so the
+    // page may offer the picture. Until this, only video-check.ts said so,
+    // and that is run by hand: a round submitted since had its audio and no
+    // video. Search not hearing it costs the picture, not the round.
+    if (status === 'ingested' && /\.(mp4|mov|webm)$/i.test(row.link.split('?')[0])) {
+      await algolia(env, `${env.ALGOLIA_INDEX}/${objectID}/partial?createIfNotExists=false`, {
+        method: 'POST', body: JSON.stringify({ objectID, video_ok: true }),
+      }).catch(() => null);
+    }
     return json({ ok: true });
   },
 
