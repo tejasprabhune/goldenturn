@@ -68,16 +68,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg
           pipx install yt-dlp
 
-      # Only needed to start the transcription jobs. Without it the run still
-      # pulls audio and fits speeches, and says transcription was skipped.
-      - name: sign in to Azure
-        if: ${{ env.AZURE_CREDENTIALS != '' }}
-        env:
-          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
       - name: onboard
         id: run
         env:
@@ -95,18 +85,6 @@ jobs:
           PUBLIC_ALGOLIA_INDEX_NAME: all_rounds
           # Writing a round's topic back to the index is part of onboarding it.
           ALGOLIA_ADMIN_KEY: ${{ secrets.ALGOLIA_ADMIN_KEY }}
-          # Each execution loads the model before it transcribes anything, so a
-          # run that takes two rounds spends a tenth of itself starting up. With
-          # hundreds outstanding it is worth handing each job a longer stint.
-          TX_LIMIT: '60'
-          # Every GPU job, not the five the script defaults to. They are only
-          # paid for while they run, and there are four hundred rounds waiting.
-          TX_JOBS: 'gt-rx-2,gt-rx-3,gt-rx-4,gt-rx-5,gt-rx-6,gt-rx-7,gt-rx-8,gt-rx-9,gt-rx-10,gt-rx-11'
-          # Azure's GPUs are no longer available to this account, so nothing is
-          # started there. Transcription is moving to Modal, where it runs on
-          # its own schedule (scripts/transcribe/modal_app.py) and needs
-          # nothing from this run but the audio in the bucket.
-          TX_PAUSED: '1'
         run: pnpm exec tsx scripts/ingest/auto.ts
 
       # Only when a round actually changed: a rebuild every twenty minutes

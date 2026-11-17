@@ -1683,7 +1683,7 @@ exec "$REAL_NPX" "$@"`);
       assert.match(bad.progress.failure.reason, /could not be read as audio or video/);
       assert.deepEqual(bad.events.map(e => `${e.stage}:${e.state}`), ['audio:failed', 'audio:started', 'audio:queued']);
     });
-    await test('auto.ts: one run reports in, pulls audio, starts transcription, fits speeches and publishes the index', async () => {
+    await test('auto.ts: one run reports in, pulls audio, leaves transcription to Modal, fits speeches and publishes the index', async () => {
       bucket.set('transcripts/fit-ok-aaaaaa.json', Buffer.from('{"segments":[]}'));
       bucket.set('transcripts/nofit-bbbbbb.json', Buffer.from('{"segments":[]}'));
       const late = await submit({ title: 'Doubles - Ingest GG vs Test HH', link: 'https://vimeo.com/123456789' });
@@ -1694,10 +1694,10 @@ exec "$REAL_NPX" "$@"`);
       assert.equal(readFileSync(output, 'utf8'), 'changed=true\n', 'the workflow is told to rebuild');
       assert.equal((await detail(late)).status, 'failed', 'the pending round was taken by the audio step');
 
-      // Transcription: the one playable round with no transcript, handed to the idle job.
-      const az = readFileSync(azLog, 'utf8');
-      assert.match(az, new RegExp(`job update -n gt-ok -g thava --set-env-vars SLUGS=${good.slug} `));
-      assert.match(az, /job start -n gt-ok/);
+      // Transcription: the one playable round with no transcript is Modal's
+      // to find. The run starts nothing for it, and says it is waiting.
+      assert.match(r.out, /1 round\(s\) waiting on a transcript from Modal/);
+      assert.ok(!existsSync(azLog) || readFileSync(azLog, 'utf8') === '', 'nothing was asked of Azure');
       // Speeches: only the rounds that needed fitting were handed to the fitter.
       assert.match(r.out, /fitting \(stand-in\): fit-ok-aaaaaa nofit-bbbbbb\n/);
       assert.ok(bucket.has('speeches/fit-ok-aaaaaa.json'));
@@ -1708,29 +1708,17 @@ exec "$REAL_NPX" "$@"`);
       const said = (await ingestLog()).map(e => `${e.stage}:${e.state}:${e.slug ?? ''}:${e.note ?? ''}`);
       for (const want of [
         'run:started::',
-        `transcript:started:${good.slug}:gt-ok`,
+        `transcript:started:${good.slug}:modal`,
         'speeches:started:fit-ok-aaaaaa:', 'speeches:started:nofit-bbbbbb:',
         'speeches:failed:nofit-bbbbbb:the fitter produced no timings',
         'index:done::',
-        'run:done::audio for 1 submitted; transcription started for 1; speeches for 1',
+        'run:done::audio for 1 submitted; speeches for 1',
       ]) assert.ok(said.includes(want), `the run did not report ${want}\n${said.slice(0, 14).join('\n')}`);
       assert.ok(!said.includes('speeches:failed:fit-ok-aaaaaa:the fitter produced no timings'));
 
       const p = await progress(good.slug);
       assert.ok(Date.now() / 1000 - p.pipeline.lastRunAt < 60, 'the run was heard from');
       assert.equal(p.pipeline.stalled, false);
-    });
-    await test('auto.ts says why transcription did not start: not signed in to Azure, then a job that will not start', async () => {
-      const out = await runScript('auto.ts', { FAKE_AZ_SIGNED_OUT: '1' });
-      assert.equal(out.status, 0, out.out);
-      assert.match(out.out, /not signed in to Azure, so no transcription job can be started/);
-      let said = (await ingestLog()).map(e => `${e.stage}:${e.state}:${e.slug ?? ''}:${e.note ?? ''}`);
-      assert.ok(said.includes(`transcript:skipped:${good.slug}:not signed in to Azure`));
-
-      const broken = await runScript('auto.ts', { TX_JOBS: 'gt-broken' });
-      assert.equal(broken.status, 0, broken.out);
-      said = (await ingestLog()).map(e => `${e.stage}:${e.state}:${e.slug ?? ''}:${e.note ?? ''}`);
-      assert.ok(said.some(l => l.startsWith(`transcript:failed:${good.slug}:gt-broken could not be started: ERROR: (ContainerAppJobNotFound)`)), said.slice(0, 6).join('\n'));
     });
     await test('auto.ts ends in error, having done nothing, when the API refuses its token', async () => {
       await submit({ title: 'Triples - Ingest II vs Test JJ', link: `${MOCK}/files/real-round.m4a` });
@@ -1803,7 +1791,7 @@ exec "$REAL_NPX" "$@"`);
       assert.equal((await detail(later)).status, 'pending');
       assert.equal((await call('DELETE', `/admin/submissions/${later.objectID}`, { token: owner })).status, 200);
     });
-    await test('a round restarted from "transcript" keeps its audio: the next run transcribes it and does not fetch it again', async () => {
+    await test('a round restarted from "transcript" keeps its audio: the next run leaves it for transcription and does not fetch it again', async () => {
       // The Worker's bucket and the stand-in are two stores here; in production
       // they are one, so what is in one is put in the other.
       bucket.set(`transcripts/${good.slug}.json`, Buffer.from('{"segments":[]}'));
@@ -1823,7 +1811,7 @@ exec "$REAL_NPX" "$@"`);
       assert.doesNotMatch(run.out, /pulling audio/);
       assert.ok(!mockLog.slice(mark).some(l => l.includes('/files/real-round.m4a')), 'the audio was not fetched again');
       assert.equal(bucket.get(`audio/${good.slug}.m4a`), audioBefore, 'the same audio, untouched');
-      assert.match(readFileSync(azLog, 'utf8'), new RegExp(`--set-env-vars SLUGS=[^\\n]*${good.slug}`), 'handed to transcription');
+      assert.match(run.out, /1 round\(s\) waiting on a transcript from Modal/, 'left for transcription');
     });
     await test('a transcript the fitter cannot fit does not make every run rebuild the site', async () => {
       const output = join(STATE, 'github-output-unfitted');
