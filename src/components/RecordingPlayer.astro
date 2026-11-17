@@ -73,17 +73,13 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
     <!--
       Only rendered for links already known to answer, which is settled at
       ingest rather than discovered here. The file is several hundred megabytes
-      on somebody's Dropbox, so nothing of it is asked for until the picture is
-      switched on and the round is playing, and it is let go of again when
-      nobody is watching (lib/videosync.ts). It has no controls of its own: the
-      sound comes from R2, and the waveform and transport below drive both.
+      on somebody's Dropbox, so nothing of it is asked for until the round is
+      played, and it is let go of again when nobody is watching
+      (lib/videosync.ts). It has no controls of its own: the sound comes from
+      R2, and the waveform and transport below drive both.
     -->
-    <div class="player-video video-file" id="player-video" data-src={videoFile} data-state="off">
-      <button type="button" class="video-facade" id="video-facade">
-        <span class="video-facade-label">Show video</span>
-        <span class="label label-muted">follows the audio, and loads only while it plays</span>
-      </button>
-      <div class="video-frame" id="video-frame" hidden>
+    <div class="player-video video-file" id="player-video" data-src={videoFile} data-state="idle">
+      <div class="video-frame" id="video-frame">
         <video
           id="player-file"
           preload="none"
@@ -94,7 +90,7 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
         ></video>
         <canvas class="video-still" id="video-still" aria-hidden="true" hidden></canvas>
         <button type="button" class="video-surface" id="video-surface" aria-label="Play or pause">
-          <span class="video-note label" id="video-note">plays with the audio</span>
+          <span class="video-mark" aria-hidden="true"></span>
         </button>
         <button type="button" class="chip video-full" id="video-full">full screen</button>
       </div>
@@ -150,9 +146,7 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
 
         <div class="transport-right">
           {(videoEmbed || videoFile) && (
-            <button id="toggle-video" class="chip" aria-pressed={videoEmbed ? 'true' : 'false'}>
-              {videoEmbed ? 'video on' : 'video off'}
-            </button>
+            <button id="toggle-video" class="chip" aria-pressed="true">video on</button>
           )}
           <label class="speed">
             <span class="label label-muted">speed</span>
@@ -282,34 +276,6 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
     margin-bottom: 1.25rem;
   }
 
-  .video-facade {
-    display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    width: 100%;
-    padding: 0.7rem 0.9rem;
-    border: 1px solid var(--rule);
-    background: var(--paper-raised);
-    color: var(--ink);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .video-facade:hover,
-  .video-facade:focus-visible {
-    border-color: var(--ink);
-  }
-
-  .video-facade-label {
-    font-weight: 600;
-  }
-
-  .video-file:not([data-state='off']) .video-facade {
-    display: none;
-  }
-
   .video-frame {
     position: relative;
     aspect-ratio: 16 / 9;
@@ -348,13 +314,17 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
     padding: 0;
   }
 
-  .video-note {
-    padding: 0.3rem 0.6rem;
-    background: color-mix(in srgb, var(--ink) 70%, transparent);
-    color: var(--paper);
+  /* A play mark until the picture has started, as on any video. */
+  .video-mark {
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 1.1rem 0 1.1rem 1.9rem;
+    border-color: transparent transparent transparent var(--paper);
+    opacity: 0.85;
   }
 
-  .video-file[data-state='playing'] .video-note {
+  .video-file:not([data-state='idle']) .video-mark {
     display: none;
   }
 
@@ -1249,9 +1219,8 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
     let sync: VideoSync | null = null;
     const videoFileEl = document.getElementById('player-file') as HTMLVideoElement | null;
     // Whether the picture is wanted is how somebody watches, not a property
-    // of one round, so like the speed it is kept across rounds. A file starts
-    // off until it has been asked for once; an embed starts on, as it always
-    // has, unless it has been switched off.
+    // of one round, so like the speed it is kept across rounds. It is on
+    // until it has been switched off.
     const VIDEO_KEY = 'gt:video';
     const videoPref = localStorage.getItem(VIDEO_KEY);
 
@@ -1260,12 +1229,7 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
       toggleVideo.setAttribute('aria-pressed', String(on));
       toggleVideo.textContent = on ? 'video on' : 'video off';
       if (remember) localStorage.setItem(VIDEO_KEY, on ? '1' : '0');
-      if (videoFileEl && videoWrap) {
-        videoWrap.dataset.state = on ? 'idle' : 'off';
-        document.getElementById('video-frame')!.hidden = !on;
-      } else if (videoWrap) {
-        videoWrap.hidden = !on;
-      }
+      if (videoWrap) videoWrap.hidden = !on;
       if (sync) {
         // Reloading the iframe to stop it would throw away the player this is
         // driving, so a synced video is told to stop instead.
@@ -1279,18 +1243,14 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
       sync = syncYouTube(iframe, audio, () => Number(speed?.value ?? 1));
       if (videoPref === '0') showVideo(false, false);
     } else if (videoFileEl && videoWrap) {
-      const note = document.getElementById('video-note')!;
       sync = syncVideoFile({
         video: videoFileEl,
         audio,
         src: videoWrap.dataset.src!,
         wrap: videoWrap,
         still: document.getElementById('video-still') as HTMLCanvasElement | null,
-        onState(state) {
-          if (videoWrap.dataset.state === 'off') return;
-          videoWrap.dataset.state = state;
-          note.textContent = state === 'loading' ? 'loading video' : 'plays with the audio';
-        },
+        // The play mark is over the picture only until it has first started.
+        onState(state) { if (state === 'playing') videoWrap.dataset.state = 'playing'; },
         // A link checked at ingest can still have gone since; losing the
         // picture is better than a broken box sitting above the waveform.
         onError() {
@@ -1299,14 +1259,8 @@ const sourceAudio = !live && !videoEmbed && !videoFile && mediaKind(sourceLink) 
           toggleVideo?.setAttribute('hidden', '');
         },
       });
-      sync.detach();
-      if (videoPref === '1') showVideo(true, false);
+      if (videoPref === '0') showVideo(false, false);
 
-      // Asking for the picture is asking to watch, so it starts the round.
-      document.getElementById('video-facade')?.addEventListener('click', () => {
-        showVideo(true);
-        play();
-      });
       const surface = document.getElementById('video-surface')!;
       surface.addEventListener('click', toggle);
       function fullScreen() {
