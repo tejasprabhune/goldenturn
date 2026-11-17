@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       minutes:
-        description: 'How long to follow the logs'
+        description: 'Minutes to wait before showing the logs'
         default: '5'
 
 permissions:
@@ -31,8 +31,14 @@ jobs:
       - run: pip install --quiet modal==1.6.4
       - name: check the bucket now
         if: ${{ inputs.sweep }}
-        run: python -c "import modal; modal.Function.from_name('goldenturn-transcribe', 'sweep').remote()"
-      - name: follow the logs
+        run: python -c "import modal; print(modal.Function.from_name('goldenturn-transcribe', 'sweep').remote())"
+      # Fetched after the wait, since the logs command returns what there is
+      # and leaves; the image build's own output is left out.
+      - name: wait, then show the logs
         env:
           MINUTES: ${{ inputs.minutes }}
-        run: timeout "$((MINUTES * 60))" modal app logs goldenturn-transcribe || true
+        run: |
+          sleep "$((MINUTES * 60))"
+          modal app logs goldenturn-transcribe --since 3h --tail 4000 \
+            | grep -v -E "Uninstall|uninstalled|Attempting|Found existing|Requirement already|Collecting|Downloading|━|^Get:|Unpacking|Selecting|Setting up|Preparing to" \
+            | tail -n 300 || true

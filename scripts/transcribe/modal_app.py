@@ -48,6 +48,11 @@ gpu_image = (
         "pip install --no-cache-dir whisperx==3.3.1 matplotlib boto3",
         'pip install --no-cache-dir --force-reinstall "numpy<2" '
         '"huggingface_hub==0.33.4" "transformers==4.46.3"',
+        # pyannote's helper packages have since moved to numpy 2, which torch
+        # 2.2 cannot use. These are the last lines of each that still run on
+        # numpy 1, and what the Azure image was built with.
+        'pip install --no-cache-dir "pyannote.core<6" "pyannote.metrics<4" '
+        '"pyannote.database<6" "pyannote.pipeline<4" "numpy<2"',
     )
     .add_local_file(HERE / "compat.py", "/app/compat.py")
     .add_local_file(HERE / "transcribe.py", "/app/transcribe.py")
@@ -116,6 +121,8 @@ def sweep():
           f"given up on {len(given_up)}", flush=True)
     if given_up:
         print("given up on: " + " ".join(given_up), flush=True)
+    # For whoever asked: the scheduler ignores it, the logs workflow prints it.
+    return {"handed_out": ready, "with_a_container": busy, "given_up_on": given_up}
 
 
 @app.function(
