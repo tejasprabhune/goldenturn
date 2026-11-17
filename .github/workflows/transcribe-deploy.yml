@@ -68,3 +68,9 @@ jobs:
       - name: deploy
         if: steps.have.outputs.ok == '1'
         run: modal deploy scripts/transcribe/modal_app.py
+
+      # A round the old code failed three times would otherwise never be
+      # handed to the new.
+      - name: let failed rounds be tried again
+        if: steps.have.outputs.ok == '1'
+        run: python -c "import modal; modal.Function.from_name('goldenturn-transcribe', 'forgive').remote()"

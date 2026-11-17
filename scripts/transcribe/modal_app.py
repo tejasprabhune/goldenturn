@@ -40,19 +40,26 @@ state = modal.Dict.from_name("goldenturn-transcribe-state", create_if_missing=Tr
 # on every cold start.
 cache = modal.Volume.from_name("goldenturn-transcribe-cache", create_if_missing=True)
 
-# The same versions as the Dockerfile beside this file, for the same reasons.
+# The Dockerfile beside this file, with more pinned. Left to itself pip now
+# replaces the image's torch with a newer one and leaves torchvision behind,
+# and moves pyannote's helpers to numpy 2, which torch 2.2 cannot use. The
+# first command resolves everything in one go around the torch that is already
+# there; the last one imports what the script imports, so an image that cannot
+# run fails here, at deploy, and not on a GPU with rounds waiting.
 gpu_image = (
     modal.Image.from_registry("pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime")
     .apt_install("ffmpeg", "git")
     .run_commands(
-        "pip install --no-cache-dir whisperx==3.3.1 matplotlib boto3",
+        "pip install --no-cache-dir whisperx==3.3.1 matplotlib boto3 "
+        "torch==2.2.2 torchaudio==2.2.2 torchvision==0.17.2 "
+        '"pyannote.core<6" "pyannote.metrics<4" "pyannote.database<6" "pyannote.pipeline<4"',
         'pip install --no-cache-dir --force-reinstall "numpy<2" '
         '"huggingface_hub==0.33.4" "transformers==4.46.3"',
-        # pyannote's helper packages have since moved to numpy 2, which torch
-        # 2.2 cannot use. These are the last lines of each that still run on
-        # numpy 1, and what the Azure image was built with.
-        'pip install --no-cache-dir "pyannote.core<6" "pyannote.metrics<4" '
-        '"pyannote.database<6" "pyannote.pipeline<4" "numpy<2"',
+        'python -c "import torch, torchvision, torchaudio; '
+        "from transformers import Wav2Vec2ForCTC; import whisperx; "
+        "from pyannote.audio import Pipeline; "
+        "assert torch.__version__.startswith('2.2.2'), torch.__version__; "
+        'print(torch.__version__, torchvision.__version__, torchaudio.__version__)"',
     )
     .add_local_file(HERE / "compat.py", "/app/compat.py")
     .add_local_file(HERE / "transcribe.py", "/app/transcribe.py")
@@ -159,6 +166,13 @@ def transcribe(slugs: list[str]):
     print(f"transcribed {len(slugs) - len(missed)} of {len(slugs)}", flush=True)
     if missed:
         raise RuntimeError(f"no transcript for: {' '.join(missed)} (exit {run.returncode})")
+
+
+@app.function(image=sweep_image)
+def forgive():
+    """Forgets every failed attempt. Run after a deploy: what failed under the old code is owed a try under the new."""
+    state.clear()
+    print("every round may be handed out again", flush=True)
 
 
 @app.function(image=sweep_image)
