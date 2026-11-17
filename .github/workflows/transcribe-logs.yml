@@ -1,0 +1,38 @@
+name: transcription logs
+
+# What the Modal app has been doing, for when a round is waiting on a
+# transcript and nothing says why. Run by hand. It can also ask the app to
+# check the bucket now instead of at its next fifteen-minute turn.
+on:
+  workflow_dispatch:
+    inputs:
+      sweep:
+        description: 'Check the bucket for work now'
+        type: boolean
+        default: false
+      minutes:
+        description: 'How long to follow the logs'
+        default: '5'
+
+permissions:
+  contents: read
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet modal==1.6.4
+      - name: check the bucket now
+        if: ${{ inputs.sweep }}
+        run: python -c "import modal; modal.Function.from_name('goldenturn-transcribe', 'sweep').remote()"
+      - name: follow the logs
+        env:
+          MINUTES: ${{ inputs.minutes }}
+        run: timeout "$((MINUTES * 60))" modal app logs goldenturn-transcribe || true
