@@ -1811,7 +1811,10 @@ exec "$REAL_NPX" "$@"`);
       assert.doesNotMatch(run.out, /pulling audio/);
       assert.ok(!mockLog.slice(mark).some(l => l.includes('/files/real-round.m4a')), 'the audio was not fetched again');
       assert.equal(bucket.get(`audio/${good.slug}.m4a`), audioBefore, 'the same audio, untouched');
-      assert.match(run.out, /1 round\(s\) waiting on a transcript from Modal/, 'left for transcription');
+      // Other rounds ingested since may be waiting too, so the count is not fixed.
+      assert.match(run.out, /\d+ round\(s\) waiting on a transcript from Modal/, 'left for transcription');
+      const waiting = (await ingestLog()).find(e => e.slug === good.slug && e.stage === 'transcript');
+      assert.deepEqual({ state: waiting.state, note: waiting.note }, { state: 'started', note: 'modal' }, 'and recorded as waiting on Modal');
     });
     await test('a transcript the fitter cannot fit does not make every run rebuild the site', async () => {
       const output = join(STATE, 'github-output-unfitted');
